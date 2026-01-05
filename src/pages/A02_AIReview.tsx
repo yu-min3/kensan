@@ -1,0 +1,226 @@
+import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { mockAIReviewReports, mockWeeklySummary } from '@/data/mockData'
+import { format, parseISO } from 'date-fns'
+import { ja } from 'date-fns/locale'
+import {
+  Bot,
+  Sparkles,
+  ThumbsUp,
+  AlertTriangle,
+  Lightbulb,
+  Calendar,
+  Loader2,
+  ChevronRight,
+} from 'lucide-react'
+
+export function A02AIReview() {
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [selectedReport, setSelectedReport] = useState(mockAIReviewReports[0])
+
+  const handleGenerate = async () => {
+    setIsGenerating(true)
+    // モック: 3秒後に完了
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    setIsGenerating(false)
+  }
+
+  const formatWeek = (start: string, end: string) => {
+    const startDate = parseISO(start)
+    const endDate = parseISO(end)
+    return `${format(startDate, 'M月d日', { locale: ja })} - ${format(endDate, 'M月d日', { locale: ja })}`
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Bot className="h-8 w-8 text-indigo-500" />
+          <div>
+            <h1 className="text-2xl font-bold">AI振り返り</h1>
+            <p className="text-sm text-muted-foreground">Phase 2 機能</p>
+          </div>
+        </div>
+        <Button onClick={handleGenerate} disabled={isGenerating} className="gap-2">
+          {isGenerating ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              生成中...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              今週のレポートを生成
+            </>
+          )}
+        </Button>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* メインコンテンツ */}
+        <div className="lg:col-span-3 space-y-6">
+          {selectedReport ? (
+            <>
+              {/* レポートヘッダー */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    {formatWeek(selectedReport.weekStart, selectedReport.weekEnd)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{selectedReport.summary}</p>
+                </CardContent>
+              </Card>
+
+              {/* よかった点 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <ThumbsUp className="h-5 w-5" />
+                    よかった点
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {selectedReport.goodPoints.map((point, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-green-500 mt-1">✓</span>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              {/* 改善点 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-yellow-600">
+                    <AlertTriangle className="h-5 w-5" />
+                    改善点
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {selectedReport.improvementPoints.map((point, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-1">!</span>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              {/* アドバイス */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-600">
+                    <Lightbulb className="h-5 w-5" />
+                    来週へのアドバイス
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {selectedReport.advice.map((item, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-1">💡</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Bot className="h-16 w-16 mx-auto text-muted-foreground/50" />
+                <h3 className="text-lg font-medium mt-4">AIレポートを生成</h3>
+                <p className="text-muted-foreground mt-2">
+                  今週の学習データを分析して、振り返りレポートを生成します。
+                </p>
+                <Button onClick={handleGenerate} className="mt-4 gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  レポートを生成
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* サイドバー */}
+        <div className="space-y-4">
+          {/* 過去のレポート */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">過去のレポート</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {mockAIReviewReports.map((report) => (
+                  <button
+                    key={report.id}
+                    onClick={() => setSelectedReport(report)}
+                    className={`w-full flex items-center justify-between p-2 rounded text-left text-sm transition-colors ${
+                      selectedReport?.id === report.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    <span>{formatWeek(report.weekStart, report.weekEnd)}</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* サマリー統計 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">今週のサマリー</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">総学習時間</span>
+                <span className="font-medium">
+                  {Math.floor(mockWeeklySummary.totalMinutes / 60)}時間
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">完了タスク</span>
+                <span className="font-medium">{mockWeeklySummary.completedTasks}件</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">計画達成率</span>
+                <span className="font-medium">
+                  {Math.round(
+                    (mockWeeklySummary.plannedVsActual.actual /
+                      mockWeeklySummary.plannedVsActual.planned) *
+                      100
+                  )}
+                  %
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 注意書き */}
+          <Card className="bg-muted/50">
+            <CardContent className="pt-4">
+              <p className="text-xs text-muted-foreground">
+                AIレポートはClaude APIを使用して生成されます。
+                データはAnthropicに送信されますが、モデルのトレーニングには使用されません。
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
