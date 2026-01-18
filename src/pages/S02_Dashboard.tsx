@@ -6,7 +6,7 @@ import { TagBadge } from '@/components/common/TagBadge'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
-import { mockWeeklySummary, mockDailyStudyHours } from '@/data/mockData'
+import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import {

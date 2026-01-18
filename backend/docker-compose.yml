@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: kensan-postgres
+    environment:
+      POSTGRES_USER: kensan
+      POSTGRES_PASSWORD: kensan
+      POSTGRES_DB: kensan
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kensan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: cmd/user-service/Dockerfile
+    container_name: kensan-user-service
+    environment:
+      SERVER_PORT: 8081
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Task Service
+  task-service:
+    build:
+      context: .
+      dockerfile: cmd/task-service/Dockerfile
+    container_name: kensan-task-service
+    environment:
+      SERVER_PORT: 8082
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Sync Service
+  sync-service:
+    build:
+      context: .
+      dockerfile: cmd/sync-service/Dockerfile
+    container_name: kensan-sync-service
+    environment:
+      SERVER_PORT: 8083
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      CLOCKIFY_BASE_URL: https://api.clockify.me/api/v1
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

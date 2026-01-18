@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { mockAIReviewReports, mockWeeklySummary } from '@/data/mockData'
+import { aiReviewReports as mockAIReviewReports, weeklySummary as mockWeeklySummary } from '@/mocks/data'
 import { format, parseISO } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import {

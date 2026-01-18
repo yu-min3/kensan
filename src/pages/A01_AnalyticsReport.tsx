@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TagBadge } from '@/components/common/TagBadge'
-import { mockWeeklySummary, mockDailyStudyHours } from '@/data/mockData'
+import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
 import {
   BarChart3,
   Clock,

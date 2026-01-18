@@ -1,23 +1,30 @@
 import { create } from 'zustand'
-import type { Project, Task } from '@/types'
-import { mockProjects, mockTasks } from '@/data/mockData'
+import type { Project, Task, GoalTag } from '@/types'
+import { projectsApi, tasksApi } from '@/api/services/tasks'
 
 interface TaskState {
   projects: Project[]
   tasks: Task[]
+  isLoading: boolean
+  error: string | null
+
+  // データ取得
+  fetchProjects: () => Promise<void>
+  fetchTasks: () => Promise<void>
+  fetchAll: () => Promise<void>
 
   // プロジェクト操作
-  addProject: (project: Omit<Project, 'id'>) => void
-  updateProject: (id: string, updates: Partial<Project>) => void
-  deleteProject: (id: string) => void
+  addProject: (project: { name: string; goalTag?: GoalTag; color?: string }) => Promise<void>
+  updateProject: (id: string, updates: Partial<Project>) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
 
   // タスク操作
-  addTask: (task: Omit<Task, 'id'>) => void
-  updateTask: (id: string, updates: Partial<Task>) => void
-  deleteTask: (id: string) => void
-  toggleTaskComplete: (id: string) => void
+  addTask: (task: { name: string; projectId: string; parentTaskId?: string }) => Promise<void>
+  updateTask: (id: string, updates: Partial<Task>) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
+  toggleTaskComplete: (id: string) => Promise<void>
 
-  // 取得
+  // 取得（同期）
   getProjectById: (id: string) => Project | undefined
   getTaskById: (id: string) => Task | undefined
   getTasksByProject: (projectId: string) => Task[]
@@ -25,50 +32,123 @@ interface TaskState {
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
-  projects: mockProjects,
-  tasks: mockTasks,
+  projects: [],
+  tasks: [],
+  isLoading: false,
+  error: null,
 
-  addProject: (project) =>
-    set((state) => ({
-      projects: [...state.projects, { ...project, id: `p${Date.now()}` }],
-    })),
+  fetchProjects: async () => {
+    set({ isLoading: true, error: null })
+    try {
+      const projects = await projectsApi.list()
+      set({ projects, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
 
-  updateProject: (id, updates) =>
-    set((state) => ({
-      projects: state.projects.map((p) =>
-        p.id === id ? { ...p, ...updates } : p
-      ),
-    })),
+  fetchTasks: async () => {
+    set({ isLoading: true, error: null })
+    try {
+      const tasks = await tasksApi.list()
+      set({ tasks, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
 
-  deleteProject: (id) =>
-    set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id),
-      tasks: state.tasks.filter((t) => t.projectId !== id),
-    })),
+  fetchAll: async () => {
+    set({ isLoading: true, error: null })
+    try {
+      const [projects, tasks] = await Promise.all([
+        projectsApi.list(),
+        tasksApi.list(),
+      ])
+      set({ projects, tasks, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
 
-  addTask: (task) =>
-    set((state) => ({
-      tasks: [...state.tasks, { ...task, id: `t${Date.now()}` }],
-    })),
+  addProject: async (project) => {
+    try {
+      const newProject = await projectsApi.create(project)
+      set((state) => ({ projects: [...state.projects, newProject] }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
 
-  updateTask: (id, updates) =>
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === id ? { ...t, ...updates } : t
-      ),
-    })),
+  updateProject: async (id, updates) => {
+    try {
+      const updatedProject = await projectsApi.update(id, updates)
+      set((state) => ({
+        projects: state.projects.map((p) =>
+          p.id === id ? updatedProject : p
+        ),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
 
-  deleteTask: (id) =>
-    set((state) => ({
-      tasks: state.tasks.filter((t) => t.id !== id && t.parentTaskId !== id),
-    })),
+  deleteProject: async (id) => {
+    try {
+      await projectsApi.delete(id)
+      set((state) => ({
+        projects: state.projects.filter((p) => p.id !== id),
+        tasks: state.tasks.filter((t) => t.projectId !== id),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
 
-  toggleTaskComplete: (id) =>
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === id ? { ...t, completed: !t.completed } : t
-      ),
-    })),
+  addTask: async (task) => {
+    try {
+      const newTask = await tasksApi.create(task)
+      set((state) => ({ tasks: [...state.tasks, newTask] }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  updateTask: async (id, updates) => {
+    try {
+      const updatedTask = await tasksApi.update(id, updates)
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === id ? updatedTask : t
+        ),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  deleteTask: async (id) => {
+    try {
+      await tasksApi.delete(id)
+      set((state) => ({
+        tasks: state.tasks.filter((t) => t.id !== id && t.parentTaskId !== id),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  toggleTaskComplete: async (id) => {
+    try {
+      const updatedTask = await tasksApi.toggleComplete(id)
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === id ? updatedTask : t
+        ),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
 
   getProjectById: (id) => get().projects.find((p) => p.id === id),
 

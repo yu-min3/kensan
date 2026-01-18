@@ -1,6 +1,8 @@
 import type { TimeBlock, TimeEntry } from '@/types'
 import { TagBadge } from './TagBadge'
 import { cn } from '@/lib/utils'
+import { Edit, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface TimeBlockTimelineProps {
   timeBlocks?: TimeBlock[]
@@ -8,6 +10,8 @@ interface TimeBlockTimelineProps {
   showComparison?: boolean
   startHour?: number
   endHour?: number
+  onBlockClick?: (block: TimeBlock) => void
+  onBlockDelete?: (blockId: string) => void
 }
 
 function formatTime(time: string): string {
@@ -29,6 +33,8 @@ export function TimeBlockTimeline({
   showComparison = false,
   startHour = 8,
   endHour = 20,
+  onBlockClick,
+  onBlockDelete,
 }: TimeBlockTimelineProps) {
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const totalMinutes = (endHour - startHour) * 60
@@ -73,21 +79,53 @@ export function TimeBlockTimeline({
           <div
             key={block.id}
             className={cn(
-              'absolute left-1 right-1 rounded-md px-2 py-1 text-xs',
+              'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group',
               showComparison ? 'left-1 right-[52%]' : 'right-1',
               block.isRoutine
                 ? 'bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700'
-                : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700'
+                : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700',
+              onBlockClick && 'cursor-pointer hover:ring-2 hover:ring-primary/50'
             )}
             style={{
               top: `${getTopPosition(block.startTime)}%`,
               height: `${getHeight(block.startTime, block.endTime)}%`,
               minHeight: '24px',
             }}
+            onClick={() => onBlockClick?.(block)}
           >
-            <div className="flex items-center gap-1 truncate">
+            <div className="flex items-center gap-1">
               {block.goalTag && <TagBadge tag={block.goalTag} size="sm" />}
-              <span className="truncate font-medium">{block.taskName}</span>
+              <span className="truncate font-medium flex-1">{block.taskName}</span>
+              {(onBlockClick || onBlockDelete) && (
+                <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
+                  {onBlockClick && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onBlockClick(block)
+                      }}
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  )}
+                  {onBlockDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onBlockDelete(block.id)
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="text-muted-foreground">
               {formatTime(block.startTime)} - {formatTime(block.endTime)}

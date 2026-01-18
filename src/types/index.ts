@@ -15,6 +15,7 @@ export interface Task {
   parentTaskId?: string
   estimatedMinutes?: number
   completed: boolean
+  dueDate?: string // YYYY-MM-DD
 }
 
 // 目標タグ

@@ -1,0 +1,226 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/kensan/backend/services/record/internal"
+	"github.com/kensan/backend/services/record/internal/service"
+	"github.com/kensan/backend/shared/middleware"
+)
+
+// Handler handles HTTP requests for learning record operations
+type Handler struct {
+	service *service.Service
+}
+
+// New creates a new record handler
+func New(svc *service.Service) *Handler {
+	return &Handler{service: svc}
+}
+
+// RegisterRoutes registers the learning record routes
+func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
+	// All routes require authentication
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware)
+
+		r.Get("/records", h.List)
+		r.Post("/records", h.Create)
+		r.Get("/records/{recordId}", h.GetByID)
+		r.Put("/records/{recordId}", h.Update)
+		r.Delete("/records/{recordId}", h.Delete)
+		r.Post("/records/search/semantic", h.SemanticSearch)
+	})
+}
+
+// List handles listing learning records
+// GET /records
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	// Parse query parameters for filtering
+	filter := &record.RecordFilter{}
+
+	if projectID := r.URL.Query().Get("project_id"); projectID != "" {
+		filter.ProjectID = &projectID
+	}
+	if goalTagStr := r.URL.Query().Get("goal_tag"); goalTagStr != "" {
+		goalTag := record.GoalTag(goalTagStr)
+		if goalTag.IsValid() {
+			filter.GoalTag = &goalTag
+		}
+	}
+	if formatStr := r.URL.Query().Get("format"); formatStr != "" {
+		format := record.RecordFormat(formatStr)
+		if format.IsValid() {
+			filter.Format = &format
+		}
+	}
+	if query := r.URL.Query().Get("q"); query != "" {
+		filter.Query = &query
+	}
+
+	records, err := h.service.List(r.Context(), userID, filter)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, records)
+}
+
+// GetByID handles getting a learning record by ID
+// GET /records/{recordId}
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	recordID := chi.URLParam(r, "recordId")
+	if recordID == "" {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+		return
+	}
+
+	rec, err := h.service.GetByID(r.Context(), userID, recordID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, rec)
+}
+
+// Create handles creating a new learning record
+// POST /records
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	var input record.CreateRecordInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	rec, err := h.service.Create(r.Context(), userID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, rec)
+}
+
+// Update handles updating a learning record
+// PUT /records/{recordId}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	recordID := chi.URLParam(r, "recordId")
+	if recordID == "" {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+		return
+	}
+
+	var input record.UpdateRecordInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	rec, err := h.service.Update(r.Context(), userID, recordID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, rec)
+}
+
+// Delete handles deleting a learning record
+// DELETE /records/{recordId}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	recordID := chi.URLParam(r, "recordId")
+	if recordID == "" {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+		return
+	}
+
+	if err := h.service.Delete(r.Context(), userID, recordID); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// SemanticSearch handles semantic search on learning records
+// POST /records/search/semantic
+func (h *Handler) SemanticSearch(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	var input record.SemanticSearchInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	results, err := h.service.SemanticSearch(r.Context(), userID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, results)
+}
+
+// handleError handles service errors and returns appropriate HTTP responses
+func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, service.ErrRecordNotFound):
+		middleware.Error(w, r, http.StatusNotFound, "RECORD_NOT_FOUND", "Learning record not found")
+	case errors.Is(err, service.ErrUnauthorized):
+		middleware.Error(w, r, http.StatusForbidden, "FORBIDDEN", "Not authorized to access this record")
+	case errors.Is(err, service.ErrTitleRequired):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "title", Message: "Title is required"}})
+	case errors.Is(err, service.ErrContentRequired):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "content", Message: "Content is required"}})
+	case errors.Is(err, service.ErrFormatRequired):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format is required"}})
+	case errors.Is(err, service.ErrInvalidFormat):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format must be markdown or drawio"}})
+	case errors.Is(err, service.ErrInvalidGoalTag):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "goalTag", Message: "Goal tag must be GK, OSS, Output, or Other"}})
+	case errors.Is(err, service.ErrQueryRequired):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "query", Message: "Query is required for semantic search"}})
+	default:
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
+	}
+}

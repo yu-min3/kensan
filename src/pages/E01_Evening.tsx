@@ -1,26 +1,30 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { TagBadge } from '@/components/common/TagBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { mockTomorrowTimeBlocks } from '@/data/mockData'
+import { useTaskStore } from '@/stores/useTaskStore'
+import type { GoalTag } from '@/types'
 import { format, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import {
   Moon,
   ArrowRight,
-  CheckCircle,
-  XCircle,
   Clock,
-  AlertTriangle,
   BookOpen,
   BookMarked,
   Plus,
   Sun,
+  TrendingUp,
 } from 'lucide-react'
 import {
   PieChart,
@@ -32,12 +36,47 @@ import {
 
 export function E01Evening() {
   const { userName } = useSettingsStore()
-  const { getTodayTimeBlocks, getTodayTimeEntries } = useTimeBlockStore()
+  const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, addTimeBlock } = useTimeBlockStore()
+  const { tasks, projects } = useTaskStore()
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
+  const tomorrowDate = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  const tomorrowBlocks = getTimeBlocksByDate(tomorrowDate)
   const today = format(new Date(), 'yyyy年M月d日（E）', { locale: ja })
   const tomorrow = format(addDays(new Date(), 1), 'M月d日（E）', { locale: ja })
+
+  // TimeBlock Dialog State for tomorrow
+  const [isTimeBlockDialogOpen, setIsTimeBlockDialogOpen] = useState(false)
+  const [blockTaskName, setBlockTaskName] = useState('')
+  const [blockStartTime, setBlockStartTime] = useState('09:00')
+  const [blockEndTime, setBlockEndTime] = useState('10:00')
+  const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
+  const [blockGoalTag, setBlockGoalTag] = useState<GoalTag | ''>('')
+
+  const openNewTimeBlockDialog = () => {
+    setBlockTaskName('')
+    setBlockTaskId(undefined)
+    setBlockGoalTag('')
+    setBlockStartTime('09:00')
+    setBlockEndTime('10:00')
+    setIsTimeBlockDialogOpen(true)
+  }
+
+  const handleSaveTimeBlock = async () => {
+    if (!blockTaskName || !blockStartTime || !blockEndTime) return
+
+    await addTimeBlock({
+      date: tomorrowDate,
+      startTime: blockStartTime,
+      endTime: blockEndTime,
+      taskName: blockTaskName,
+      taskId: blockTaskId,
+      goalTag: blockGoalTag || undefined,
+      isRoutine: false,
+    })
+    setIsTimeBlockDialogOpen(false)
+  }
 
   // 計画時間と実績時間を計算
   const calculateMinutes = (items: { startTime: string; endTime: string }[]) => {
@@ -78,9 +117,8 @@ export function E01Evening() {
     return h > 0 ? `${h}h ${m}m` : `${m}m`
   }
 
-  const completedTasks = todayEntries.length
-  const plannedTasks = todayBlocks.length
-  const completionRate = plannedTasks > 0 ? Math.round((completedTasks / plannedTasks) * 100) : 0
+  // 時間ベースの計画達成率
+  const completionRate = plannedMinutes > 0 ? Math.round((actualMinutes / plannedMinutes) * 100) : 0
 
   return (
     <div className="space-y-6">
@@ -106,51 +144,92 @@ export function E01Evening() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* 左カラム: 計画vs実績 */}
         <div className="lg:col-span-2 space-y-6">
-          {/* サマリー */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">計画時間</p>
-                    <p className="text-xl font-bold">{formatMinutes(plannedMinutes)}</p>
-                  </div>
+          {/* 今日のサマリー（統合カード） */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                今日のサマリー
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* 計画達成率 */}
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-4xl font-bold">{completionRate}%</p>
+                  <p className="text-sm text-muted-foreground">達成率</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex-1">
+                  <Progress value={Math.min(completionRate, 100)} className="h-3" />
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {formatMinutes(actualMinutes)} / {formatMinutes(plannedMinutes)}
+                  </p>
+                </div>
+              </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">実績時間</p>
-                    <p className="text-xl font-bold">{formatMinutes(actualMinutes)}</p>
-                  </div>
+              {/* 時間サマリー */}
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">計画</p>
+                  <p className="text-xl font-semibold">{formatMinutes(plannedMinutes)}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">実績</p>
+                  <p className="text-xl font-semibold text-green-600">{formatMinutes(actualMinutes)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">差分</p>
+                  <p className={`text-xl font-semibold ${difference >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                    {difference >= 0 ? '+' : ''}{formatMinutes(difference)}
+                  </p>
+                </div>
+              </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  {difference >= 0 ? (
-                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                  <div>
-                    <p className="text-sm text-muted-foreground">差分</p>
-                    <p className="text-xl font-bold">
-                      {difference >= 0 ? '+' : '-'}
-                      {formatMinutes(difference)}
-                    </p>
+              {/* 目標別の時間配分 */}
+              {pieData.length > 0 && (
+                <div className="pt-4 border-t">
+                  <p className="text-sm font-medium mb-3">目標別の時間配分</p>
+                  <div className="flex items-center gap-6">
+                    <ResponsiveContainer width={120} height={120}>
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={30}
+                          outerRadius={50}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [formatMinutes(value as number), '']}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2">
+                      {pieData.map((item) => (
+                        <div key={item.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded"
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-sm">{item.name}</span>
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {formatMinutes(item.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* 計画 vs 実績 タイムライン */}
           <Card>
@@ -203,66 +282,6 @@ export function E01Evening() {
 
         {/* 右カラム: サイドパネル */}
         <div className="space-y-6">
-          {/* 目標別時間配分 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">目標別の時間配分</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={60}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => [formatMinutes(value as number), '']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2 mt-4">
-                {pieData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <span className="text-sm">{item.name}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {formatMinutes(item.value)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 達成率 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">計画達成率</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center">
-                <p className="text-4xl font-bold">{completionRate}%</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {completedTasks}/{plannedTasks} タスク完了
-                </p>
-              </div>
-              <Progress value={completionRate} className="h-2 mt-4" />
-            </CardContent>
-          </Card>
-
           {/* 明日のタイムブロック */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -279,7 +298,7 @@ export function E01Evening() {
             <CardContent>
               <p className="text-sm text-muted-foreground mb-3">{tomorrow}</p>
               <div className="space-y-2">
-                {mockTomorrowTimeBlocks.map((block) => (
+                {tomorrowBlocks.map((block) => (
                   <div
                     key={block.id}
                     className="flex items-center gap-2 p-2 rounded-lg bg-muted/50"
@@ -291,7 +310,12 @@ export function E01Evening() {
                     {block.goalTag && <TagBadge tag={block.goalTag} size="sm" />}
                   </div>
                 ))}
-                <Button variant="outline" size="sm" className="w-full gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1"
+                  onClick={openNewTimeBlockDialog}
+                >
                   <Plus className="h-4 w-4" />
                   タイムブロック追加
                 </Button>
@@ -316,6 +340,104 @@ export function E01Evening() {
           </div>
         </div>
       </div>
+
+      {/* 明日のタイムブロック追加ダイアログ */}
+      <Dialog open={isTimeBlockDialogOpen} onOpenChange={setIsTimeBlockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>明日のタイムブロックを追加</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="blockTaskName">タスク名</Label>
+              <Input
+                id="blockTaskName"
+                value={blockTaskName}
+                onChange={(e) => setBlockTaskName(e.target.value)}
+                placeholder="例: ICA試験勉強"
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="blockStartTime">開始時刻</Label>
+                <Input
+                  id="blockStartTime"
+                  type="time"
+                  value={blockStartTime}
+                  onChange={(e) => setBlockStartTime(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="blockEndTime">終了時刻</Label>
+                <Input
+                  id="blockEndTime"
+                  type="time"
+                  value={blockEndTime}
+                  onChange={(e) => setBlockEndTime(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>目標タグ（任意）</Label>
+              <Select value={blockGoalTag} onValueChange={(v) => setBlockGoalTag(v as GoalTag)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="タグを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GK">GK (Golden Kubestronaut)</SelectItem>
+                  <SelectItem value="OSS">OSS</SelectItem>
+                  <SelectItem value="Output">Output</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>または既存タスクから選択</Label>
+              <Select
+                value={blockTaskId || ''}
+                onValueChange={(v) => {
+                  const task = tasks.find((t) => t.id === v)
+                  if (task) {
+                    setBlockTaskId(v)
+                    setBlockTaskName(task.name)
+                    const project = projects.find((p) => p.id === task.projectId)
+                    if (project?.goalTag) {
+                      setBlockGoalTag(project.goalTag)
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="タスクを選択（任意）" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tasks.filter((t) => !t.completed && !t.parentTaskId).map((task) => (
+                    <SelectItem key={task.id} value={task.id}>
+                      {task.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTimeBlockDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleSaveTimeBlock} disabled={!blockTaskName}>
+              追加
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

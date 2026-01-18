@@ -1,15 +1,32 @@
-import { Settings, Bell, Sun, Moon } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Settings, Bell, Sun, Moon, LogOut } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 
 export function Header() {
+  const navigate = useNavigate()
+  const { logout, user } = useAuthStore()
   const { userName, theme, setTheme } = useSettingsStore()
+
+  const displayName = user?.name || userName
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
     setTheme(newTheme)
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
   }
 
   return (
@@ -40,12 +57,29 @@ export function Header() {
           </Button>
         </Link>
 
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-sm font-medium">{userName}</span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 ml-2 pl-2 border-l cursor-pointer hover:opacity-80">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium">{displayName}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild>
+              <Link to="/settings" className="cursor-pointer">
+                <Settings className="h-4 w-4 mr-2" />
+                設定
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+              <LogOut className="h-4 w-4 mr-2" />
+              ログアウト
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

@@ -1,15 +1,23 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { UserSettings, Theme } from '@/types'
-import { mockUserSettings } from '@/data/mockData'
+import { userApi } from '@/api/services/user'
 
 interface SettingsState extends UserSettings {
+  isLoading: boolean
+  error: string | null
+
+  // データ取得
+  fetchSettings: () => Promise<void>
+
+  // 操作
   setClockifyApiKey: (key: string) => void
   setWorkspace: (id: string, name: string) => void
   setTimezone: (tz: string) => void
   setTheme: (theme: Theme) => void
   setUserName: (name: string) => void
   setIsConfigured: (configured: boolean) => void
+  saveSettings: () => Promise<void>
   resetSettings: () => void
 }
 
@@ -25,9 +33,21 @@ const initialSettings: UserSettings = {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
-      // 初期状態（デモ用にmockデータを使用）
-      ...mockUserSettings,
+    (set, get) => ({
+      ...initialSettings,
+      isLoading: false,
+      error: null,
+
+      fetchSettings: async () => {
+        set({ isLoading: true, error: null })
+        try {
+          const settings = await userApi.getSettings()
+          set({ ...settings, isLoading: false })
+        } catch (error) {
+          // If fetch fails, keep local settings
+          set({ error: (error as Error).message, isLoading: false })
+        }
+      },
 
       setClockifyApiKey: (key) =>
         set({ clockifyApiKey: key }),
@@ -47,11 +67,34 @@ export const useSettingsStore = create<SettingsState>()(
       setIsConfigured: (configured) =>
         set({ isConfigured: configured }),
 
+      saveSettings: async () => {
+        const state = get()
+        try {
+          await userApi.updateSettings({
+            clockifyApiKey: state.clockifyApiKey,
+            workspaceId: state.workspaceId,
+            timezone: state.timezone,
+            theme: state.theme,
+          })
+        } catch (error) {
+          set({ error: (error as Error).message })
+        }
+      },
+
       resetSettings: () =>
         set(initialSettings),
     }),
     {
       name: 'kensan-settings',
+      partialize: (state) => ({
+        clockifyApiKey: state.clockifyApiKey,
+        workspaceId: state.workspaceId,
+        workspaceName: state.workspaceName,
+        timezone: state.timezone,
+        theme: state.theme,
+        isConfigured: state.isConfigured,
+        userName: state.userName,
+      }),
     }
   )
 )
