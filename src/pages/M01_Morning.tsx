@@ -15,8 +15,7 @@ import { useTaskStore } from '@/stores/useTaskStore'
 import { useRoutineStore } from '@/stores/useRoutineStore'
 import { weeklySummary as mockWeeklySummary } from '@/mocks/data'
 import type { GoalTag } from '@/types'
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { formatDateJa, formatDateIso, formatMinutes, formatTime } from '@/lib/dateFormat'
 import {
   Sun,
   Plus,
@@ -37,8 +36,8 @@ export function M01Morning() {
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
   const todayRoutines = getTodayRoutines()
-  const today = format(new Date(), 'yyyy年M月d日（E）', { locale: ja })
-  const todayDate = format(new Date(), 'yyyy-MM-dd')
+  const today = formatDateJa(new Date())
+  const todayDate = formatDateIso(new Date())
 
   // TimeBlock Dialog State
   const [isTimeBlockDialogOpen, setIsTimeBlockDialogOpen] = useState(false)
@@ -176,12 +175,6 @@ export function M01Morning() {
   //     !task.parentTaskId &&
   //     !todayBlocks.some((b) => b.taskId === task.id)
   // )
-
-  const formatMinutes = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
-  }
 
   return (
     <div className="space-y-6">
@@ -384,7 +377,7 @@ export function M01Morning() {
                   作業中: {timerTaskName}
                 </p>
                 <p className="text-xs text-green-600 dark:text-green-400">
-                  開始: {timerStartTime ? format(timerStartTime, 'HH:mm') : ''}
+                  開始: {timerStartTime ? formatTime(timerStartTime) : ''}
                 </p>
               </div>
               <Button

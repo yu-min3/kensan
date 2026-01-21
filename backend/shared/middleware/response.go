@@ -131,3 +131,64 @@ func RequireURLParam(w http.ResponseWriter, r *http.Request, paramName string) (
 	}
 	return value, true
 }
+
+// ErrorMapping defines how a service error should be mapped to an HTTP response.
+type ErrorMapping struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+// HandleServiceError maps a service error to an HTTP response.
+// It checks the error against the provided mappings and writes the appropriate response.
+// If no mapping matches, it writes a 500 Internal Server Error.
+//
+// Usage:
+//
+//	err := h.service.DoSomething(...)
+//	if err != nil {
+//	    middleware.HandleServiceError(w, r, err, map[error]middleware.ErrorMapping{
+//	        service.ErrNotFound: {http.StatusNotFound, "NOT_FOUND", "Resource not found"},
+//	        service.ErrInvalidInput: {http.StatusBadRequest, "INVALID_INPUT", "Invalid input"},
+//	    }, "Failed to do something")
+//	    return
+//	}
+func HandleServiceError(w http.ResponseWriter, r *http.Request, err error, mappings map[error]ErrorMapping, defaultMessage string) {
+	for targetErr, mapping := range mappings {
+		if err == targetErr {
+			Error(w, r, mapping.Status, mapping.Code, mapping.Message)
+			return
+		}
+	}
+	// Default: Internal Server Error
+	Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", defaultMessage)
+}
+
+// ValidateRequired checks that all specified fields have non-empty values.
+// Returns true if all fields are valid, false otherwise.
+// On failure, writes a ValidationError response with details for all empty fields.
+//
+// Usage:
+//
+//	if !middleware.ValidateRequired(w, r, map[string]string{
+//	    "name": input.Name,
+//	    "email": input.Email,
+//	}) {
+//	    return
+//	}
+func ValidateRequired(w http.ResponseWriter, r *http.Request, fields map[string]string) bool {
+	var errors []ErrorDetail
+	for field, value := range fields {
+		if value == "" {
+			errors = append(errors, ErrorDetail{
+				Field:   field,
+				Message: field + " is required",
+			})
+		}
+	}
+	if len(errors) > 0 {
+		ValidationError(w, r, errors)
+		return false
+	}
+	return true
+}

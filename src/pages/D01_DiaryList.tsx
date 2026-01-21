@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useDiaryStore } from '@/stores/useDiaryStore'
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { formatMonth, formatDayOfMonth, formatDayOfWeekJa } from '@/lib/dateFormat'
 import { BookMarked, Plus, Search, Calendar } from 'lucide-react'
 
 export function D01DiaryList() {
@@ -35,7 +34,7 @@ export function D01DiaryList() {
   // 日付でグループ化
   const groupedByMonth = filteredEntries.reduce(
     (acc, entry) => {
-      const month = format(new Date(entry.date), 'yyyy年M月', { locale: ja })
+      const month = formatMonth(entry.date)
       if (!acc[month]) acc[month] = []
       acc[month].push(entry)
       return acc
@@ -109,10 +108,10 @@ export function D01DiaryList() {
                     <div className="flex items-start gap-4">
                       <div className="text-center min-w-[50px]">
                         <div className="text-2xl font-bold">
-                          {format(new Date(entry.date), 'd')}
+                          {formatDayOfMonth(entry.date)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {format(new Date(entry.date), 'E', { locale: ja })}
+                          {formatDayOfWeekJa(entry.date)}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">

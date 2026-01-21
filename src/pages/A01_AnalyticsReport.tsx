@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TagBadge } from '@/components/common/TagBadge'
+import { formatDurationShort } from '@/lib/dateFormat'
 import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
 import {
   BarChart3,
@@ -37,12 +38,6 @@ const projectData = Object.entries(mockWeeklySummary.byProject).map(([name, minu
 
 export function A01AnalyticsReport() {
   const [period, setPeriod] = useState<'week' | 'month'>('week')
-
-  const formatMinutes = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return h > 0 ? `${h}h ${m}m` : `${m}m`
-  }
 
   const totalHours = Math.floor(mockWeeklySummary.totalMinutes / 60)
   const totalMinutes = mockWeeklySummary.totalMinutes % 60
@@ -171,7 +166,7 @@ export function A01AnalyticsReport() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [formatMinutes(value as number), '']} />
+                  <Tooltip formatter={(value) => [formatDurationShort(value as number), '']} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-3 flex-1">
@@ -185,7 +180,7 @@ export function A01AnalyticsReport() {
                       <span className="text-sm">{item.name}</span>
                     </div>
                     <span className="text-sm font-medium">
-                      {formatMinutes(item.value)}
+                      {formatDurationShort(item.value)}
                     </span>
                   </div>
                 ))}

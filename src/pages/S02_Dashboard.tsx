@@ -7,8 +7,7 @@ import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { formatDateJa, formatDurationShort, formatMonthDay } from '@/lib/dateFormat'
 import {
   Sun,
   Moon,
@@ -35,7 +34,7 @@ export function S02Dashboard() {
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
-  const today = format(new Date(), 'yyyy年M月d日（E）', { locale: ja })
+  const today = formatDateJa(new Date())
 
   const totalPlannedMinutes = todayBlocks.reduce((acc, block) => {
     const [sh, sm] = block.startTime.split(':').map(Number)
@@ -48,12 +47,6 @@ export function S02Dashboard() {
     const [eh, em] = entry.endTime.split(':').map(Number)
     return acc + (eh * 60 + em) - (sh * 60 + sm)
   }, 0)
-
-  const formatMinutes = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return h > 0 ? `${h}h ${m}m` : `${m}m`
-  }
 
   return (
     <div className="space-y-6">
@@ -91,7 +84,7 @@ export function S02Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">今日の予定</p>
-                <p className="text-2xl font-bold">{formatMinutes(totalPlannedMinutes)}</p>
+                <p className="text-2xl font-bold">{formatDurationShort(totalPlannedMinutes)}</p>
               </div>
             </div>
           </CardContent>
@@ -105,7 +98,7 @@ export function S02Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">今日の実績</p>
-                <p className="text-2xl font-bold">{formatMinutes(totalActualMinutes)}</p>
+                <p className="text-2xl font-bold">{formatDurationShort(totalActualMinutes)}</p>
               </div>
             </div>
           </CardContent>
@@ -309,7 +302,7 @@ export function S02Dashboard() {
                     {record.goalTag && <TagBadge tag={record.goalTag} size="sm" />}
                     <span>{record.projectName}</span>
                     <span>•</span>
-                    <span>{format(record.createdAt, 'M/d')}</span>
+                    <span>{formatMonthDay(record.createdAt)}</span>
                   </div>
                 </Link>
               ))}

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TagBadge } from '@/components/common/TagBadge'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useTaskStore } from '@/stores/useTaskStore'
-import { format } from 'date-fns'
+import { formatDateIso } from '@/lib/dateFormat'
 import { BookOpen, Plus, Search, FileText, Shapes } from 'lucide-react'
 
 export function L01LearningRecordList() {
@@ -88,7 +88,7 @@ export function L01LearningRecordList() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate">{record.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {format(record.createdAt, 'yyyy-MM-dd')}
+                      {formatDateIso(record.createdAt)}
                     </p>
                     <div className="flex items-center gap-2 mt-2">
                       {record.goalTag && (

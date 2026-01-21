@@ -15,8 +15,8 @@ import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useMemoStore } from '@/stores/useMemoStore'
 import type { GoalTag } from '@/types'
-import { format, addDays } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { addDays } from 'date-fns'
+import { formatDateJa, formatDateShortJa, formatDateIso, formatTime, formatDurationShort } from '@/lib/dateFormat'
 import {
   Moon,
   ArrowRight,
@@ -51,10 +51,10 @@ export function E01Evening() {
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
-  const tomorrowDate = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  const tomorrowDate = formatDateIso(addDays(new Date(), 1))
   const tomorrowBlocks = getTimeBlocksByDate(tomorrowDate)
-  const today = format(new Date(), 'yyyy年M月d日（E）', { locale: ja })
-  const tomorrow = format(addDays(new Date(), 1), 'M月d日（E）', { locale: ja })
+  const today = formatDateJa(new Date())
+  const tomorrow = formatDateShortJa(addDays(new Date(), 1))
 
   // TimeBlock Dialog State for tomorrow
   const [isTimeBlockDialogOpen, setIsTimeBlockDialogOpen] = useState(false)
@@ -121,12 +121,6 @@ export function E01Evening() {
     { name: 'Other', value: timeByGoal['Other'] || 0, color: '#a0aec0' },
   ].filter((d) => d.value > 0)
 
-  const formatMinutes = (minutes: number) => {
-    const h = Math.floor(Math.abs(minutes) / 60)
-    const m = Math.abs(minutes) % 60
-    return h > 0 ? `${h}h ${m}m` : `${m}m`
-  }
-
   // 時間ベースの計画達成率
   const completionRate = plannedMinutes > 0 ? Math.round((actualMinutes / plannedMinutes) * 100) : 0
 
@@ -172,7 +166,7 @@ export function E01Evening() {
                 <div className="flex-1">
                   <Progress value={Math.min(completionRate, 100)} className="h-3" />
                   <p className="text-sm text-muted-foreground mt-2">
-                    {formatMinutes(actualMinutes)} / {formatMinutes(plannedMinutes)}
+                    {formatDurationShort(actualMinutes)} / {formatDurationShort(plannedMinutes)}
                   </p>
                 </div>
               </div>
@@ -181,16 +175,16 @@ export function E01Evening() {
               <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">計画</p>
-                  <p className="text-xl font-semibold">{formatMinutes(plannedMinutes)}</p>
+                  <p className="text-xl font-semibold">{formatDurationShort(plannedMinutes)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">実績</p>
-                  <p className="text-xl font-semibold text-green-600">{formatMinutes(actualMinutes)}</p>
+                  <p className="text-xl font-semibold text-green-600">{formatDurationShort(actualMinutes)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">差分</p>
                   <p className={`text-xl font-semibold ${difference >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                    {difference >= 0 ? '+' : ''}{formatMinutes(difference)}
+                    {difference >= 0 ? '+' : ''}{formatDurationShort(difference)}
                   </p>
                 </div>
               </div>
@@ -215,7 +209,7 @@ export function E01Evening() {
                           ))}
                         </Pie>
                         <Tooltip
-                          formatter={(value) => [formatMinutes(value as number), '']}
+                          formatter={(value) => [formatDurationShort(value as number), '']}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -230,7 +224,7 @@ export function E01Evening() {
                             <span className="text-sm">{item.name}</span>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            {formatMinutes(item.value)}
+                            {formatDurationShort(item.value)}
                           </span>
                         </div>
                       ))}
@@ -275,7 +269,7 @@ export function E01Evening() {
             entries={todayEntries}
             title="今日の実績"
             showAddButton={true}
-            defaultDate={format(new Date(), 'yyyy-MM-dd')}
+            defaultDate={formatDateIso(new Date())}
           />
 
           {/* 今日のメモ */}
@@ -309,7 +303,7 @@ export function E01Evening() {
                           {memo.content}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(memo.createdAt), 'HH:mm')}
+                          {formatTime(memo.createdAt)}
                         </p>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

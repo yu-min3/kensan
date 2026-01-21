@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { aiReviewReports as mockAIReviewReports, weeklySummary as mockWeeklySummary } from '@/mocks/data'
-import { format, parseISO } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { formatDateRange } from '@/lib/dateFormat'
 import {
   Bot,
   Sparkles,
@@ -26,11 +25,7 @@ export function A02AIReview() {
     setIsGenerating(false)
   }
 
-  const formatWeek = (start: string, end: string) => {
-    const startDate = parseISO(start)
-    const endDate = parseISO(end)
-    return `${format(startDate, 'M月d日', { locale: ja })} - ${format(endDate, 'M月d日', { locale: ja })}`
-  }
+  const formatWeek = (start: string, end: string) => formatDateRange(start, end)
 
   return (
     <div className="space-y-6">

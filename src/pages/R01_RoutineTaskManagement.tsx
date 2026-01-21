@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useRoutineStore } from '@/stores/useRoutineStore'
+import { formatMinutes } from '@/lib/dateFormat'
 import type { RoutineFrequency } from '@/types'
 import { RotateCcw, Plus, Edit, Trash2 } from 'lucide-react'
 
@@ -77,15 +78,6 @@ export function R01RoutineTaskManagement() {
     } else {
       setDaysOfWeek([...daysOfWeek, day].sort())
     }
-  }
-
-  const formatMinutes = (minutes: number) => {
-    if (minutes >= 60) {
-      const h = Math.floor(minutes / 60)
-      const m = minutes % 60
-      return m > 0 ? `${h}時間${m}分` : `${h}時間`
-    }
-    return `${minutes}分`
   }
 
   const getFrequencyDisplay = (routine: typeof routines[0]) => {
