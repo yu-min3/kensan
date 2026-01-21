@@ -29,23 +29,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - VITE_USER_SERVICE_URL=http://localhost:8081
+        - VITE_TASK_SERVICE_URL=http://localhost:8082
+        - VITE_SYNC_SERVICE_URL=http://localhost:8083
+        - VITE_TIMEBLOCK_SERVICE_URL=http://localhost:8084
+        - VITE_ROUTINE_SERVICE_URL=http://localhost:8085
+        - VITE_RECORD_SERVICE_URL=http://localhost:8086
+        - VITE_DIARY_SERVICE_URL=http://localhost:8087
+        - VITE_ANALYTICS_SERVICE_URL=http://localhost:8088
+        - VITE_AI_SERVICE_URL=http://localhost:8089
+        - VITE_MEMO_SERVICE_URL=http://localhost:8090
     container_name: kensan-frontend
     ports:
       - "5173:5173"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - VITE_ENABLE_MSW=false
-      - VITE_USER_SERVICE_URL=http://localhost:8081
-      - VITE_TASK_SERVICE_URL=http://localhost:8082
-      - VITE_SYNC_SERVICE_URL=http://localhost:8083
-      - VITE_TIMEBLOCK_SERVICE_URL=http://localhost:8084
-      - VITE_ROUTINE_SERVICE_URL=http://localhost:8085
-      - VITE_RECORD_SERVICE_URL=http://localhost:8086
-      - VITE_DIARY_SERVICE_URL=http://localhost:8087
-      - VITE_ANALYTICS_SERVICE_URL=http://localhost:8088
-      - VITE_AI_SERVICE_URL=http://localhost:8089
     networks:
       - kensan-network
 
@@ -246,6 +243,28 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8089:8089"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kensan-network
+
+  memo-service:
+    build:
+      context: ./backend
+      dockerfile: services/memo/Dockerfile
+    container_name: kensan-memo-service
+    environment:
+      SERVER_PORT: 8090
+      SERVER_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+    ports:
+      - "8090:8090"
     depends_on:
       postgres:
         condition: service_healthy

@@ -39,6 +39,13 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Put("/{entryId}", h.UpdateTimeEntry)
 		r.Delete("/{entryId}", h.DeleteTimeEntry)
 	})
+
+	// Timer routes
+	r.Route("/timer", func(r chi.Router) {
+		r.Get("/current", h.GetCurrentTimer)
+		r.Post("/start", h.StartTimer)
+		r.Post("/stop", h.StopTimer)
+	})
 }
 
 // ========== TimeBlock Handlers ==========
@@ -49,7 +56,15 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 
 	filter := timeblock.TimeBlockFilter{}
 
-	// Parse date filter (exact match)
+	// Parse UTC timestamp filters (take precedence)
+	if startTs := r.URL.Query().Get("start_timestamp"); startTs != "" {
+		filter.StartTimestamp = &startTs
+	}
+	if endTs := r.URL.Query().Get("end_timestamp"); endTs != "" {
+		filter.EndTimestamp = &endTs
+	}
+
+	// Parse date filter (exact match) - only used if no timestamp filters
 	if date := r.URL.Query().Get("date"); date != "" {
 		filter.Date = &date
 	}
@@ -64,7 +79,12 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 		filter.EndDate = &endDate
 	}
 
-	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter)
+	// Parse timezone parameter for response conversion
+	// If provided, date/time in response will be converted to the specified timezone
+	// If empty, date/time will be returned as stored (UTC)
+	timezone := r.URL.Query().Get("timezone")
+
+	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter, timezone)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidDate) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
@@ -231,7 +251,15 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 
 	filter := timeblock.TimeEntryFilter{}
 
-	// Parse date filter (exact match)
+	// Parse UTC timestamp filters (take precedence)
+	if startTs := r.URL.Query().Get("start_timestamp"); startTs != "" {
+		filter.StartTimestamp = &startTs
+	}
+	if endTs := r.URL.Query().Get("end_timestamp"); endTs != "" {
+		filter.EndTimestamp = &endTs
+	}
+
+	// Parse date filter (exact match) - only used if no timestamp filters
 	if date := r.URL.Query().Get("date"); date != "" {
 		filter.Date = &date
 	}
@@ -257,7 +285,12 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 		filter.GoalTag = &gt
 	}
 
-	entries, err := h.service.ListTimeEntries(r.Context(), userID, filter)
+	// Parse timezone parameter for response conversion
+	// If provided, date/time in response will be converted to the specified timezone
+	// If empty, date/time will be returned as stored (UTC)
+	timezone := r.URL.Query().Get("timezone")
+
+	entries, err := h.service.ListTimeEntries(r.Context(), userID, filter, timezone)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidDate) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
@@ -388,4 +421,80 @@ func (h *Handler) DeleteTimeEntry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ========== Timer Handlers ==========
+
+// GetCurrentTimer handles GET /timer/current
+func (h *Handler) GetCurrentTimer(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	timer, err := h.service.GetRunningTimer(r.Context(), userID)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get running timer")
+		return
+	}
+
+	// Return null if no timer is running (not an error)
+	middleware.JSON(w, r, http.StatusOK, timer)
+}
+
+// StartTimer handles POST /timer/start
+func (h *Handler) StartTimer(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input timeblock.StartTimerInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+		return
+	}
+
+	// Validation
+	var validationErrors []middleware.ErrorDetail
+	if input.TaskName == "" {
+		validationErrors = append(validationErrors, middleware.ErrorDetail{
+			Field: "taskName", Message: "Task name is required",
+		})
+	}
+	if len(validationErrors) > 0 {
+		middleware.ValidationError(w, r, validationErrors)
+		return
+	}
+
+	timer, err := h.service.StartTimer(r.Context(), userID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrTimerAlreadyRunning) {
+			middleware.Error(w, r, http.StatusConflict, "TIMER_ALREADY_RUNNING", "A timer is already running. Stop it first before starting a new one.")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidGoalTag) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidInput) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to start timer")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, timer)
+}
+
+// StopTimer handles POST /timer/stop
+func (h *Handler) StopTimer(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	result, err := h.service.StopTimer(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, service.ErrRunningTimerNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "NO_RUNNING_TIMER", "No running timer to stop")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to stop timer")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, result)
 }

@@ -13,6 +13,8 @@ import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useRoutineStore } from '@/stores/useRoutineStore'
+import { syncApi } from '@/api/services/sync'
+import { ApiError } from '@/api/client'
 import { weeklySummary as mockWeeklySummary } from '@/mocks/data'
 import type { GoalTag } from '@/types'
 import { format } from 'date-fns'
@@ -26,6 +28,7 @@ import {
   // GripVertical, // 未スケジュールタスク用（一時的に非表示）
   RotateCcw,
   Square,
+  RefreshCw,
 } from 'lucide-react'
 
 export function M01Morning() {
@@ -60,6 +63,9 @@ export function M01Morning() {
   const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false)
   const [selectedTimerTaskId, setSelectedTimerTaskId] = useState<string>('')
 
+  // Sync State
+  const [isSyncing, setIsSyncing] = useState(false)
+
   // TimeBlock Dialog Handlers
   const openNewTimeBlockDialog = (taskId?: string, taskName?: string, goalTag?: GoalTag) => {
     setEditingBlockId(null)
@@ -82,8 +88,9 @@ export function M01Morning() {
     setBlockTaskName(block.taskName)
     setBlockTaskId(block.taskId)
     setBlockGoalTag(block.goalTag || '')
-    setBlockStartTime(block.startTime)
-    setBlockEndTime(block.endTime)
+    // バックエンドは HH:mm:ss 形式で返すが、<input type="time"> と API は HH:mm を期待
+    setBlockStartTime(block.startTime.slice(0, 5))
+    setBlockEndTime(block.endTime.slice(0, 5))
     setIsTimeBlockDialogOpen(true)
   }
 
@@ -168,6 +175,26 @@ export function M01Morning() {
     setTimerStartTime(null)
   }
 
+  // Sync Handler
+  const handleSync = async () => {
+    if (isSyncing) return
+    setIsSyncing(true)
+    try {
+      await syncApi.triggerSync()
+      console.log('[Kensan] Manual sync complete')
+      window.location.reload()
+    } catch (err) {
+      console.error('[Kensan] Sync failed:', err)
+      if (err instanceof ApiError) {
+        alert(`同期エラー [${err.status}] ${err.code}\n${err.message}`)
+      } else {
+        alert(`同期に失敗しました: ${(err as Error).message}`)
+      }
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   // 未スケジュールのタスク - 一時的に非表示（将来復活予定）
   // const unscheduledTasks = tasks.filter(
   //   (task) =>
@@ -212,19 +239,32 @@ export function M01Morning() {
                 <Clock className="h-5 w-5" />
                 今日のタイムブロック
               </CardTitle>
-              <Button size="sm" className="gap-1" onClick={() => openNewTimeBlockDialog()}>
-                <Plus className="h-4 w-4" />
-                追加
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  title="Clockifyデータを同期"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  同期
+                </Button>
+                <Button size="sm" className="gap-1" onClick={() => openNewTimeBlockDialog()}>
+                  <Plus className="h-4 w-4" />
+                  追加
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="mb-4 flex gap-4 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-400" />
+                  <div className="w-3 h-3 rounded border" style={{ backgroundColor: 'var(--timeblock-plan-bg)', borderColor: 'var(--timeblock-plan-border)' }} />
                   <span>予定（計画）</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-green-200 border border-green-400" />
+                  <div className="w-3 h-3 rounded border" style={{ backgroundColor: 'var(--timeblock-actual-bg)', borderColor: 'var(--timeblock-actual-border)' }} />
                   <span>実績</span>
                 </div>
               </div>

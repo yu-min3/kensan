@@ -44,6 +44,7 @@ type Task struct {
 	ClockifyID       *string   `json:"clockifyId,omitempty"`
 	ParentTaskID     *string   `json:"parentTaskId,omitempty"`
 	Name             string    `json:"name"`
+	GoalTag          *GoalTag  `json:"goalTag,omitempty"`
 	EstimatedMinutes *int      `json:"estimatedMinutes,omitempty"`
 	Completed        bool      `json:"completed"`
 	DueDate          *string   `json:"dueDate,omitempty"`
@@ -71,24 +72,26 @@ type UpdateProjectInput struct {
 
 // CreateTaskInput represents the input for creating a task
 type CreateTaskInput struct {
-	ProjectID        string  `json:"projectId"`
-	ClockifyID       *string `json:"clockifyId,omitempty"`
-	ParentTaskID     *string `json:"parentTaskId,omitempty"`
-	Name             string  `json:"name"`
-	EstimatedMinutes *int    `json:"estimatedMinutes,omitempty"`
-	Completed        bool    `json:"completed"`
-	DueDate          *string `json:"dueDate,omitempty"`
+	ProjectID        string   `json:"projectId"`
+	ClockifyID       *string  `json:"clockifyId,omitempty"`
+	ParentTaskID     *string  `json:"parentTaskId,omitempty"`
+	Name             string   `json:"name"`
+	GoalTag          *GoalTag `json:"goalTag,omitempty"`
+	EstimatedMinutes *int     `json:"estimatedMinutes,omitempty"`
+	Completed        bool     `json:"completed"`
+	DueDate          *string  `json:"dueDate,omitempty"`
 }
 
 // UpdateTaskInput represents the input for updating a task
 type UpdateTaskInput struct {
-	ProjectID        *string `json:"projectId,omitempty"`
-	ClockifyID       *string `json:"clockifyId,omitempty"`
-	ParentTaskID     *string `json:"parentTaskId,omitempty"`
-	Name             *string `json:"name,omitempty"`
-	EstimatedMinutes *int    `json:"estimatedMinutes,omitempty"`
-	Completed        *bool   `json:"completed,omitempty"`
-	DueDate          *string `json:"dueDate,omitempty"`
+	ProjectID        *string  `json:"projectId,omitempty"`
+	ClockifyID       *string  `json:"clockifyId,omitempty"`
+	ParentTaskID     *string  `json:"parentTaskId,omitempty"`
+	Name             *string  `json:"name,omitempty"`
+	GoalTag          *GoalTag `json:"goalTag,omitempty"`
+	EstimatedMinutes *int     `json:"estimatedMinutes,omitempty"`
+	Completed        *bool    `json:"completed,omitempty"`
+	DueDate          *string  `json:"dueDate,omitempty"`
 }
 
 // ProjectFilter represents filters for listing projects

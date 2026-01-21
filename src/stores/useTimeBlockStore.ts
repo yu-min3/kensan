@@ -14,16 +14,19 @@ interface TimeBlockState {
   fetchTimeBlocksRange: (startDate: string, endDate: string) => Promise<void>
   fetchTimeEntries: (date?: string) => Promise<void>
   fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
+  // Timezone-aware fetch methods (converts local date to UTC range for proper querying)
+  fetchTimeBlocksForLocalDate: (localDate: string, timezone: string) => Promise<void>
+  fetchTimeEntriesForLocalDate: (localDate: string, timezone: string) => Promise<void>
 
   // タイムブロック操作
   addTimeBlock: (block: Omit<TimeBlock, 'id'>) => Promise<void>
   updateTimeBlock: (id: string, updates: Partial<TimeBlock>) => Promise<void>
   deleteTimeBlock: (id: string) => Promise<void>
 
-  // 時間記録操作（現状はローカルのみ - Clockify連携用）
-  addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void
-  updateTimeEntry: (id: string, updates: Partial<TimeEntry>) => void
-  deleteTimeEntry: (id: string) => void
+  // 時間記録操作（API連携）
+  addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => Promise<void>
+  updateTimeEntry: (id: string, updates: Partial<TimeEntry>) => Promise<void>
+  deleteTimeEntry: (id: string) => Promise<void>
 
   // 取得
   getTimeBlocksByDate: (date: string) => TimeBlock[]
@@ -123,23 +126,64 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  // TimeEntries are read-only from Clockify sync - local operations for now
-  addTimeEntry: (entry) =>
-    set((state) => ({
-      timeEntries: [...state.timeEntries, { ...entry, id: `te${Date.now()}` }],
-    })),
+  // Timezone-aware fetch: converts local date to UTC range for proper querying
+  fetchTimeBlocksForLocalDate: async (localDate, timezone) => {
+    set({ isLoading: true, error: null })
+    try {
+      const timeBlocks = await timeblocksApi.listByLocalDate(localDate, timezone)
+      // Replace all blocks since the query is already filtered for the correct range
+      set({ timeBlocks, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
 
-  updateTimeEntry: (id, updates) =>
-    set((state) => ({
-      timeEntries: state.timeEntries.map((e) =>
-        e.id === id ? { ...e, ...updates } : e
-      ),
-    })),
+  fetchTimeEntriesForLocalDate: async (localDate, timezone) => {
+    set({ isLoading: true, error: null })
+    try {
+      const timeEntries = await timeentriesApi.listByLocalDate(localDate, timezone)
+      // Replace all entries since the query is already filtered for the correct range
+      set({ timeEntries, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
 
-  deleteTimeEntry: (id) =>
-    set((state) => ({
-      timeEntries: state.timeEntries.filter((e) => e.id !== id),
-    })),
+  // TimeEntry CRUD operations (API connected)
+  addTimeEntry: async (entry) => {
+    try {
+      const newEntry = await timeentriesApi.create(entry)
+      set((state) => ({
+        timeEntries: [...state.timeEntries, newEntry],
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  updateTimeEntry: async (id, updates) => {
+    try {
+      const updatedEntry = await timeentriesApi.update(id, updates)
+      set((state) => ({
+        timeEntries: state.timeEntries.map((e) =>
+          e.id === id ? updatedEntry : e
+        ),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  deleteTimeEntry: async (id) => {
+    try {
+      await timeentriesApi.delete(id)
+      set((state) => ({
+        timeEntries: state.timeEntries.filter((e) => e.id !== id),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
 
   getTimeBlocksByDate: (date) =>
     get().timeBlocks.filter((b) => b.date === date),
@@ -148,12 +192,16 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     get().timeEntries.filter((e) => e.date === date),
 
   getTodayTimeBlocks: () => {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    return get().timeBlocks.filter((b) => b.date === today)
+    // When using timezone-aware fetch (fetchTimeBlocksForLocalDate), the store
+    // already contains only the data for the requested local date range.
+    // Return all entries without additional filtering.
+    return get().timeBlocks
   },
 
   getTodayTimeEntries: () => {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    return get().timeEntries.filter((e) => e.date === today)
+    // When using timezone-aware fetch (fetchTimeEntriesForLocalDate), the store
+    // already contains only the data for the requested local date range.
+    // Return all entries without additional filtering.
+    return get().timeEntries
   },
 }))

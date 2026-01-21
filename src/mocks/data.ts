@@ -369,38 +369,33 @@ export let diaryEntries: DiaryEntry[] = [
   {
     id: 'd1',
     date: today,
-    title: '新年の抱負と計画',
-    content: `# 新年の抱負と計画
+    title: '[MOCK] MSWテスト日記',
+    content: `# MSWモックデータ
 
-2025年の目標を整理した。
+これはMSW（Mock Service Worker）のテストデータです。
+バックエンド通信時には表示されません。
 
-## 技術目標
-- Golden Kubestronaut 完走
-- Kensanを完成させてOSS公開
-- 技術ブログ月2本
-
-## プライベート
-- 家族との時間を大切に
-- 健康管理（週3運動）
-
-今年も頑張ろう。
+- make dev → このデータが表示される
+- make rebuild → DBのシードデータが表示される
 `,
-    tags: ['振り返り', '目標'],
+    tags: ['mock', 'テスト'],
     createdAt: new Date(today),
     updatedAt: new Date(today),
   },
   {
     id: 'd2',
     date: yesterday,
-    title: '育児と学習の両立について',
-    content: `# 育児と学習の両立について
+    title: '[MOCK] モックデータの説明',
+    content: `# モックモードについて
 
-最近、子どもが夜泣きで睡眠時間が減っている。
-それでも少しずつ学習時間を確保できているのは、タイムブロック管理のおかげ。
+このデータが見えている場合、MSWモックモードで動作しています。
 
-朝の時間を有効活用することが大事だと実感した。
+実際のバックエンドと通信するには:
+\`\`\`
+make rebuild
+\`\`\`
 `,
-    tags: ['育児', '日常'],
+    tags: ['mock', '説明'],
     createdAt: new Date(yesterday),
     updatedAt: new Date(yesterday),
   },

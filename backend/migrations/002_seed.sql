@@ -6,7 +6,7 @@
 -- ==============================================================================
 -- Password hash is bcrypt of 'password123'
 INSERT INTO users (id, email, name, password_hash) VALUES
-    ('11111111-1111-1111-1111-111111111111', 'test@kensan.dev', 'Yu', '$2a$10$rQZ8kHxH8XzK.7JjqHmH4OLzKfvKvFq5xsQYOG9Y8vWvQvP9.xpHe');
+    ('11111111-1111-1111-1111-111111111111', 'test@kensan.dev', 'Yu', '$2a$10$RrkXDfsDcA1ZC/tRZ4s6Qua1ymkwFRhwH0dLCMGIdqTEMbgqMplL6');
 
 -- User settings
 INSERT INTO user_settings (user_id, workspace_id, workspace_name, timezone, theme, is_configured, ai_enabled) VALUES
@@ -73,63 +73,42 @@ INSERT INTO tasks (id, user_id, project_id, name, completed) VALUES
 -- Routine Tasks
 -- ==============================================================================
 INSERT INTO routine_tasks (id, user_id, name, frequency, days_of_week, estimated_minutes, default_start_time, enabled) VALUES
-    ('rrrrrrrr-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '技術ニュースチェック', 'daily', NULL, 15, '16:30', true),
-    ('rrrrrrrr-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '英語学習', 'daily', NULL, 30, '17:00', true),
-    ('rrrrrrrr-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '筋トレ', 'custom', ARRAY[1, 3, 5], 30, '18:00', true),
-    ('rrrrrrrr-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '週次振り返り', 'weekly', ARRAY[0], 60, '20:00', true);
+    ('eeee0000-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '技術ニュースチェック', 'daily', NULL, 15, '16:30', true),
+    ('eeee0000-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '英語学習', 'daily', NULL, 30, '17:00', true),
+    ('eeee0000-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '筋トレ', 'custom', ARRAY[1, 3, 5], 30, '18:00', true),
+    ('eeee0000-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', '週次振り返り', 'weekly', ARRAY[0], 60, '20:00', true);
 
 -- ==============================================================================
--- Time Blocks (Today's plan) - Using CURRENT_DATE
+-- Time Blocks and Time Entries
 -- ==============================================================================
-INSERT INTO time_blocks (id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine) VALUES
-    ('tttbbbbb-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '09:00', '11:00', '11111111-0001-0001-0000-000000000000', 'ICA試験勉強 - Traffic Management', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK', false),
-    ('tttbbbbb-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '11:30', '14:30', '22222222-0001-0002-0000-000000000000', 'Kensan開発 - コンポーネント実装', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Kensan', 'OSS', false),
-    ('tttbbbbb-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '15:00', '16:00', '33333333-0001-0000-0000-000000000000', 'ブログ記事執筆', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'ブログ執筆', 'Output', false),
-    ('tttbbbbb-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '16:30', '16:45', NULL, '技術ニュースチェック', NULL, NULL, 'Other', true),
-    ('tttbbbbb-0005-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '17:00', '17:30', NULL, '英語学習', NULL, NULL, 'Other', true);
-
--- Tomorrow's plan
-INSERT INTO time_blocks (id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine) VALUES
-    ('tttbbbbb-1001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE + 1, '09:00', '11:00', '11111111-0001-0002-0000-000000000000', 'ICA試験勉強 - Security', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK', false);
-
--- ==============================================================================
--- Time Entries (Yesterday's actuals)
--- ==============================================================================
-INSERT INTO time_entries (id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description) VALUES
-    ('ttteeee-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE - 1, '09:00', '11:00', '11111111-0001-0001-0000-000000000000', 'ICA試験勉強 - Traffic Management', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK', NULL),
-    ('ttteeee-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE - 1, '11:30', '14:30', '22222222-0001-0002-0000-000000000000', 'Kensan開発 - コンポーネント実装', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Kensan', 'OSS', NULL),
-    ('ttteeee-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE - 1, '15:00', '16:00', '33333333-0001-0000-0000-000000000000', 'ブログ記事執筆', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'ブログ執筆', 'Output', NULL),
-    ('ttteeee-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE - 1, '16:30', '17:00', NULL, '技術ニュースチェック', NULL, NULL, 'Other', NULL),
-    ('ttteeee-0005-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE - 1, '17:30', '18:30', NULL, '予定外MTG', NULL, NULL, 'Other', '緊急の技術相談');
-
--- Today's partial actuals
-INSERT INTO time_entries (id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description) VALUES
-    ('ttteeee-1001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '09:00', '11:00', '11111111-0001-0001-0000-000000000000', 'ICA試験勉強 - Traffic Management', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK', NULL),
-    ('ttteeee-1002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', CURRENT_DATE, '11:30', '14:30', '22222222-0001-0002-0000-000000000000', 'Kensan開発 - コンポーネント実装', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Kensan', 'OSS', NULL);
+-- NOTE: Time blocks (plans) and time entries (actuals) are not seeded.
+-- These will be created by:
+--   - Time blocks: User creates manually or from routine tasks
+--   - Time entries: Synced from Clockify via sync-service
 
 -- ==============================================================================
 -- Learning Records
 -- ==============================================================================
 INSERT INTO learning_records (id, user_id, title, content, format, project_id, project_name, goal_tag, created_at, updated_at) VALUES
-    ('llllllll-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('00000001-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      'Istio Traffic Management まとめ',
      E'# Istio Traffic Management\n\n## VirtualService\n\nVirtualServiceは、Istioにおけるトラフィックルーティングの中核となるリソースである。\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: reviews\nspec:\n  hosts:\n  - reviews\n  http:\n  - match:\n    - headers:\n        end-user:\n          exact: jason\n    route:\n    - destination:\n        host: reviews\n        subset: v2\n  - route:\n    - destination:\n        host: reviews\n        subset: v1\n```\n\n## DestinationRule\n\nDestinationRuleは、トラフィックが特定のサービスに到達した後のポリシーを定義する。\n\n- サブセット定義\n- ロードバランシング設定\n- コネクションプール設定\n- 外れ値検出設定',
      'markdown', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK',
      CURRENT_DATE - 1, CURRENT_DATE - 1),
 
-    ('llllllll-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('00000001-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      'Kensan アーキテクチャ図',
      '[drawio content placeholder]',
      'drawio', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Kensan', 'OSS',
      CURRENT_DATE - 2, CURRENT_DATE - 2),
 
-    ('llllllll-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('00000001-0003-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      'Cilium eBPF 動作原理',
      E'# Cilium eBPF 動作原理\n\n## eBPFとは\n\neBPF (extended Berkeley Packet Filter) は、Linuxカーネル内でサンドボックス化されたプログラムを実行するための技術。\n\n## XDP (eXpress Data Path)\n\n- ネットワークドライバの直後でパケット処理\n- 高速なパケット処理を実現\n- ドロップ、転送、リダイレクト、通常処理への受け渡しが可能\n\n## TC (Traffic Control)\n\n- より高レベルなパケット処理\n- L7ポリシーの適用が可能',
      'markdown', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK',
      CURRENT_DATE - 3, CURRENT_DATE - 3),
 
-    ('llllllll-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('00000001-0004-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      'Prometheus PromQL基礎',
      E'# Prometheus PromQL基礎\n\n## 基本的なクエリ\n\n### インスタントベクター\n```\nhttp_requests_total{job="api-server"}\n```\n\n### レンジベクター\n```\nhttp_requests_total{job="api-server"}[5m]\n```\n\n## 集約関数\n\n- sum() - 合計\n- avg() - 平均\n- rate() - 増加率\n- increase() - 増加量',
      'markdown', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Certification', 'GK',
@@ -139,13 +118,13 @@ INSERT INTO learning_records (id, user_id, title, content, format, project_id, p
 -- Diary Entries
 -- ==============================================================================
 INSERT INTO diary_entries (id, user_id, date, title, content, tags) VALUES
-    ('dddiiiii-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('ddd00000-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      CURRENT_DATE,
      '新年の抱負と計画',
      E'# 新年の抱負と計画\n\n2025年の目標を整理した。\n\n## 技術目標\n- Golden Kubestronaut 完走\n- Kensanを完成させてOSS公開\n- 技術ブログ月2本\n\n## プライベート\n- 家族との時間を大切に\n- 健康管理（週3運動）\n\n今年も頑張ろう。',
      ARRAY['振り返り', '目標']),
 
-    ('dddiiiii-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('ddd00000-0002-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      CURRENT_DATE - 1,
      '育児と学習の両立について',
      E'# 育児と学習の両立について\n\n最近、子どもが夜泣きで睡眠時間が減っている。\nそれでも少しずつ学習時間を確保できているのは、タイムブロック管理のおかげ。\n\n朝の時間を有効活用することが大事だと実感した。',
@@ -155,7 +134,7 @@ INSERT INTO diary_entries (id, user_id, date, title, content, tags) VALUES
 -- AI Review Reports
 -- ==============================================================================
 INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, created_at) VALUES
-    ('aaaiiiii-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+    ('aaa00000-0001-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
      CURRENT_DATE - 7,
      CURRENT_DATE - 1,
      '今週は合計32時間の学習を達成しました。Golden Kubestronaut目標に対して、ICA試験勉強に重点的に取り組み、Traffic Managementの理解が深まりました。',

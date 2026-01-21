@@ -19,6 +19,7 @@ interface TaskResponse {
   name: string
   projectId: string
   parentTaskId?: string
+  goalTag?: GoalTag
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string
@@ -40,6 +41,7 @@ const transformTask = (t: TaskResponse): Task => ({
   name: t.name,
   projectId: t.projectId,
   parentTaskId: t.parentTaskId,
+  goalTag: t.goalTag,
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
@@ -117,7 +119,7 @@ export const tasksApi = {
     return transformTask(response)
   },
 
-  async create(data: { name: string; projectId: string; parentTaskId?: string; estimatedMinutes?: number; dueDate?: string }): Promise<Task> {
+  async create(data: { name: string; projectId: string; parentTaskId?: string; goalTag?: GoalTag; estimatedMinutes?: number; dueDate?: string }): Promise<Task> {
     const response = await httpClient.post<TaskResponse>(
       API_CONFIG.baseUrls.task,
       '/tasks',
@@ -126,7 +128,7 @@ export const tasksApi = {
     return transformTask(response)
   },
 
-  async update(id: string, data: Partial<{ name: string; projectId?: string; parentTaskId?: string | null; estimatedMinutes?: number; dueDate?: string | null }>): Promise<Task> {
+  async update(id: string, data: Partial<{ name: string; projectId?: string; parentTaskId?: string | null; goalTag?: GoalTag | null; estimatedMinutes?: number; dueDate?: string | null }>): Promise<Task> {
     const response = await httpClient.put<TaskResponse>(
       API_CONFIG.baseUrls.task,
       `/tasks/${id}`,

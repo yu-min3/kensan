@@ -27,9 +27,8 @@ func NewClient(baseURL string) *Client {
 
 // Workspace represents a Clockify workspace
 type Workspace struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	MembersCount int    `json:"memberships,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Project represents a Clockify project
@@ -40,6 +39,14 @@ type Project struct {
 	Archived   bool   `json:"archived"`
 	ClientID   string `json:"clientId,omitempty"`
 	ClientName string `json:"clientName,omitempty"`
+}
+
+// Task represents a Clockify task
+type Task struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ProjectID string `json:"projectId"`
+	Status    string `json:"status"` // ACTIVE, DONE
 }
 
 // TimeEntry represents a Clockify time entry
@@ -87,6 +94,22 @@ func (c *Client) GetProjects(ctx context.Context, apiKey, workspaceID string) ([
 	}
 
 	return projects, nil
+}
+
+// GetTasks retrieves all tasks for a project in a workspace
+func (c *Client) GetTasks(ctx context.Context, apiKey, workspaceID, projectID string) ([]Task, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks", workspaceID, projectID)
+	req, err := c.newRequest(ctx, "GET", path, apiKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []Task
+	if err := c.do(req, &tasks); err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
 }
 
 // GetTimeEntries retrieves time entries for a user in a workspace
@@ -145,7 +168,7 @@ func (c *Client) newRequest(ctx context.Context, method, path, apiKey string) (*
 	return req, nil
 }
 
-func (c *Client) do(req *http.Request, v interface{}) error {
+func (c *Client) do(req *http.Request, v any) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)

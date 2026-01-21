@@ -120,6 +120,10 @@ type TimeBlockFilter struct {
 	Date      *string // Exact date match (YYYY-MM-DD)
 	StartDate *string // Range start (inclusive)
 	EndDate   *string // Range end (inclusive)
+	// UTC timestamp range filters (ISO8601 format)
+	// These take precedence over Date/StartDate/EndDate when provided
+	StartTimestamp *string // UTC timestamp range start (inclusive)
+	EndTimestamp   *string // UTC timestamp range end (exclusive)
 }
 
 // TimeEntryFilter represents filters for listing time entries
@@ -129,6 +133,10 @@ type TimeEntryFilter struct {
 	EndDate   *string  // Range end (inclusive)
 	ProjectID *string  // Filter by project
 	GoalTag   *GoalTag // Filter by goal tag
+	// UTC timestamp range filters (ISO8601 format)
+	// These take precedence over Date/StartDate/EndDate when provided
+	StartTimestamp *string // UTC timestamp range start (inclusive)
+	EndTimestamp   *string // UTC timestamp range end (exclusive)
 }
 
 // GenerateFromRoutinesInput represents input for generating time blocks from routines
@@ -140,4 +148,33 @@ type GenerateFromRoutinesInput struct {
 type GenerateFromRoutinesResult struct {
 	Generated int         `json:"generated"` // Number of time blocks generated
 	Blocks    []TimeBlock `json:"blocks"`    // The generated time blocks
+}
+
+// RunningTimer represents an active timer for time tracking
+type RunningTimer struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"userId"`
+	TaskName    string    `json:"taskName"`
+	ProjectID   *string   `json:"projectId,omitempty"`
+	ProjectName *string   `json:"projectName,omitempty"`
+	GoalTag     *GoalTag  `json:"goalTag,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	StartedAt   time.Time `json:"startedAt"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// StartTimerInput represents the input for starting a timer
+type StartTimerInput struct {
+	TaskName    string   `json:"taskName"`
+	ProjectID   *string  `json:"projectId,omitempty"`
+	ProjectName *string  `json:"projectName,omitempty"`
+	GoalTag     *GoalTag `json:"goalTag,omitempty"`
+	Description *string  `json:"description,omitempty"`
+}
+
+// StopTimerResult represents the result of stopping a timer
+type StopTimerResult struct {
+	TimeEntry *TimeEntry `json:"timeEntry"`
+	Duration  int64      `json:"duration"` // Duration in seconds
 }

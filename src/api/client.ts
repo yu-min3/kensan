@@ -1,4 +1,5 @@
 // HTTP Client for API requests
+import { toast } from 'sonner'
 
 export class ApiError extends Error {
   constructor(
@@ -42,19 +43,37 @@ class HttpClient {
       requestHeaders['Authorization'] = `Bearer ${this.authToken}`
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: requestHeaders,
-      body: body ? JSON.stringify(body) : undefined,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method,
+        headers: requestHeaders,
+        body: body ? JSON.stringify(body) : undefined,
+      })
+    } catch (err) {
+      // Network error (server down, CORS, etc.)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown network error'
+      toast.error('Network Error', {
+        description: `${method} ${endpoint}: ${errorMessage}`,
+        duration: 5000,
+      })
+      throw new ApiError(0, 'NETWORK_ERROR', errorMessage)
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new ApiError(
-        response.status,
-        errorData.code || 'UNKNOWN_ERROR',
-        errorData.message || `Request failed with status ${response.status}`
-      )
+      // Backend returns {error: {code, message}, meta: {...}}
+      const errorObj = errorData.error || errorData
+      const errorCode = errorObj.code || 'UNKNOWN_ERROR'
+      const errorMessage = errorObj.message || `Request failed with status ${response.status}`
+
+      // Show toast notification for API errors
+      toast.error(`API Error [${response.status}]`, {
+        description: `${errorCode}: ${errorMessage}`,
+        duration: 5000,
+      })
+
+      throw new ApiError(response.status, errorCode, errorMessage)
     }
 
     // 204 No Content の場合は空のレスポンス
@@ -62,7 +81,10 @@ class HttpClient {
       return {} as T
     }
 
-    return response.json()
+    const json = await response.json()
+    // バックエンドは {data: ..., meta: ...} 形式で返すため、data フィールドを抽出
+    // MSW や他のソースからの直接レスポンスにも対応
+    return (json.data !== undefined ? json.data : json) as T
   }
 
   get<T>(baseUrl: string, endpoint: string, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {

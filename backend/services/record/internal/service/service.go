@@ -25,8 +25,8 @@ type Service struct {
 	repo repository.Repository
 }
 
-// New creates a new record service
-func New(repo repository.Repository) *Service {
+// NewService creates a new record service
+func NewService(repo repository.Repository) *Service {
 	return &Service{
 		repo: repo,
 	}

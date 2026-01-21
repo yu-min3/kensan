@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { TimerWidget } from '@/components/common/TimerWidget'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 
@@ -39,6 +40,10 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <TimerWidget />
+
+        <div className="h-6 w-px bg-border mx-1" />
+
         <Button variant="ghost" size="icon" onClick={toggleTheme}>
           {theme === 'dark' ? (
             <Sun className="h-5 w-5" />

@@ -2,6 +2,7 @@
 import { authHandlers } from './handlers/auth'
 import { taskHandlers } from './handlers/tasks'
 import { timeblockHandlers } from './handlers/timeblocks'
+import { timerHandlers } from './handlers/timer'
 import { syncHandlers } from './handlers/sync'
 import { routineHandlers } from './handlers/routines'
 import { recordHandlers } from './handlers/records'
@@ -13,6 +14,7 @@ export const handlers = [
   ...authHandlers,
   ...taskHandlers,
   ...timeblockHandlers,
+  ...timerHandlers,
   ...syncHandlers,
   ...routineHandlers,
   ...recordHandlers,

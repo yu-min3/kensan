@@ -281,7 +281,7 @@ func (r *PostgresRepository) DeleteProject(ctx context.Context, userID, projectI
 // ListTasks returns all tasks for a user with optional filters
 func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filter task.TaskFilter) ([]task.Task, error) {
 	query := `
-		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1
 	`
@@ -325,6 +325,7 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var goalTag *string
 		err := rows.Scan(
 			&t.ID,
 			&t.UserID,
@@ -332,6 +333,7 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 			&t.ClockifyID,
 			&t.ParentTaskID,
 			&t.Name,
+			&goalTag,
 			&t.EstimatedMinutes,
 			&t.Completed,
 			&t.DueDate,
@@ -340,6 +342,10 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if goalTag != nil {
+			gt := task.GoalTag(*goalTag)
+			t.GoalTag = &gt
 		}
 		tasks = append(tasks, t)
 	}
@@ -354,12 +360,13 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 // GetTaskByID returns a task by ID for a specific user
 func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID string) (*task.Task, error) {
 	query := `
-		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 		FROM tasks
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Task
+	var goalTag *string
 	err := r.pool.QueryRow(ctx, query, taskID, userID).Scan(
 		&t.ID,
 		&t.UserID,
@@ -367,6 +374,7 @@ func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID str
 		&t.ClockifyID,
 		&t.ParentTaskID,
 		&t.Name,
+		&goalTag,
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
@@ -380,6 +388,11 @@ func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID str
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
+	if goalTag != nil {
+		gt := task.GoalTag(*goalTag)
+		t.GoalTag = &gt
+	}
+
 	return &t, nil
 }
 
@@ -388,13 +401,20 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 	id := uuid.New().String()
 	now := time.Now()
 
+	var goalTag *string
+	if input.GoalTag != nil {
+		s := string(*input.GoalTag)
+		goalTag = &s
+	}
+
 	query := `
-		INSERT INTO tasks (id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		INSERT INTO tasks (id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 	`
 
 	var t task.Task
+	var returnedGoalTag *string
 	err := r.pool.QueryRow(ctx, query,
 		id,
 		userID,
@@ -402,6 +422,7 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 		input.ClockifyID,
 		input.ParentTaskID,
 		input.Name,
+		goalTag,
 		input.EstimatedMinutes,
 		input.Completed,
 		input.DueDate,
@@ -414,6 +435,7 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 		&t.ClockifyID,
 		&t.ParentTaskID,
 		&t.Name,
+		&returnedGoalTag,
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
@@ -422,6 +444,11 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+
+	if returnedGoalTag != nil {
+		gt := task.GoalTag(*returnedGoalTag)
+		t.GoalTag = &gt
 	}
 
 	return &t, nil
@@ -455,6 +482,12 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		argCount++
 		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
 		args = append(args, *input.Name)
+	}
+
+	if input.GoalTag != nil {
+		argCount++
+		setClauses = append(setClauses, fmt.Sprintf("goal_tag = $%d", argCount))
+		args = append(args, string(*input.GoalTag))
 	}
 
 	if input.EstimatedMinutes != nil {
@@ -492,10 +525,11 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		UPDATE tasks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var t task.Task
+	var goalTag *string
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&t.ID,
 		&t.UserID,
@@ -503,6 +537,7 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		&t.ClockifyID,
 		&t.ParentTaskID,
 		&t.Name,
+		&goalTag,
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
@@ -514,6 +549,11 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+
+	if goalTag != nil {
+		gt := task.GoalTag(*goalTag)
+		t.GoalTag = &gt
 	}
 
 	return &t, nil
@@ -537,7 +577,7 @@ func (r *PostgresRepository) DeleteTask(ctx context.Context, userID, taskID stri
 // GetChildTasks returns all child tasks for a given parent task
 func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTaskID string) ([]task.Task, error) {
 	query := `
-		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1 AND parent_task_id = $2
 		ORDER BY created_at DESC
@@ -552,6 +592,7 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var goalTag *string
 		err := rows.Scan(
 			&t.ID,
 			&t.UserID,
@@ -559,6 +600,7 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 			&t.ClockifyID,
 			&t.ParentTaskID,
 			&t.Name,
+			&goalTag,
 			&t.EstimatedMinutes,
 			&t.Completed,
 			&t.DueDate,
@@ -567,6 +609,10 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan child task: %w", err)
+		}
+		if goalTag != nil {
+			gt := task.GoalTag(*goalTag)
+			t.GoalTag = &gt
 		}
 		tasks = append(tasks, t)
 	}
@@ -584,10 +630,11 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 		UPDATE tasks
 		SET completed = NOT completed, updated_at = $3
 		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		RETURNING id, user_id, project_id, clockify_id, parent_task_id, name, goal_tag, estimated_minutes, completed, due_date, created_at, updated_at
 	`
 
 	var t task.Task
+	var goalTag *string
 	err := r.pool.QueryRow(ctx, query, taskID, userID, time.Now()).Scan(
 		&t.ID,
 		&t.UserID,
@@ -595,6 +642,7 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 		&t.ClockifyID,
 		&t.ParentTaskID,
 		&t.Name,
+		&goalTag,
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
@@ -606,6 +654,11 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to toggle task complete: %w", err)
+	}
+
+	if goalTag != nil {
+		gt := task.GoalTag(*goalTag)
+		t.GoalTag = &gt
 	}
 
 	return &t, nil

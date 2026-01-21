@@ -102,7 +102,7 @@ export function L01LearningRecordList() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
                       {record.format === 'markdown'
-                        ? record.content.slice(0, 100) + '...'
+                        ? (record.content || '').slice(0, 100) + '...'
                         : 'drawio図解'}
                     </p>
                   </div>

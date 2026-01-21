@@ -6,7 +6,9 @@ import { useRoutineStore } from '@/stores/useRoutineStore'
 import { useDiaryStore } from '@/stores/useDiaryStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
-import { format, addDays } from 'date-fns'
+import { useTimerStore } from '@/stores/useTimerStore'
+import { syncApi } from '@/api/services/sync'
+import { getTodayInTimezone } from '@/lib/timezone'
 
 // App startup data initialization hook
 export function useInitializeData() {
@@ -20,9 +22,9 @@ export function useInitializeData() {
   // Task store
   const fetchTasks = useTaskStore((state) => state.fetchAll)
 
-  // TimeBlock store
-  const fetchTimeBlocks = useTimeBlockStore((state) => state.fetchTimeBlocksRange)
-  const fetchTimeEntries = useTimeBlockStore((state) => state.fetchTimeEntriesRange)
+  // TimeBlock store (timezone-aware fetch methods)
+  const fetchTimeBlocksForLocalDate = useTimeBlockStore((state) => state.fetchTimeBlocksForLocalDate)
+  const fetchTimeEntriesForLocalDate = useTimeBlockStore((state) => state.fetchTimeEntriesForLocalDate)
 
   // Routine store
   const fetchRoutines = useRoutineStore((state) => state.fetchRoutines)
@@ -35,6 +37,10 @@ export function useInitializeData() {
 
   // Settings store
   const fetchSettings = useSettingsStore((state) => state.fetchSettings)
+  const timezone = useSettingsStore((state) => state.timezone)
+
+  // Timer store
+  const fetchCurrentTimer = useTimerStore((state) => state.fetchCurrentTimer)
 
   useEffect(() => {
     // Only initialize when authenticated
@@ -49,18 +55,33 @@ export function useInitializeData() {
       setIsLoading(true)
 
       try {
-        // Fetch data from all stores in parallel
-        const today = format(new Date(), 'yyyy-MM-dd')
-        const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+        // First fetch settings to get timezone (needed for time block queries)
+        await fetchSettings()
 
+        // Get the current timezone (may have been updated by fetchSettings)
+        const currentTimezone = useSettingsStore.getState().timezone || 'Asia/Tokyo'
+        const todayLocal = getTodayInTimezone(currentTimezone)
+        console.log(`[Kensan] Using timezone: ${currentTimezone}, today: ${todayLocal}`)
+
+        // Sync Clockify data (ignore errors - user may not have Clockify configured)
+        try {
+          console.log('[Kensan] Syncing Clockify data...')
+          await syncApi.triggerSync()
+          console.log('[Kensan] Clockify sync complete')
+        } catch {
+          console.log('[Kensan] Clockify sync skipped (not configured or failed)')
+        }
+
+        // Fetch data from all stores in parallel
+        // Use timezone-aware fetch for time blocks and entries
         await Promise.all([
           fetchTasks(),
-          fetchTimeBlocks(today, tomorrow),
-          fetchTimeEntries(today, tomorrow),
+          fetchTimeBlocksForLocalDate(todayLocal, currentTimezone),
+          fetchTimeEntriesForLocalDate(todayLocal, currentTimezone),
           fetchRoutines(),
           fetchDiaries(),
           fetchRecords(),
-          fetchSettings(),
+          fetchCurrentTimer(),
         ])
 
         console.log('[Kensan] Data initialization complete')
@@ -73,7 +94,7 @@ export function useInitializeData() {
       }
     }
     init()
-  }, [isAuthenticated, fetchTasks, fetchTimeBlocks, fetchTimeEntries, fetchRoutines, fetchDiaries, fetchRecords, fetchSettings])
+  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchRoutines, fetchDiaries, fetchRecords, fetchSettings, fetchCurrentTimer, timezone])
 
   return { initialized, isLoading, error }
 }

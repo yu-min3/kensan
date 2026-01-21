@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
+import { FloatingMemoButton } from '@/components/common/FloatingMemoButton'
 
 export function Layout() {
   return (
@@ -12,6 +13,7 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+      <FloatingMemoButton />
     </div>
   )
 }

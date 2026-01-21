@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { TagBadge } from '@/components/common/TagBadge'
 import { useTaskStore } from '@/stores/useTaskStore'
+import { CLOCKIFY_MASTER_MODE } from '@/config/features'
 import type { GoalTag } from '@/types'
 import {
   FolderKanban,
@@ -18,6 +19,7 @@ import {
   Folder,
   Edit,
   Trash2,
+  Cloud,
 } from 'lucide-react'
 
 const goalTagOptions: { value: GoalTag; label: string }[] = [
@@ -55,6 +57,7 @@ export function T01TaskManagement() {
   const [taskName, setTaskName] = useState('')
   const [taskProjectId, setTaskProjectId] = useState('')
   const [taskParentId, setTaskParentId] = useState<string | undefined>(undefined)
+  const [taskGoalTag, setTaskGoalTag] = useState<GoalTag | ''>('')
 
   // Project Dialog State
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
@@ -69,6 +72,7 @@ export function T01TaskManagement() {
     setTaskName('')
     setTaskProjectId(projectId || projects[0]?.id || '')
     setTaskParentId(parentId)
+    setTaskGoalTag('')
     setIsTaskDialogOpen(true)
   }
 
@@ -77,6 +81,7 @@ export function T01TaskManagement() {
     setTaskName(task.name)
     setTaskProjectId(task.projectId)
     setTaskParentId(task.parentTaskId)
+    setTaskGoalTag(task.goalTag || '')
     setIsTaskDialogOpen(true)
   }
 
@@ -84,9 +89,9 @@ export function T01TaskManagement() {
     if (!taskName || !taskProjectId) return
 
     if (editingTaskId) {
-      await updateTask(editingTaskId, { name: taskName, projectId: taskProjectId, parentTaskId: taskParentId })
+      await updateTask(editingTaskId, { name: taskName, projectId: taskProjectId, parentTaskId: taskParentId, goalTag: taskGoalTag || undefined })
     } else {
-      await addTask({ name: taskName, projectId: taskProjectId, parentTaskId: taskParentId })
+      await addTask({ name: taskName, projectId: taskProjectId, parentTaskId: taskParentId, goalTag: taskGoalTag || undefined })
     }
     setIsTaskDialogOpen(false)
   }
@@ -180,17 +185,25 @@ export function T01TaskManagement() {
         <div className="flex items-center gap-3">
           <FolderKanban className="h-8 w-8 text-red-500" />
           <h1 className="text-2xl font-bold">タスク管理</h1>
+          {CLOCKIFY_MASTER_MODE && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+              <Cloud className="h-3 w-3" />
+              Clockify同期モード
+            </span>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={openNewProjectDialog}>
-            <Plus className="h-4 w-4" />
-            プロジェクト追加
-          </Button>
-          <Button className="gap-2" onClick={() => openNewTaskDialog()}>
-            <Plus className="h-4 w-4" />
-            タスク追加
-          </Button>
-        </div>
+        {!CLOCKIFY_MASTER_MODE && (
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2" onClick={openNewProjectDialog}>
+              <Plus className="h-4 w-4" />
+              プロジェクト追加
+            </Button>
+            <Button className="gap-2" onClick={() => openNewTaskDialog()}>
+              <Plus className="h-4 w-4" />
+              タスク追加
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* フィルター */}
@@ -242,30 +255,35 @@ export function T01TaskManagement() {
                   <span className="text-sm text-muted-foreground ml-auto">
                     {filteredProjectTasks.length}タスク
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => openNewTaskDialog(project.id)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                  {!CLOCKIFY_MASTER_MODE && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => openNewTaskDialog(project.id)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0"
                     onClick={() => openEditProjectDialog(project)}
+                    title={CLOCKIFY_MASTER_MODE ? '目標タグを設定' : 'プロジェクトを編集'}
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => handleDeleteProject(project.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!CLOCKIFY_MASTER_MODE && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => handleDeleteProject(project.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </CardTitle>
               </CardHeader>
 
@@ -308,33 +326,36 @@ export function T01TaskManagement() {
                             >
                               {task.name}
                             </span>
-                            <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => openNewTaskDialog(task.projectId, task.id)}
-                                title="サブタスク追加"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => openEditTaskDialog(task)}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => handleDeleteTask(task.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            {task.goalTag && <TagBadge tag={task.goalTag} size="sm" />}
+                            {!CLOCKIFY_MASTER_MODE && (
+                              <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => openNewTaskDialog(task.projectId, task.id)}
+                                  title="サブタスク追加"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => openEditTaskDialog(task)}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleDeleteTask(task.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
 
                           {/* 子タスク */}
@@ -361,24 +382,27 @@ export function T01TaskManagement() {
                                   >
                                     {childTask.name}
                                   </span>
-                                  <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                      onClick={() => openEditTaskDialog(childTask)}
-                                    >
-                                      <Edit className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                      onClick={() => handleDeleteTask(childTask.id)}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                  {childTask.goalTag && <TagBadge tag={childTask.goalTag} size="sm" />}
+                                  {!CLOCKIFY_MASTER_MODE && (
+                                    <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => openEditTaskDialog(childTask)}
+                                      >
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => handleDeleteTask(childTask.id)}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -437,6 +461,22 @@ export function T01TaskManagement() {
               </Select>
             </div>
 
+            <div>
+              <Label>目標タグ</Label>
+              <Select value={taskGoalTag} onValueChange={(v) => setTaskGoalTag(v as GoalTag)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="タグを選択（任意）" />
+                </SelectTrigger>
+                <SelectContent>
+                  {goalTagOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {taskParentId && (
               <div>
                 <Label className="text-muted-foreground">
@@ -462,62 +502,92 @@ export function T01TaskManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingProjectId ? 'プロジェクトを編集' : 'プロジェクトを追加'}
+              {CLOCKIFY_MASTER_MODE
+                ? '目標タグを設定'
+                : editingProjectId
+                  ? 'プロジェクトを編集'
+                  : 'プロジェクトを追加'}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="projectName">プロジェクト名</Label>
-              <Input
-                id="projectName"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="例: 新規プロジェクト"
-                className="mt-1"
-              />
-            </div>
+            {CLOCKIFY_MASTER_MODE ? (
+              <>
+                <div>
+                  <Label className="text-muted-foreground">プロジェクト名</Label>
+                  <p className="mt-1 text-sm">{projectName}</p>
+                </div>
+                <div>
+                  <Label>目標タグ</Label>
+                  <Select value={projectGoalTag} onValueChange={(v) => setProjectGoalTag(v as GoalTag)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="タグを選択（任意）" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {goalTagOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="projectName">プロジェクト名</Label>
+                  <Input
+                    id="projectName"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="例: 新規プロジェクト"
+                    className="mt-1"
+                  />
+                </div>
 
-            <div>
-              <Label>目標タグ</Label>
-              <Select value={projectGoalTag} onValueChange={(v) => setProjectGoalTag(v as GoalTag)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タグを選択（任意）" />
-                </SelectTrigger>
-                <SelectContent>
-                  {goalTagOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div>
+                  <Label>目標タグ</Label>
+                  <Select value={projectGoalTag} onValueChange={(v) => setProjectGoalTag(v as GoalTag)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="タグを選択（任意）" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {goalTagOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label htmlFor="projectColor">カラー</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input
-                  id="projectColor"
-                  type="color"
-                  value={projectColor}
-                  onChange={(e) => setProjectColor(e.target.value)}
-                  className="w-12 h-10 p-1"
-                />
-                <Input
-                  value={projectColor}
-                  onChange={(e) => setProjectColor(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-            </div>
+                <div>
+                  <Label htmlFor="projectColor">カラー</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      id="projectColor"
+                      type="color"
+                      value={projectColor}
+                      onChange={(e) => setProjectColor(e.target.value)}
+                      className="w-12 h-10 p-1"
+                    />
+                    <Input
+                      value={projectColor}
+                      onChange={(e) => setProjectColor(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)}>
               キャンセル
             </Button>
-            <Button onClick={handleSaveProject} disabled={!projectName}>
+            <Button onClick={handleSaveProject} disabled={!CLOCKIFY_MASTER_MODE && !projectName}>
               保存
             </Button>
           </DialogFooter>

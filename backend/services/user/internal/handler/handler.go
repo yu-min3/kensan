@@ -16,27 +16,25 @@ type Handler struct {
 	service *service.Service
 }
 
-// New creates a new user handler
-func New(svc *service.Service) *Handler {
+// NewHandler creates a new user handler
+func NewHandler(svc *service.Service) *Handler {
 	return &Handler{service: svc}
 }
 
-// RegisterRoutes registers the user routes
-func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
-	// Public routes (no authentication required)
+// RegisterPublicRoutes registers routes that don't require authentication.
+func (h *Handler) RegisterPublicRoutes(r chi.Router) {
 	r.Post("/auth/register", h.Register)
 	r.Post("/auth/login", h.Login)
+}
 
-	// Protected routes (authentication required)
-	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware)
-
-		r.Get("/users/me", h.GetProfile)
-		r.Put("/users/me", h.UpdateProfile)
-		r.Get("/users/me/settings", h.GetSettings)
-		r.Put("/users/me/settings", h.UpdateSettings)
-		r.Post("/users/me/ai-consent", h.GiveAIConsent)
-	})
+// RegisterRoutes registers routes that require authentication.
+// Authentication middleware is expected to be applied by the caller.
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/users/me", h.GetProfile)
+	r.Put("/users/me", h.UpdateProfile)
+	r.Get("/users/me/settings", h.GetSettings)
+	r.Put("/users/me/settings", h.UpdateSettings)
+	r.Post("/users/me/ai-consent", h.GiveAIConsent)
 }
 
 // Register handles user registration

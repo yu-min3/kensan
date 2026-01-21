@@ -33,7 +33,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // GetByID retrieves a diary entry by ID
 func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*diary.DiaryEntry, error) {
 	query := `
-		SELECT id, user_id, date, title, content, tags, created_at, updated_at
+		SELECT id, user_id, date::text, title, content, tags, created_at, updated_at
 		FROM diary_entries
 		WHERE id = $1
 	`
@@ -69,7 +69,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*diary.Dia
 // GetByIDAndUserID retrieves a diary entry by ID and user ID
 func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*diary.DiaryEntry, error) {
 	query := `
-		SELECT id, user_id, date, title, content, tags, created_at, updated_at
+		SELECT id, user_id, date::text, title, content, tags, created_at, updated_at
 		FROM diary_entries
 		WHERE id = $1 AND user_id = $2
 	`
@@ -105,7 +105,7 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 // GetByDateAndUserID retrieves a diary entry by date and user ID
 func (r *PostgresRepository) GetByDateAndUserID(ctx context.Context, date, userID string) (*diary.DiaryEntry, error) {
 	query := `
-		SELECT id, user_id, date, title, content, tags, created_at, updated_at
+		SELECT id, user_id, date::text, title, content, tags, created_at, updated_at
 		FROM diary_entries
 		WHERE date = $1 AND user_id = $2
 	`
@@ -141,7 +141,7 @@ func (r *PostgresRepository) GetByDateAndUserID(ctx context.Context, date, userI
 // List retrieves diary entries for a user with optional filters
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter *diary.DiaryFilter) ([]*diary.DiaryEntryListItem, error) {
 	query := `
-		SELECT id, user_id, date, title, content, tags, created_at, updated_at
+		SELECT id, user_id, date::text, title, content, tags, created_at, updated_at
 		FROM diary_entries
 		WHERE user_id = $1
 	`

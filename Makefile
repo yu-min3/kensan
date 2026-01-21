@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db help
+.PHONY: up down build logs ps clean frontend backend db help dev dev-docker dev-backend
 
 # Default target
 .DEFAULT_GOAL := help
@@ -83,12 +83,29 @@ backend: db
 # Development Commands
 # =============================================================================
 
-## Start frontend in local dev mode (not Docker)
-dev-frontend:
-	npm run dev
+## Start in development mode with MSW mocking (frontend-only, no backend needed)
+dev:
+	@echo ""
+	@echo "🔧 Development Mode (MSW Mocking)"
+	@echo ""
+	@echo "Starting frontend with MSW enabled..."
+	@echo "All API requests will be mocked. No backend required."
+	@echo ""
+	npm run dev:mock
+
+## Start with Docker + MSW (alternative to local npm)
+dev-docker:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build frontend
+	@echo ""
+	@echo "🔧 Development Mode (Docker + MSW)"
+	@echo ""
+	@echo "Frontend: http://localhost:5173"
+	@echo ""
 
 ## Start backend services only (for local frontend development)
 dev-backend: db backend
+	@echo ""
+	@echo "Backend services started. Now run 'npm run dev' for frontend."
 
 # =============================================================================
 # Health Check
@@ -133,8 +150,9 @@ help:
 	@echo "  db        Start only database"
 	@echo ""
 	@echo "Development:"
-	@echo "  dev-frontend  Run frontend locally (npm run dev)"
-	@echo "  dev-backend   Start backend in Docker for local frontend"
+	@echo "  dev           Start frontend with MSW mocking (npm, no backend)"
+	@echo "  dev-docker    Start frontend with MSW in Docker"
+	@echo "  dev-backend   Start backend services for local frontend"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

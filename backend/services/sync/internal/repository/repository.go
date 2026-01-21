@@ -88,8 +88,9 @@ func (r *PostgresRepository) UpdateSyncStatus(ctx context.Context, status *sync.
 
 // GetUserClockifySettings retrieves Clockify settings for a user
 func (r *PostgresRepository) GetUserClockifySettings(ctx context.Context, userID string) (*sync.UserClockifySettings, error) {
+	// ADR-0003: Plaintext storage for development phase
 	query := `
-		SELECT user_id, clockify_api_key, clockify_user_id, workspace_id, default_project_id
+		SELECT user_id, clockify_api_key, clockify_user_id, workspace_id, NULL as default_project_id
 		FROM user_settings
 		WHERE user_id = $1
 	`
@@ -114,14 +115,14 @@ func (r *PostgresRepository) GetUserClockifySettings(ctx context.Context, userID
 
 // UpdateUserClockifySettings updates Clockify settings for a user
 func (r *PostgresRepository) UpdateUserClockifySettings(ctx context.Context, settings *sync.UserClockifySettings) error {
+	// ADR-0003: Plaintext storage for development phase
 	query := `
-		INSERT INTO user_settings (user_id, clockify_api_key, clockify_user_id, workspace_id, default_project_id, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW())
+		INSERT INTO user_settings (user_id, clockify_api_key, clockify_user_id, workspace_id, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
 		ON CONFLICT (user_id) DO UPDATE SET
 			clockify_api_key = EXCLUDED.clockify_api_key,
 			clockify_user_id = EXCLUDED.clockify_user_id,
 			workspace_id = EXCLUDED.workspace_id,
-			default_project_id = EXCLUDED.default_project_id,
 			updated_at = NOW()
 	`
 
@@ -130,7 +131,6 @@ func (r *PostgresRepository) UpdateUserClockifySettings(ctx context.Context, set
 		settings.ClockifyAPIKey,
 		settings.ClockifyUserID,
 		settings.WorkspaceID,
-		settings.DefaultProjectID,
 	)
 	return err
 }
@@ -138,12 +138,12 @@ func (r *PostgresRepository) UpdateUserClockifySettings(ctx context.Context, set
 // UpsertProject upserts a project from Clockify
 func (r *PostgresRepository) UpsertProject(ctx context.Context, userID, projectID, name, color string, archived bool, clientID, clientName *string) (created bool, err error) {
 	query := `
-		INSERT INTO projects (id, user_id, clockify_id, name, color, archived, client_id, client_name, created_at, updated_at)
+		INSERT INTO projects (id, user_id, clockify_id, name, color, is_archived, client_id, client_name, created_at, updated_at)
 		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 		ON CONFLICT (user_id, clockify_id) DO UPDATE SET
 			name = EXCLUDED.name,
 			color = EXCLUDED.color,
-			archived = EXCLUDED.archived,
+			is_archived = EXCLUDED.is_archived,
 			client_id = EXCLUDED.client_id,
 			client_name = EXCLUDED.client_name,
 			updated_at = NOW()
@@ -154,23 +154,70 @@ func (r *PostgresRepository) UpsertProject(ctx context.Context, userID, projectI
 	return
 }
 
-// UpsertTimeEntry upserts a time entry from Clockify
-func (r *PostgresRepository) UpsertTimeEntry(ctx context.Context, userID, entryID, description, projectID string, taskID *string, start, end time.Time, duration string) (created bool, err error) {
+// UpsertTask upserts a task from Clockify
+func (r *PostgresRepository) UpsertTask(ctx context.Context, userID, taskID, clockifyProjectID, name string, completed bool) (created bool, err error) {
 	query := `
-		INSERT INTO time_entries (id, user_id, clockify_id, description, project_id, task_id, start_time, end_time, duration, created_at, updated_at)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		INSERT INTO tasks (id, user_id, clockify_id, project_id, name, completed, created_at, updated_at)
+		VALUES (
+			gen_random_uuid(),
+			$1,
+			$2,
+			(SELECT id FROM projects WHERE user_id = $1 AND clockify_id = $3),
+			$4,
+			$5,
+			NOW(),
+			NOW()
+		)
 		ON CONFLICT (user_id, clockify_id) DO UPDATE SET
-			description = EXCLUDED.description,
+			name = EXCLUDED.name,
 			project_id = EXCLUDED.project_id,
-			task_id = EXCLUDED.task_id,
+			completed = EXCLUDED.completed,
+			updated_at = NOW()
+		RETURNING (xmax = 0) AS inserted
+	`
+
+	err = r.db.QueryRow(ctx, query, userID, taskID, clockifyProjectID, name, completed).Scan(&created)
+	return
+}
+
+// UpsertTimeEntry upserts a time entry from Clockify
+func (r *PostgresRepository) UpsertTimeEntry(ctx context.Context, userID, entryID, description, clockifyProjectID string, taskID *string, start, end time.Time, duration string) (created bool, err error) {
+	// The schema has separate date and time fields, and project_id is UUID referencing projects table
+	// We need to:
+	// 1. Extract date from start timestamp
+	// 2. Extract time from start/end timestamps
+	// 3. Look up project UUID from clockify_id
+	query := `
+		INSERT INTO time_entries (id, user_id, clockify_id, date, start_time, end_time, task_name, project_id, project_name, description, duration, created_at, updated_at)
+		VALUES (
+			gen_random_uuid(),
+			$1,
+			$2,
+			$3::DATE,
+			$4::TIME,
+			$5::TIME,
+			COALESCE(NULLIF($6, ''), 'Untitled'),
+			(SELECT id FROM projects WHERE user_id = $1 AND clockify_id = $7),
+			(SELECT name FROM projects WHERE user_id = $1 AND clockify_id = $7),
+			$6,
+			$8,
+			NOW(),
+			NOW()
+		)
+		ON CONFLICT (user_id, clockify_id) DO UPDATE SET
+			date = EXCLUDED.date,
 			start_time = EXCLUDED.start_time,
 			end_time = EXCLUDED.end_time,
+			task_name = EXCLUDED.task_name,
+			project_id = EXCLUDED.project_id,
+			project_name = EXCLUDED.project_name,
+			description = EXCLUDED.description,
 			duration = EXCLUDED.duration,
 			updated_at = NOW()
 		RETURNING (xmax = 0) AS inserted
 	`
 
-	err = r.db.QueryRow(ctx, query, userID, entryID, description, projectID, taskID, start, end, duration).Scan(&created)
+	err = r.db.QueryRow(ctx, query, userID, entryID, start, start, end, description, clockifyProjectID, duration).Scan(&created)
 	return
 }
 

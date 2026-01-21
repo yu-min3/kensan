@@ -51,6 +51,11 @@ func (m *MockRepository) UpsertProject(ctx context.Context, userID, projectID, n
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockRepository) UpsertTask(ctx context.Context, userID, taskID, clockifyProjectID, name string, completed bool) (bool, error) {
+	args := m.Called(ctx, userID, taskID, clockifyProjectID, name, completed)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockRepository) UpsertTimeEntry(ctx context.Context, userID, entryID, description, projectID string, taskID *string, startTime, endTime time.Time, duration string) (bool, error) {
 	args := m.Called(ctx, userID, entryID, description, projectID, taskID, startTime, endTime, duration)
 	return args.Bool(0), args.Error(1)

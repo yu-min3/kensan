@@ -13,6 +13,7 @@ export interface Task {
   name: string
   projectId: string
   parentTaskId?: string
+  goalTag?: GoalTag
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string // YYYY-MM-DD

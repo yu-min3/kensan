@@ -16,24 +16,20 @@ type Handler struct {
 	service *service.Service
 }
 
-// New creates a new record handler
-func New(svc *service.Service) *Handler {
+// NewHandler creates a new record handler
+func NewHandler(svc *service.Service) *Handler {
 	return &Handler{service: svc}
 }
 
-// RegisterRoutes registers the learning record routes
-func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
-	// All routes require authentication
-	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware)
-
-		r.Get("/records", h.List)
-		r.Post("/records", h.Create)
-		r.Get("/records/{recordId}", h.GetByID)
-		r.Put("/records/{recordId}", h.Update)
-		r.Delete("/records/{recordId}", h.Delete)
-		r.Post("/records/search/semantic", h.SemanticSearch)
-	})
+// RegisterRoutes registers the learning record routes.
+// Authentication middleware is expected to be applied by the caller.
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/records", h.List)
+	r.Post("/records", h.Create)
+	r.Get("/records/{recordId}", h.GetByID)
+	r.Put("/records/{recordId}", h.Update)
+	r.Delete("/records/{recordId}", h.Delete)
+	r.Post("/records/search/semantic", h.SemanticSearch)
 }
 
 // List handles listing learning records

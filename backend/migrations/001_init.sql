@@ -166,8 +166,9 @@ CREATE INDEX idx_learning_records_project_id ON learning_records(project_id);
 CREATE INDEX idx_learning_records_goal_tag ON learning_records(goal_tag);
 
 -- Full-text search index for learning records
+-- Note: Using 'simple' config as 'japanese' is not available in postgres:alpine
 CREATE INDEX idx_learning_records_search ON learning_records
-    USING GIN (to_tsvector('japanese', title || ' ' || COALESCE(content, '')));
+    USING GIN (to_tsvector('simple', title || ' ' || COALESCE(content, '')));
 
 -- Diary entries table
 CREATE TABLE diary_entries (

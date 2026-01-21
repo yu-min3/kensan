@@ -50,7 +50,7 @@ export function TaskCard({
           >
             {task.name}
           </span>
-          {goalTag && <TagBadge tag={goalTag} size="sm" />}
+          {(task.goalTag || goalTag) && <TagBadge tag={task.goalTag || goalTag!} size="sm" />}
         </div>
         {projectName && (
           <p className="text-xs text-muted-foreground truncate">

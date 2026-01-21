@@ -103,6 +103,31 @@ func (m *MockRepository) DeleteTimeEntry(ctx context.Context, userID, timeEntryI
 	return args.Error(0)
 }
 
+// Timer methods
+func (m *MockRepository) GetRunningTimer(ctx context.Context, userID string) (*timeblock.RunningTimer, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*timeblock.RunningTimer), args.Error(1)
+}
+
+func (m *MockRepository) StartTimer(ctx context.Context, userID string, input timeblock.StartTimerInput) (*timeblock.RunningTimer, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*timeblock.RunningTimer), args.Error(1)
+}
+
+func (m *MockRepository) StopTimer(ctx context.Context, userID string) (*timeblock.TimeEntry, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*timeblock.TimeEntry), args.Error(1)
+}
+
 // ========== Date/Time Validation Tests ==========
 
 func TestValidateDate(t *testing.T) {
@@ -168,7 +193,7 @@ func TestService_ListTimeBlocks_Success(t *testing.T) {
 
 	mockRepo.On("ListTimeBlocks", ctx, userID, filter).Return(expectedBlocks, nil)
 
-	result, err := svc.ListTimeBlocks(ctx, userID, filter)
+	result, err := svc.ListTimeBlocks(ctx, userID, filter, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
@@ -192,7 +217,7 @@ func TestService_ListTimeBlocks_ByDate(t *testing.T) {
 
 	mockRepo.On("ListTimeBlocks", ctx, userID, filter).Return(expectedBlocks, nil)
 
-	result, err := svc.ListTimeBlocks(ctx, userID, filter)
+	result, err := svc.ListTimeBlocks(ctx, userID, filter, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
@@ -210,7 +235,7 @@ func TestService_ListTimeBlocks_InvalidDateFilter(t *testing.T) {
 		Date: &invalidDate,
 	}
 
-	result, err := svc.ListTimeBlocks(ctx, userID, filter)
+	result, err := svc.ListTimeBlocks(ctx, userID, filter, "")
 
 	assert.ErrorIs(t, err, ErrInvalidDate)
 	assert.Nil(t, result)
@@ -226,7 +251,7 @@ func TestService_ListTimeBlocks_ReturnsEmptySliceForNil(t *testing.T) {
 
 	mockRepo.On("ListTimeBlocks", ctx, userID, filter).Return(nil, nil)
 
-	result, err := svc.ListTimeBlocks(ctx, userID, filter)
+	result, err := svc.ListTimeBlocks(ctx, userID, filter, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -561,7 +586,7 @@ func TestService_ListTimeEntries_Success(t *testing.T) {
 
 	mockRepo.On("ListTimeEntries", ctx, userID, filter).Return(expectedEntries, nil)
 
-	result, err := svc.ListTimeEntries(ctx, userID, filter)
+	result, err := svc.ListTimeEntries(ctx, userID, filter, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
@@ -578,7 +603,7 @@ func TestService_ListTimeEntries_InvalidDateFilter(t *testing.T) {
 		Date: &invalidDate,
 	}
 
-	result, err := svc.ListTimeEntries(ctx, userID, filter)
+	result, err := svc.ListTimeEntries(ctx, userID, filter, "")
 
 	assert.ErrorIs(t, err, ErrInvalidDate)
 	assert.Nil(t, result)
@@ -594,7 +619,7 @@ func TestService_ListTimeEntries_ReturnsEmptySliceForNil(t *testing.T) {
 
 	mockRepo.On("ListTimeEntries", ctx, userID, filter).Return(nil, nil)
 
-	result, err := svc.ListTimeEntries(ctx, userID, filter)
+	result, err := svc.ListTimeEntries(ctx, userID, filter, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

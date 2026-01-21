@@ -31,22 +31,25 @@ type TimeEntryAggregate struct {
 }
 
 // GetTimeEntriesAggregated returns aggregated time entries for a date range
+// Uses cascade logic: time_entry.goal_tag > task.goal_tag > project.goal_tag
 func (r *PostgresRepository) GetTimeEntriesAggregated(ctx context.Context, userID, startDate, endDate string) ([]TimeEntryAggregate, error) {
 	query := `
 		SELECT
-			date,
-			goal_tag,
-			project_id,
+			te.date::text,
+			COALESCE(te.goal_tag, t.goal_tag, p.goal_tag) AS effective_goal_tag,
+			te.project_id::text,
 			SUM(
 				EXTRACT(EPOCH FROM (
-					(date || ' ' || end_time)::timestamp -
-					(date || ' ' || start_time)::timestamp
+					(te.date || ' ' || te.end_time)::timestamp -
+					(te.date || ' ' || te.start_time)::timestamp
 				)) / 60
 			)::integer AS minutes
-		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
-		GROUP BY date, goal_tag, project_id
-		ORDER BY date ASC
+		FROM time_entries te
+		LEFT JOIN tasks t ON te.task_id = t.id
+		LEFT JOIN projects p ON te.project_id = p.id
+		WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3
+		GROUP BY te.date, COALESCE(te.goal_tag, t.goal_tag, p.goal_tag), te.project_id
+		ORDER BY te.date ASC
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
@@ -139,19 +142,22 @@ func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, use
 }
 
 // GetMinutesByGoalTag returns minutes aggregated by goal tag for a date range
+// Uses cascade logic: time_entry.goal_tag > task.goal_tag > project.goal_tag
 func (r *PostgresRepository) GetMinutesByGoalTag(ctx context.Context, userID, startDate, endDate string) (map[string]int, error) {
 	query := `
 		SELECT
-			COALESCE(goal_tag, 'Other') as goal_tag,
+			COALESCE(te.goal_tag, t.goal_tag, p.goal_tag, 'Other') as effective_goal_tag,
 			SUM(
 				EXTRACT(EPOCH FROM (
-					(date || ' ' || end_time)::timestamp -
-					(date || ' ' || start_time)::timestamp
+					(te.date || ' ' || te.end_time)::timestamp -
+					(te.date || ' ' || te.start_time)::timestamp
 				)) / 60
 			)::integer AS minutes
-		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
-		GROUP BY COALESCE(goal_tag, 'Other')
+		FROM time_entries te
+		LEFT JOIN tasks t ON te.task_id = t.id
+		LEFT JOIN projects p ON te.project_id = p.id
+		WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3
+		GROUP BY COALESCE(te.goal_tag, t.goal_tag, p.goal_tag, 'Other')
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
@@ -178,6 +184,7 @@ func (r *PostgresRepository) GetMinutesByGoalTag(ctx context.Context, userID, st
 }
 
 // GetMinutesByGoalTagForCurrentWeek returns minutes for a specific goal tag in the current week
+// Uses cascade logic: time_entry.goal_tag > task.goal_tag > project.goal_tag
 func (r *PostgresRepository) GetMinutesByGoalTagForCurrentWeek(ctx context.Context, userID string, goalTag analytics.GoalTag) (int, error) {
 	// Get current week start (Monday) and end (Sunday)
 	now := time.Now()
@@ -195,12 +202,15 @@ func (r *PostgresRepository) GetMinutesByGoalTagForCurrentWeek(ctx context.Conte
 	query := `
 		SELECT COALESCE(SUM(
 			EXTRACT(EPOCH FROM (
-				(date || ' ' || end_time)::timestamp -
-				(date || ' ' || start_time)::timestamp
+				(te.date || ' ' || te.end_time)::timestamp -
+				(te.date || ' ' || te.start_time)::timestamp
 			)) / 60
 		)::integer, 0) AS minutes
-		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3 AND goal_tag = $4
+		FROM time_entries te
+		LEFT JOIN tasks t ON te.task_id = t.id
+		LEFT JOIN projects p ON te.project_id = p.id
+		WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3
+			AND COALESCE(te.goal_tag, t.goal_tag, p.goal_tag) = $4
 	`
 
 	var minutes int
@@ -216,7 +226,7 @@ func (r *PostgresRepository) GetMinutesByGoalTagForCurrentWeek(ctx context.Conte
 func (r *PostgresRepository) GetMinutesByProject(ctx context.Context, userID, startDate, endDate string) (map[string]int, error) {
 	query := `
 		SELECT
-			COALESCE(project_id, 'unknown') as project_id,
+			COALESCE(project_id::text, 'unknown') as project_id,
 			SUM(
 				EXTRACT(EPOCH FROM (
 					(date || ' ' || end_time)::timestamp -
@@ -255,7 +265,7 @@ func (r *PostgresRepository) GetMinutesByProject(ctx context.Context, userID, st
 func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error) {
 	query := `
 		SELECT
-			date,
+			date::text,
 			SUM(
 				EXTRACT(EPOCH FROM (
 					(date || ' ' || end_time)::timestamp -

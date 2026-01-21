@@ -1,8 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,9 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { TagBadge } from '@/components/common/TagBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
+import { TimeEntryList } from '@/components/common/TimeEntryList'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
+import { useMemoStore } from '@/stores/useMemoStore'
+import { syncApi } from '@/api/services/sync'
+import { ApiError } from '@/api/client'
 import type { GoalTag } from '@/types'
 import { format, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -25,6 +28,10 @@ import {
   Plus,
   Sun,
   TrendingUp,
+  RefreshCw,
+  Lightbulb,
+  Archive,
+  Trash2,
 } from 'lucide-react'
 import {
   PieChart,
@@ -38,6 +45,12 @@ export function E01Evening() {
   const { userName } = useSettingsStore()
   const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, addTimeBlock } = useTimeBlockStore()
   const { tasks, projects } = useTaskStore()
+  const { fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
+
+  // Fetch memos on mount
+  useEffect(() => {
+    fetchMemos()
+  }, [fetchMemos])
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
@@ -53,6 +66,29 @@ export function E01Evening() {
   const [blockEndTime, setBlockEndTime] = useState('10:00')
   const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
   const [blockGoalTag, setBlockGoalTag] = useState<GoalTag | ''>('')
+
+  // Sync State
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  // Sync Handler
+  const handleSync = async () => {
+    if (isSyncing) return
+    setIsSyncing(true)
+    try {
+      await syncApi.triggerSync()
+      console.log('[Kensan] Manual sync complete')
+      window.location.reload()
+    } catch (err) {
+      console.error('[Kensan] Sync failed:', err)
+      if (err instanceof ApiError) {
+        alert(`同期エラー [${err.status}] ${err.code}\n${err.message}`)
+      } else {
+        alert(`同期に失敗しました: ${(err as Error).message}`)
+      }
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const openNewTimeBlockDialog = () => {
     setBlockTaskName('')
@@ -233,20 +269,31 @@ export function E01Evening() {
 
           {/* 計画 vs 実績 タイムライン */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 計画 vs 実績
               </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={handleSync}
+                disabled={isSyncing}
+                title="Clockifyデータを同期"
+              >
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                同期
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="mb-4 flex gap-4 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-400" />
+                  <div className="w-3 h-3 rounded border" style={{ backgroundColor: 'var(--timeblock-plan-bg)', borderColor: 'var(--timeblock-plan-border)' }} />
                   <span>計画</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-green-200 border border-green-400" />
+                  <div className="w-3 h-3 rounded border" style={{ backgroundColor: 'var(--timeblock-actual-bg)', borderColor: 'var(--timeblock-actual-border)' }} />
                   <span>実績</span>
                 </div>
               </div>
@@ -260,22 +307,72 @@ export function E01Evening() {
             </CardContent>
           </Card>
 
-          {/* 今日の学び・メモ */}
+          {/* 今日の実績（時間記録リスト） */}
+          <TimeEntryList
+            entries={todayEntries}
+            title="今日の実績"
+            showAddButton={true}
+            defaultDate={format(new Date(), 'yyyy-MM-dd')}
+          />
+
+          {/* 今日のメモ */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">今日の学び・メモ</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Lightbulb className="h-4 w-4 text-yellow-500" />
+                今日のメモ
+              </CardTitle>
               <Link to="/learning-records/new">
                 <Button size="sm" variant="outline" className="gap-1">
                   <Plus className="h-4 w-4" />
-                  記録
+                  学習記録へ
                 </Button>
               </Link>
             </CardHeader>
             <CardContent>
-              <Textarea
-                placeholder="今日学んだこと、気づいたことをメモ..."
-                className="min-h-[100px]"
-              />
+              {getActiveMemos().length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  メモがありません。右下の💡ボタンからメモを追加できます。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {getActiveMemos().map((memo) => (
+                    <div
+                      key={memo.id}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {memo.content}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(memo.createdAt), 'HH:mm')}
+                        </p>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => archiveMemo(memo.id)}
+                          title="アーカイブ"
+                        >
+                          <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => deleteMemo(memo.id)}
+                          title="削除"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

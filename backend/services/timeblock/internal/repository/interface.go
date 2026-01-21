@@ -22,4 +22,9 @@ type Repository interface {
 	CreateTimeEntry(ctx context.Context, userID string, input timeblock.CreateTimeEntryInput) (*timeblock.TimeEntry, error)
 	UpdateTimeEntry(ctx context.Context, userID, timeEntryID string, input timeblock.UpdateTimeEntryInput) (*timeblock.TimeEntry, error)
 	DeleteTimeEntry(ctx context.Context, userID, timeEntryID string) error
+
+	// Timer Operations
+	GetRunningTimer(ctx context.Context, userID string) (*timeblock.RunningTimer, error)
+	StartTimer(ctx context.Context, userID string, input timeblock.StartTimerInput) (*timeblock.RunningTimer, error)
+	StopTimer(ctx context.Context, userID string) (*timeblock.TimeEntry, error)
 }

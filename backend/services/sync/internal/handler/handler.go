@@ -15,17 +15,15 @@ type Handler struct {
 	service *service.Service
 }
 
-// New creates a new sync handler
-func New(svc *service.Service) *Handler {
+// NewHandler creates a new sync handler
+func NewHandler(svc *service.Service) *Handler {
 	return &Handler{service: svc}
 }
 
-// RegisterRoutes registers the sync routes
-func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
+// RegisterRoutes registers the sync routes.
+// Authentication middleware is expected to be applied by the caller.
+func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/sync", func(r chi.Router) {
-		// All sync routes require authentication
-		r.Use(authMiddleware)
-
 		r.Post("/clockify/workspaces", h.GetWorkspaces)
 		r.Post("/clockify/projects", h.SyncProjects)
 		r.Post("/clockify/time-entries", h.SyncTimeEntries)

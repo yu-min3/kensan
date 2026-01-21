@@ -76,7 +76,7 @@ func newTestService(repo *MockRepository) *Service {
 		Issuer:     "kensan-test",
 		ExpireHour: 24,
 	})
-	return New(repo, jwtManager)
+	return NewService(repo, jwtManager)
 }
 
 // ========== Unit Tests for Helper Functions ==========

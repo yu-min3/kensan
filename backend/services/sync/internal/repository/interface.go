@@ -24,6 +24,9 @@ type Repository interface {
 	// UpsertProject upserts a project from Clockify
 	UpsertProject(ctx context.Context, userID, projectID, name, color string, archived bool, clientID, clientName *string) (created bool, err error)
 
+	// UpsertTask upserts a task from Clockify
+	UpsertTask(ctx context.Context, userID, taskID, clockifyProjectID, name string, completed bool) (created bool, err error)
+
 	// UpsertTimeEntry upserts a time entry from Clockify
 	UpsertTimeEntry(ctx context.Context, userID, entryID, description, projectID string, taskID *string, start, end time.Time, duration string) (created bool, err error)
 

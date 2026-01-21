@@ -78,8 +78,13 @@ func (s *Service) SyncProjects(ctx context.Context, userID string) (*sync.SyncRe
 		Synced: len(projects),
 	}
 
-	// Upsert projects
+	// Upsert projects (only active ones, skip archived)
 	for _, p := range projects {
+		if p.Archived {
+			log.Debug().Str("projectID", p.ID).Str("name", p.Name).Msg("skipping archived project")
+			continue
+		}
+
 		var clientID, clientName *string
 		if p.ClientID != "" {
 			clientID = &p.ClientID
@@ -103,6 +108,70 @@ func (s *Service) SyncProjects(ctx context.Context, userID string) (*sync.SyncRe
 
 	// Update sync status
 	s.updateSyncStatusSuccess(ctx, userID)
+
+	return result, nil
+}
+
+// SyncTasks synchronizes tasks from Clockify to the local database
+// It fetches tasks for all projects the user has
+func (s *Service) SyncTasks(ctx context.Context, userID string) (*sync.SyncResult, error) {
+	// Get user settings
+	settings, err := s.repo.GetUserClockifySettings(ctx, userID)
+	if err != nil {
+		s.updateSyncStatusError(ctx, userID, err.Error())
+		return nil, err
+	}
+
+	if settings.ClockifyAPIKey == nil || *settings.ClockifyAPIKey == "" {
+		err := ErrAPIKeyRequired
+		s.updateSyncStatusError(ctx, userID, err.Error())
+		return nil, err
+	}
+
+	if settings.WorkspaceID == nil || *settings.WorkspaceID == "" {
+		err := ErrWorkspaceRequired
+		s.updateSyncStatusError(ctx, userID, err.Error())
+		return nil, err
+	}
+
+	// First, get all projects to fetch tasks for each
+	projects, err := s.clockify.GetProjects(ctx, *settings.ClockifyAPIKey, *settings.WorkspaceID)
+	if err != nil {
+		s.updateSyncStatusError(ctx, userID, err.Error())
+		return nil, err
+	}
+
+	result := &sync.SyncResult{}
+
+	// Fetch and upsert tasks for each active project (skip archived)
+	for _, project := range projects {
+		if project.Archived {
+			continue
+		}
+
+		tasks, err := s.clockify.GetTasks(ctx, *settings.ClockifyAPIKey, *settings.WorkspaceID, project.ID)
+		if err != nil {
+			log.Error().Err(err).Str("projectID", project.ID).Msg("failed to get tasks from Clockify")
+			continue
+		}
+
+		result.Synced += len(tasks)
+
+		for _, t := range tasks {
+			completed := t.Status == "DONE"
+			created, err := s.repo.UpsertTask(ctx, userID, t.ID, project.ID, t.Name, completed)
+			if err != nil {
+				log.Error().Err(err).Str("taskID", t.ID).Msg("failed to upsert task")
+				continue
+			}
+
+			if created {
+				result.Created++
+			} else {
+				result.Updated++
+			}
+		}
+	}
 
 	return result, nil
 }
@@ -186,7 +255,7 @@ func (s *Service) GetSyncStatus(ctx context.Context, userID string) (*sync.SyncS
 	return s.repo.GetSyncStatus(ctx, userID)
 }
 
-// TriggerSync triggers a full sync for a user (projects and recent time entries)
+// TriggerSync triggers a full sync for a user (projects, tasks, and recent time entries)
 func (s *Service) TriggerSync(ctx context.Context, userID string) (*sync.SyncResult, error) {
 	// Set status to pending
 	status := &sync.SyncStatus{
@@ -199,7 +268,7 @@ func (s *Service) TriggerSync(ctx context.Context, userID string) (*sync.SyncRes
 
 	totalResult := &sync.SyncResult{}
 
-	// Sync projects
+	// Sync projects first (tasks depend on projects)
 	projectResult, err := s.SyncProjects(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -208,8 +277,22 @@ func (s *Service) TriggerSync(ctx context.Context, userID string) (*sync.SyncRes
 	totalResult.Created += projectResult.Created
 	totalResult.Updated += projectResult.Updated
 
+	// Sync tasks for all projects
+	taskResult, err := s.SyncTasks(ctx, userID)
+	if err != nil {
+		// Log but don't fail - tasks might not exist for some projects
+		log.Warn().Err(err).Str("userID", userID).Msg("failed to sync tasks, continuing")
+	} else {
+		totalResult.Synced += taskResult.Synced
+		totalResult.Created += taskResult.Created
+		totalResult.Updated += taskResult.Updated
+	}
+
 	// Sync time entries for the last 30 days
-	endDate := time.Now()
+	// Use end of today (23:59:59 UTC) to ensure all entries for today are included
+	// Clockify API filters by end time, so using current time might miss recent entries
+	now := time.Now().UTC()
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
 	startDate := endDate.AddDate(0, 0, -30)
 
 	entryResult, err := s.SyncTimeEntries(ctx, userID, startDate, endDate)

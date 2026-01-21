@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { httpClient } from '@/api/client'
+import { API_CONFIG } from '@/api/config'
 
 interface User {
   id: string
@@ -37,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null })
         try {
           const response = await httpClient.post<{ token: string; user: User }>(
-            import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:8081',
+            API_CONFIG.baseUrls.user,
             '/auth/login',
             { email, password }
           )
@@ -62,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null })
         try {
           const response = await httpClient.post<{ token: string; user: User }>(
-            import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:8081',
+            API_CONFIG.baseUrls.user,
             '/auth/register',
             { email, password, name }
           )
@@ -108,12 +109,12 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         token: state.token,
         user: state.user,
+        isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
-        // 永続化されたトークンを復元
+        // 永続化されたトークンをhttpClientに設定
         if (state?.token) {
           httpClient.setAuthToken(state.token)
-          state.isAuthenticated = true
         }
       },
     }

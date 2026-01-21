@@ -3,19 +3,23 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/repository"
 )
 
 var (
-	ErrTimeBlockNotFound = errors.New("time block not found")
-	ErrTimeEntryNotFound = errors.New("time entry not found")
-	ErrInvalidGoalTag    = errors.New("invalid goal tag")
-	ErrInvalidInput      = errors.New("invalid input")
-	ErrInvalidDate       = errors.New("invalid date format (expected YYYY-MM-DD)")
-	ErrInvalidTime       = errors.New("invalid time format (expected HH:mm)")
+	ErrTimeBlockNotFound   = errors.New("time block not found")
+	ErrTimeEntryNotFound   = errors.New("time entry not found")
+	ErrRunningTimerNotFound = errors.New("no running timer found")
+	ErrTimerAlreadyRunning = errors.New("timer is already running")
+	ErrInvalidGoalTag      = errors.New("invalid goal tag")
+	ErrInvalidInput        = errors.New("invalid input")
+	ErrInvalidDate         = errors.New("invalid date format (expected YYYY-MM-DD)")
+	ErrInvalidTime         = errors.New("invalid time format (expected HH:mm)")
 )
 
 // dateRegex matches YYYY-MM-DD format
@@ -44,10 +48,42 @@ func validateTime(t string) bool {
 	return timeRegex.MatchString(t)
 }
 
+// convertUTCToLocalDateTime converts UTC date and time to local timezone
+// utcDate format: "YYYY-MM-DD", utcTime format: "HH:mm:ss"
+// Returns localDate, localTime in the same formats
+func convertUTCToLocalDateTime(utcDate, utcTime, timezone string) (string, string, error) {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid timezone: %w", err)
+	}
+
+	// Parse UTC date and time (handle both HH:mm:ss and HH:mm formats)
+	timeStr := utcTime
+	if len(timeStr) == 5 {
+		timeStr += ":00" // Add seconds if not present
+	}
+
+	utcTimeStr := fmt.Sprintf("%sT%sZ", utcDate, timeStr)
+	utcParsed, err := time.Parse(time.RFC3339, utcTimeStr)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse UTC datetime: %w", err)
+	}
+
+	// Convert to local timezone
+	localTime := utcParsed.In(loc)
+
+	localDate := localTime.Format("2006-01-02")
+	localTimeStr := localTime.Format("15:04:05")
+
+	return localDate, localTimeStr, nil
+}
+
 // ========== TimeBlock Operations ==========
 
 // ListTimeBlocks returns all time blocks for a user with optional filters
-func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error) {
+// If timezone is provided (non-empty), date/time in the response will be converted to local time.
+// If timezone is empty, date/time will be returned as stored (UTC).
+func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter, timezone string) ([]timeblock.TimeBlock, error) {
 	// Validate date filters
 	if filter.Date != nil && !validateDate(*filter.Date) {
 		return nil, ErrInvalidDate
@@ -66,6 +102,23 @@ func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter time
 
 	if blocks == nil {
 		return []timeblock.TimeBlock{}, nil
+	}
+
+	// Convert to local timezone if specified
+	if timezone != "" {
+		for i := range blocks {
+			localDate, localStartTime, err := convertUTCToLocalDateTime(blocks[i].Date, blocks[i].StartTime, timezone)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert start time: %w", err)
+			}
+			_, localEndTime, err := convertUTCToLocalDateTime(blocks[i].Date, blocks[i].EndTime, timezone)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert end time: %w", err)
+			}
+			blocks[i].Date = localDate
+			blocks[i].StartTime = localStartTime
+			blocks[i].EndTime = localEndTime
+		}
 	}
 
 	return blocks, nil
@@ -187,7 +240,9 @@ func (s *Service) GenerateFromRoutines(ctx context.Context, userID string, input
 // ========== TimeEntry Operations ==========
 
 // ListTimeEntries returns all time entries for a user with optional filters
-func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error) {
+// If timezone is provided (non-empty), date/time in the response will be converted to local time.
+// If timezone is empty, date/time will be returned as stored (UTC).
+func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter, timezone string) ([]timeblock.TimeEntry, error) {
 	// Validate date filters
 	if filter.Date != nil && !validateDate(*filter.Date) {
 		return nil, ErrInvalidDate
@@ -210,6 +265,23 @@ func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter tim
 
 	if entries == nil {
 		return []timeblock.TimeEntry{}, nil
+	}
+
+	// Convert to local timezone if specified
+	if timezone != "" {
+		for i := range entries {
+			localDate, localStartTime, err := convertUTCToLocalDateTime(entries[i].Date, entries[i].StartTime, timezone)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert start time: %w", err)
+			}
+			_, localEndTime, err := convertUTCToLocalDateTime(entries[i].Date, entries[i].EndTime, timezone)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert end time: %w", err)
+			}
+			entries[i].Date = localDate
+			entries[i].StartTime = localStartTime
+			entries[i].EndTime = localEndTime
+		}
 	}
 
 	return entries, nil
@@ -307,4 +379,60 @@ func (s *Service) DeleteTimeEntry(ctx context.Context, userID, timeEntryID strin
 	}
 
 	return s.repo.DeleteTimeEntry(ctx, userID, timeEntryID)
+}
+
+// ========== Timer Operations ==========
+
+// GetRunningTimer returns the current running timer for a user
+func (s *Service) GetRunningTimer(ctx context.Context, userID string) (*timeblock.RunningTimer, error) {
+	return s.repo.GetRunningTimer(ctx, userID)
+}
+
+// StartTimer starts a new timer for a user
+func (s *Service) StartTimer(ctx context.Context, userID string, input timeblock.StartTimerInput) (*timeblock.RunningTimer, error) {
+	// Validate required fields
+	if input.TaskName == "" {
+		return nil, ErrInvalidInput
+	}
+
+	if input.GoalTag != nil && !input.GoalTag.IsValid() {
+		return nil, ErrInvalidGoalTag
+	}
+
+	// Check if a timer is already running
+	existing, err := s.repo.GetRunningTimer(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrTimerAlreadyRunning
+	}
+
+	return s.repo.StartTimer(ctx, userID, input)
+}
+
+// StopTimer stops the current timer and creates a time entry
+func (s *Service) StopTimer(ctx context.Context, userID string) (*timeblock.StopTimerResult, error) {
+	// Check if a timer is running
+	timer, err := s.repo.GetRunningTimer(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if timer == nil {
+		return nil, ErrRunningTimerNotFound
+	}
+
+	// Stop the timer and create a time entry
+	entry, err := s.repo.StopTimer(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate duration
+	duration := time.Since(timer.StartedAt).Seconds()
+
+	return &timeblock.StopTimerResult{
+		TimeEntry: entry,
+		Duration:  int64(duration),
+	}, nil
 }

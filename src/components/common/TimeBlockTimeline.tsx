@@ -15,7 +15,8 @@ interface TimeBlockTimelineProps {
 }
 
 function formatTime(time: string): string {
-  return time
+  // HH:mm:ss → HH:mm に変換（秒を削除）
+  return time.slice(0, 5)
 }
 
 function getMinutesFromTime(time: string): number {
@@ -31,11 +32,33 @@ export function TimeBlockTimeline({
   timeBlocks = [],
   timeEntries = [],
   showComparison = false,
-  startHour = 8,
-  endHour = 20,
+  startHour: defaultStartHour = 8,
+  endHour: defaultEndHour = 20,
   onBlockClick,
   onBlockDelete,
 }: TimeBlockTimelineProps) {
+  // Calculate actual time range from data to ensure all items are visible
+  const allTimes = [
+    ...timeBlocks.flatMap((b) => [b.startTime, b.endTime]),
+    ...timeEntries.flatMap((e) => [e.startTime, e.endTime]),
+  ]
+
+  let minHour = defaultStartHour
+  let maxHour = defaultEndHour
+
+  if (allTimes.length > 0) {
+    const hours = allTimes.map((t) => Math.floor(getMinutesFromTime(t) / 60))
+    const dataMinHour = Math.min(...hours)
+    const dataMaxHour = Math.max(...hours) + 1 // +1 to include the end hour
+
+    // Expand range to include all data
+    minHour = Math.min(defaultStartHour, dataMinHour)
+    maxHour = Math.max(defaultEndHour, dataMaxHour)
+  }
+
+  const startHour = minHour
+  const endHour = maxHour
+
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const totalMinutes = (endHour - startHour) * 60
 
@@ -49,8 +72,12 @@ export function TimeBlockTimeline({
     return (duration / totalMinutes) * 100
   }
 
+  // Calculate if we need scrolling (more than default range)
+  const needsScroll = hours.length > (defaultEndHour - defaultStartHour)
+  const maxHeight = needsScroll ? `${(defaultEndHour - defaultStartHour) * 48}px` : undefined
+
   return (
-    <div className="relative flex">
+    <div className={cn("relative flex", needsScroll && "overflow-y-auto")} style={{ maxHeight }}>
       {/* 時間軸 */}
       <div className="w-16 flex-shrink-0">
         {hours.map((hour) => (
@@ -79,14 +106,13 @@ export function TimeBlockTimeline({
           <div
             key={block.id}
             className={cn(
-              'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group',
+              'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group border',
               showComparison ? 'left-1 right-[52%]' : 'right-1',
-              block.isRoutine
-                ? 'bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700'
-                : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700',
               onBlockClick && 'cursor-pointer hover:ring-2 hover:ring-primary/50'
             )}
             style={{
+              backgroundColor: block.isRoutine ? 'var(--timeblock-routine-bg)' : 'var(--timeblock-plan-bg)',
+              borderColor: block.isRoutine ? 'var(--timeblock-routine-border)' : 'var(--timeblock-plan-border)',
               top: `${getTopPosition(block.startTime)}%`,
               height: `${getHeight(block.startTime, block.endTime)}%`,
               minHeight: '24px',
@@ -138,8 +164,10 @@ export function TimeBlockTimeline({
           timeEntries.map((entry) => (
             <div
               key={entry.id}
-              className="absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700"
+              className="absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs border"
               style={{
+                backgroundColor: 'var(--timeblock-actual-bg)',
+                borderColor: 'var(--timeblock-actual-border)',
                 top: `${getTopPosition(entry.startTime)}%`,
                 height: `${getHeight(entry.startTime, entry.endTime)}%`,
                 minHeight: '24px',

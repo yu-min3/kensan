@@ -120,7 +120,7 @@ func TestGoalTag_IsValid(t *testing.T) {
 
 func TestService_List_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -141,7 +141,7 @@ func TestService_List_Success(t *testing.T) {
 
 func TestService_List_WithGoalTagFilter(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	goalTag := record.GoalTagGK
@@ -166,7 +166,7 @@ func TestService_List_WithGoalTagFilter(t *testing.T) {
 
 func TestService_List_RepositoryError(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -184,7 +184,7 @@ func TestService_List_RepositoryError(t *testing.T) {
 
 func TestService_GetByID_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -210,7 +210,7 @@ func TestService_GetByID_Success(t *testing.T) {
 
 func TestService_GetByID_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "nonexistent"
@@ -227,7 +227,7 @@ func TestService_GetByID_NotFound(t *testing.T) {
 
 func TestService_GetByID_RepositoryError(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -246,7 +246,7 @@ func TestService_GetByID_RepositoryError(t *testing.T) {
 
 func TestService_Create_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	goalTag := record.GoalTagGK
@@ -273,7 +273,7 @@ func TestService_Create_Success(t *testing.T) {
 
 func TestService_Create_TitleRequired(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -293,7 +293,7 @@ func TestService_Create_TitleRequired(t *testing.T) {
 
 func TestService_Create_TitleWhitespaceOnly(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -313,7 +313,7 @@ func TestService_Create_TitleWhitespaceOnly(t *testing.T) {
 
 func TestService_Create_ContentRequired(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -333,7 +333,7 @@ func TestService_Create_ContentRequired(t *testing.T) {
 
 func TestService_Create_FormatRequired(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -353,7 +353,7 @@ func TestService_Create_FormatRequired(t *testing.T) {
 
 func TestService_Create_InvalidFormat(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -373,7 +373,7 @@ func TestService_Create_InvalidFormat(t *testing.T) {
 
 func TestService_Create_InvalidGoalTag(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	invalidTag := record.GoalTag("invalid")
@@ -395,7 +395,7 @@ func TestService_Create_InvalidGoalTag(t *testing.T) {
 
 func TestService_Create_RepositoryError(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -419,7 +419,7 @@ func TestService_Create_RepositoryError(t *testing.T) {
 
 func TestService_Update_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -450,7 +450,7 @@ func TestService_Update_Success(t *testing.T) {
 
 func TestService_Update_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "nonexistent"
@@ -472,7 +472,7 @@ func TestService_Update_NotFound(t *testing.T) {
 
 func TestService_Update_EmptyTitle(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -502,7 +502,7 @@ func TestService_Update_EmptyTitle(t *testing.T) {
 
 func TestService_Update_InvalidFormat(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -532,7 +532,7 @@ func TestService_Update_InvalidFormat(t *testing.T) {
 
 func TestService_Update_InvalidGoalTag(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -564,7 +564,7 @@ func TestService_Update_InvalidGoalTag(t *testing.T) {
 
 func TestService_Delete_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -579,7 +579,7 @@ func TestService_Delete_Success(t *testing.T) {
 
 func TestService_Delete_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "nonexistent"
@@ -595,7 +595,7 @@ func TestService_Delete_NotFound(t *testing.T) {
 
 func TestService_Delete_RepositoryError(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	recordID := "record-123"
@@ -613,7 +613,7 @@ func TestService_Delete_RepositoryError(t *testing.T) {
 
 func TestService_SemanticSearch_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -651,7 +651,7 @@ func TestService_SemanticSearch_Success(t *testing.T) {
 
 func TestService_SemanticSearch_EmptyQuery(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -670,7 +670,7 @@ func TestService_SemanticSearch_EmptyQuery(t *testing.T) {
 
 func TestService_SemanticSearch_WhitespaceQuery(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -689,7 +689,7 @@ func TestService_SemanticSearch_WhitespaceQuery(t *testing.T) {
 
 func TestService_SemanticSearch_DefaultLimit(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -712,7 +712,7 @@ func TestService_SemanticSearch_DefaultLimit(t *testing.T) {
 
 func TestService_SemanticSearch_MaxLimit(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 

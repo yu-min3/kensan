@@ -1,0 +1,11 @@
+# Development override - enables MSW mocking for frontend
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - VITE_ENABLE_MSW=true

@@ -36,8 +36,8 @@ type Service struct {
 	jwtManager *auth.JWTManager
 }
 
-// New creates a new user service
-func New(repo repository.Repository, jwtManager *auth.JWTManager) *Service {
+// NewService creates a new user service
+func NewService(repo repository.Repository, jwtManager *auth.JWTManager) *Service {
 	return &Service{
 		repo:       repo,
 		jwtManager: jwtManager,

@@ -103,7 +103,7 @@ func TestDateValidation(t *testing.T) {
 
 func TestService_List_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -124,7 +124,7 @@ func TestService_List_Success(t *testing.T) {
 
 func TestService_List_WithDateFilter(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	startDate := "2024-01-01"
@@ -152,7 +152,7 @@ func TestService_List_WithDateFilter(t *testing.T) {
 
 func TestService_GetByID_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "diary-123"
@@ -179,7 +179,7 @@ func TestService_GetByID_Success(t *testing.T) {
 
 func TestService_GetByID_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "nonexistent"
@@ -197,7 +197,7 @@ func TestService_GetByID_NotFound(t *testing.T) {
 
 func TestService_GetByDate_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	date := "2024-01-15"
@@ -221,7 +221,7 @@ func TestService_GetByDate_Success(t *testing.T) {
 
 func TestService_GetByDate_InvalidDateFormat(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	invalidDate := "01-15-2024"
@@ -238,7 +238,7 @@ func TestService_GetByDate_InvalidDateFormat(t *testing.T) {
 
 func TestService_Create_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -264,7 +264,7 @@ func TestService_Create_Success(t *testing.T) {
 
 func TestService_Create_TitleRequired(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -283,7 +283,7 @@ func TestService_Create_TitleRequired(t *testing.T) {
 
 func TestService_Create_DateRequired(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -302,7 +302,7 @@ func TestService_Create_DateRequired(t *testing.T) {
 
 func TestService_Create_InvalidDateFormat(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 
@@ -323,7 +323,7 @@ func TestService_Create_InvalidDateFormat(t *testing.T) {
 
 func TestService_Update_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "diary-123"
@@ -355,7 +355,7 @@ func TestService_Update_Success(t *testing.T) {
 
 func TestService_Update_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "nonexistent"
@@ -376,7 +376,7 @@ func TestService_Update_NotFound(t *testing.T) {
 
 func TestService_Update_EmptyTitle(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "diary-123"
@@ -406,7 +406,7 @@ func TestService_Update_EmptyTitle(t *testing.T) {
 
 func TestService_Delete_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "diary-123"
@@ -421,7 +421,7 @@ func TestService_Delete_Success(t *testing.T) {
 
 func TestService_Delete_NotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	svc := New(mockRepo)
+	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
 	diaryID := "nonexistent"

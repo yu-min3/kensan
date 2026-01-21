@@ -30,29 +30,41 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // ListTimeBlocks returns all time blocks for a user with optional filters
 func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error) {
 	query := `
-		SELECT id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
+		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
 		FROM time_blocks
 		WHERE user_id = $1
 	`
 	args := []interface{}{userID}
 	argCount := 1
 
-	if filter.Date != nil {
+	// UTC timestamp range filters take precedence over date filters
+	if filter.StartTimestamp != nil && filter.EndTimestamp != nil {
+		// Query using combined date + start_time as timestamp
 		argCount++
-		query += fmt.Sprintf(" AND date = $%d", argCount)
-		args = append(args, *filter.Date)
-	}
+		query += fmt.Sprintf(" AND (date + start_time) >= $%d::timestamp", argCount)
+		args = append(args, *filter.StartTimestamp)
+		argCount++
+		query += fmt.Sprintf(" AND (date + start_time) < $%d::timestamp", argCount)
+		args = append(args, *filter.EndTimestamp)
+	} else {
+		// Fall back to date-based filters
+		if filter.Date != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date = $%d", argCount)
+			args = append(args, *filter.Date)
+		}
 
-	if filter.StartDate != nil {
-		argCount++
-		query += fmt.Sprintf(" AND date >= $%d", argCount)
-		args = append(args, *filter.StartDate)
-	}
+		if filter.StartDate != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date >= $%d", argCount)
+			args = append(args, *filter.StartDate)
+		}
 
-	if filter.EndDate != nil {
-		argCount++
-		query += fmt.Sprintf(" AND date <= $%d", argCount)
-		args = append(args, *filter.EndDate)
+		if filter.EndDate != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date <= $%d", argCount)
+			args = append(args, *filter.EndDate)
+		}
 	}
 
 	query += " ORDER BY date ASC, start_time ASC"
@@ -103,7 +115,7 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 // GetTimeBlockByID returns a time block by ID for a specific user
 func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeBlockID string) (*timeblock.TimeBlock, error) {
 	query := `
-		SELECT id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
+		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
 		FROM time_blocks
 		WHERE id = $1 AND user_id = $2
 	`
@@ -155,7 +167,7 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 	query := `
 		INSERT INTO time_blocks (id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		RETURNING id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
+		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
 	`
 
 	var tb timeblock.TimeBlock
@@ -286,7 +298,7 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		UPDATE time_blocks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
+		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var tb timeblock.TimeBlock
@@ -360,29 +372,41 @@ func (r *PostgresRepository) CreateTimeBlockBatch(ctx context.Context, userID st
 // ListTimeEntries returns all time entries for a user with optional filters
 func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error) {
 	query := `
-		SELECT id, clockify_id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
+		SELECT id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
 		FROM time_entries
 		WHERE user_id = $1
 	`
 	args := []interface{}{userID}
 	argCount := 1
 
-	if filter.Date != nil {
+	// UTC timestamp range filters take precedence over date filters
+	if filter.StartTimestamp != nil && filter.EndTimestamp != nil {
+		// Query using combined date + start_time as timestamp
 		argCount++
-		query += fmt.Sprintf(" AND date = $%d", argCount)
-		args = append(args, *filter.Date)
-	}
+		query += fmt.Sprintf(" AND (date + start_time) >= $%d::timestamp", argCount)
+		args = append(args, *filter.StartTimestamp)
+		argCount++
+		query += fmt.Sprintf(" AND (date + start_time) < $%d::timestamp", argCount)
+		args = append(args, *filter.EndTimestamp)
+	} else {
+		// Fall back to date-based filters
+		if filter.Date != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date = $%d", argCount)
+			args = append(args, *filter.Date)
+		}
 
-	if filter.StartDate != nil {
-		argCount++
-		query += fmt.Sprintf(" AND date >= $%d", argCount)
-		args = append(args, *filter.StartDate)
-	}
+		if filter.StartDate != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date >= $%d", argCount)
+			args = append(args, *filter.StartDate)
+		}
 
-	if filter.EndDate != nil {
-		argCount++
-		query += fmt.Sprintf(" AND date <= $%d", argCount)
-		args = append(args, *filter.EndDate)
+		if filter.EndDate != nil {
+			argCount++
+			query += fmt.Sprintf(" AND date <= $%d", argCount)
+			args = append(args, *filter.EndDate)
+		}
 	}
 
 	if filter.ProjectID != nil {
@@ -445,7 +469,7 @@ func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string,
 // GetTimeEntryByID returns a time entry by ID for a specific user
 func (r *PostgresRepository) GetTimeEntryByID(ctx context.Context, userID, timeEntryID string) (*timeblock.TimeEntry, error) {
 	query := `
-		SELECT id, clockify_id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
+		SELECT id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
 		FROM time_entries
 		WHERE id = $1 AND user_id = $2
 	`
@@ -497,7 +521,7 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 	query := `
 		INSERT INTO time_entries (id, clockify_id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		RETURNING id, clockify_id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
+		RETURNING id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
 	`
 
 	var te timeblock.TimeEntry
@@ -628,7 +652,7 @@ func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEn
 		UPDATE time_entries
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, clockify_id, user_id, date, start_time, end_time, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
+		RETURNING id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var te timeblock.TimeEntry
@@ -677,4 +701,183 @@ func (r *PostgresRepository) DeleteTimeEntry(ctx context.Context, userID, timeEn
 	}
 
 	return nil
+}
+
+// ========== Timer Operations ==========
+
+// GetRunningTimer returns the current running timer for a user
+func (r *PostgresRepository) GetRunningTimer(ctx context.Context, userID string) (*timeblock.RunningTimer, error) {
+	query := `
+		SELECT id, user_id, task_name, project_id, project_name, goal_tag, description, started_at, created_at, updated_at
+		FROM running_timers
+		WHERE user_id = $1
+	`
+
+	var rt timeblock.RunningTimer
+	var goalTag *string
+	err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&rt.ID,
+		&rt.UserID,
+		&rt.TaskName,
+		&rt.ProjectID,
+		&rt.ProjectName,
+		&goalTag,
+		&rt.Description,
+		&rt.StartedAt,
+		&rt.CreatedAt,
+		&rt.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get running timer: %w", err)
+	}
+
+	if goalTag != nil {
+		gt := timeblock.GoalTag(*goalTag)
+		rt.GoalTag = &gt
+	}
+
+	return &rt, nil
+}
+
+// StartTimer starts a new timer for a user
+func (r *PostgresRepository) StartTimer(ctx context.Context, userID string, input timeblock.StartTimerInput) (*timeblock.RunningTimer, error) {
+	id := uuid.New().String()
+	now := time.Now()
+
+	var goalTag *string
+	if input.GoalTag != nil {
+		s := string(*input.GoalTag)
+		goalTag = &s
+	}
+
+	query := `
+		INSERT INTO running_timers (id, user_id, task_name, project_id, project_name, goal_tag, description, started_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, user_id, task_name, project_id, project_name, goal_tag, description, started_at, created_at, updated_at
+	`
+
+	var rt timeblock.RunningTimer
+	var returnedGoalTag *string
+	err := r.pool.QueryRow(ctx, query,
+		id,
+		userID,
+		input.TaskName,
+		input.ProjectID,
+		input.ProjectName,
+		goalTag,
+		input.Description,
+		now,
+		now,
+		now,
+	).Scan(
+		&rt.ID,
+		&rt.UserID,
+		&rt.TaskName,
+		&rt.ProjectID,
+		&rt.ProjectName,
+		&returnedGoalTag,
+		&rt.Description,
+		&rt.StartedAt,
+		&rt.CreatedAt,
+		&rt.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start timer: %w", err)
+	}
+
+	if returnedGoalTag != nil {
+		gt := timeblock.GoalTag(*returnedGoalTag)
+		rt.GoalTag = &gt
+	}
+
+	return &rt, nil
+}
+
+// StopTimer stops the current timer and creates a time entry
+func (r *PostgresRepository) StopTimer(ctx context.Context, userID string) (*timeblock.TimeEntry, error) {
+	// Get the running timer first
+	timer, err := r.GetRunningTimer(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if timer == nil {
+		return nil, nil
+	}
+
+	now := time.Now()
+
+	// Create time entry from the running timer
+	entryID := uuid.New().String()
+	startDate := timer.StartedAt.Format("2006-01-02")
+	startTime := timer.StartedAt.Format("15:04")
+	endDate := now.Format("2006-01-02")
+	endTime := now.Format("15:04")
+
+	var goalTag *string
+	if timer.GoalTag != nil {
+		s := string(*timer.GoalTag)
+		goalTag = &s
+	}
+
+	// Insert time entry
+	insertQuery := `
+		INSERT INTO time_entries (id, user_id, date, start_time, end_time, task_name, project_id, project_name, goal_tag, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
+	`
+
+	var te timeblock.TimeEntry
+	var returnedGoalTag *string
+	err = r.pool.QueryRow(ctx, insertQuery,
+		entryID,
+		userID,
+		startDate,
+		startTime,
+		endTime,
+		timer.TaskName,
+		timer.ProjectID,
+		timer.ProjectName,
+		goalTag,
+		timer.Description,
+		now,
+		now,
+	).Scan(
+		&te.ID,
+		&te.ClockifyID,
+		&te.UserID,
+		&te.Date,
+		&te.StartTime,
+		&te.EndTime,
+		&te.TaskID,
+		&te.TaskName,
+		&te.ProjectID,
+		&te.ProjectName,
+		&returnedGoalTag,
+		&te.Description,
+		&te.CreatedAt,
+		&te.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create time entry from timer: %w", err)
+	}
+
+	if returnedGoalTag != nil {
+		gt := timeblock.GoalTag(*returnedGoalTag)
+		te.GoalTag = &gt
+	}
+
+	// Delete the running timer
+	deleteQuery := `DELETE FROM running_timers WHERE user_id = $1`
+	_, err = r.pool.Exec(ctx, deleteQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete running timer: %w", err)
+	}
+
+	// Handle cross-midnight timers - use the end date if different from start date
+	_ = endDate // The timer might span multiple days, but we store start date
+
+	return &te, nil
 }

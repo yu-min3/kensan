@@ -73,6 +73,7 @@ export const useSettingsStore = create<SettingsState>()(
           await userApi.updateSettings({
             clockifyApiKey: state.clockifyApiKey,
             workspaceId: state.workspaceId,
+            workspaceName: state.workspaceName,
             timezone: state.timezone,
             theme: state.theme,
           })

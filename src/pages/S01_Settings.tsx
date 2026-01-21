@@ -7,12 +7,19 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { syncApi } from '@/api/services/sync'
+import { ApiError } from '@/api/client'
+
+interface Workspace {
+  id: string
+  name: string
+}
 
 export function S01Settings() {
   const navigate = useNavigate()
   const {
     clockifyApiKey,
-    workspaceName,
+    workspaceId,
     timezone,
     theme,
     isConfigured,
@@ -21,22 +28,51 @@ export function S01Settings() {
     setTimezone,
     setTheme,
     setIsConfigured,
+    saveSettings,
   } = useSettingsStore()
 
   const [apiKey, setApiKey] = useState(clockifyApiKey || '')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId || '')
 
   const handleTestConnection = async () => {
     setTestStatus('testing')
-    // モック: 2秒後に成功
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setTestStatus('success')
-    setClockifyApiKey(apiKey)
-    setWorkspace('ws-12345', 'Personal Workspace')
+    setErrorMessage('')
+    try {
+      const result = await syncApi.validateApiKey(apiKey)
+      setWorkspaces(result.workspaces)
+      // デフォルトでアクティブなワークスペースを選択
+      const defaultWs = result.workspaces.find(ws => ws.id === result.user.activeWorkspace)
+        || result.workspaces[0]
+      if (defaultWs) {
+        setSelectedWorkspaceId(defaultWs.id)
+        setWorkspace(defaultWs.id, defaultWs.name)
+      }
+      setClockifyApiKey(apiKey)
+      setTestStatus('success')
+    } catch (err) {
+      setTestStatus('error')
+      if (err instanceof ApiError) {
+        setErrorMessage(`[${err.status}] ${err.message}`)
+      } else {
+        setErrorMessage((err as Error).message)
+      }
+    }
   }
 
-  const handleSave = () => {
+  const handleWorkspaceChange = (wsId: string) => {
+    setSelectedWorkspaceId(wsId)
+    const ws = workspaces.find(w => w.id === wsId)
+    if (ws) {
+      setWorkspace(ws.id, ws.name)
+    }
+  }
+
+  const handleSave = async () => {
     setIsConfigured(true)
+    await saveSettings()
     navigate('/')
   }
 
@@ -81,19 +117,38 @@ export function S01Settings() {
               {testStatus === 'success' && (
                 <div className="flex items-center gap-2 text-green-600 text-sm">
                   <CheckCircle className="h-4 w-4" />
-                  接続成功: {workspaceName}
+                  接続成功
                 </div>
               )}
               {testStatus === 'error' && (
                 <div className="flex items-center gap-2 text-red-600 text-sm">
                   <AlertCircle className="h-4 w-4" />
-                  接続に失敗しました
+                  {errorMessage || '接続に失敗しました'}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
                 Clockify設定 → API → APIキー から取得できます
               </p>
             </div>
+
+            {/* Workspace Selection */}
+            {workspaces.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="workspace">ワークスペース</Label>
+                <Select value={selectedWorkspaceId} onValueChange={handleWorkspaceChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="ワークスペースを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workspaces.map((ws) => (
+                      <SelectItem key={ws.id} value={ws.id}>
+                        {ws.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Timezone */}
             <div className="space-y-2">

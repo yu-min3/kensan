@@ -12,5 +12,6 @@ export const API_CONFIG = {
     diary: import.meta.env.VITE_DIARY_SERVICE_URL || 'http://localhost:8087',
     analytics: import.meta.env.VITE_ANALYTICS_SERVICE_URL || 'http://localhost:8088',
     ai: import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8089',
+    memo: import.meta.env.VITE_MEMO_SERVICE_URL || 'http://localhost:8090',
   },
 } as const

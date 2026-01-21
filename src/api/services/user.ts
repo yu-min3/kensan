@@ -3,20 +3,18 @@ import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import type { UserSettings, Theme } from '@/types'
 
-// API Response types
+// API Response types (matches backend SettingsResponse)
 interface UserSettingsResponse {
-  id: string
   userId: string
   clockifyApiKey?: string
-  clockifyApiKeySet: boolean
+  hasClockifyApiKey: boolean
   workspaceId?: string
   workspaceName?: string
   timezone: string
   theme: Theme
+  isConfigured: boolean
+  aiEnabled: boolean
   aiConsentGiven: boolean
-  aiConsentDate?: string
-  createdAt: string
-  updatedAt: string
 }
 
 interface UserProfileResponse {
@@ -29,18 +27,19 @@ interface UserProfileResponse {
 
 // Transform API response to frontend type
 const transformUserSettings = (s: UserSettingsResponse, profile?: UserProfileResponse): UserSettings => ({
-  clockifyApiKey: s.clockifyApiKeySet ? '********' : undefined,
+  clockifyApiKey: s.hasClockifyApiKey ? (s.clockifyApiKey || '********') : undefined,
   workspaceId: s.workspaceId,
   workspaceName: s.workspaceName,
   timezone: s.timezone,
   theme: s.theme,
-  isConfigured: s.clockifyApiKeySet && !!s.workspaceId,
+  isConfigured: s.isConfigured,
   userName: profile?.name || '',
 })
 
 export interface UpdateSettingsInput {
   clockifyApiKey?: string
   workspaceId?: string
+  workspaceName?: string
   timezone?: string
   theme?: Theme
 }

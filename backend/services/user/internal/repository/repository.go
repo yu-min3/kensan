@@ -33,7 +33,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // GetByID retrieves a user by ID
 func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
 	query := `
-		SELECT id, email, name, password, created_at, updated_at
+		SELECT id, email, name, password_hash, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -60,7 +60,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*user.User
 // GetByEmail retrieves a user by email
 func (r *PostgresRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	query := `
-		SELECT id, email, name, password, created_at, updated_at
+		SELECT id, email, name, password_hash, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -105,7 +105,7 @@ func (r *PostgresRepository) Create(ctx context.Context, u *user.User) error {
 	u.UpdatedAt = now
 
 	query := `
-		INSERT INTO users (id, email, name, password, created_at, updated_at)
+		INSERT INTO users (id, email, name, password_hash, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
@@ -131,7 +131,7 @@ func (r *PostgresRepository) Update(ctx context.Context, u *user.User) error {
 
 	query := `
 		UPDATE users
-		SET email = $2, name = $3, password = $4, updated_at = $5
+		SET email = $2, name = $3, password_hash = $4, updated_at = $5
 		WHERE id = $1
 	`
 
@@ -155,6 +155,7 @@ func (r *PostgresRepository) Update(ctx context.Context, u *user.User) error {
 
 // GetSettings retrieves user settings
 func (r *PostgresRepository) GetSettings(ctx context.Context, userID string) (*user.UserSettings, error) {
+	// ADR-0003: Plaintext storage for development phase
 	query := `
 		SELECT user_id, clockify_api_key, workspace_id, workspace_name,
 		       timezone, theme, is_configured, ai_enabled, ai_consent_given
@@ -199,6 +200,7 @@ func (r *PostgresRepository) GetSettings(ctx context.Context, userID string) (*u
 
 // UpdateSettings updates user settings
 func (r *PostgresRepository) UpdateSettings(ctx context.Context, s *user.UserSettings) error {
+	// ADR-0003: Plaintext storage for development phase
 	query := `
 		UPDATE user_settings
 		SET clockify_api_key = $2, workspace_id = $3, workspace_name = $4,

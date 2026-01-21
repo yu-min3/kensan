@@ -16,24 +16,20 @@ type Handler struct {
 	service *service.Service
 }
 
-// New creates a new diary handler
-func New(svc *service.Service) *Handler {
+// NewHandler creates a new diary handler
+func NewHandler(svc *service.Service) *Handler {
 	return &Handler{service: svc}
 }
 
-// RegisterRoutes registers the diary routes
-func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
-	// All routes require authentication
-	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware)
-
-		r.Get("/diaries", h.List)
-		r.Post("/diaries", h.Create)
-		r.Get("/diaries/by-date/{date}", h.GetByDate)
-		r.Get("/diaries/{diaryId}", h.GetByID)
-		r.Put("/diaries/{diaryId}", h.Update)
-		r.Delete("/diaries/{diaryId}", h.Delete)
-	})
+// RegisterRoutes registers the diary routes.
+// Authentication middleware is expected to be applied by the caller.
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/diaries", h.List)
+	r.Post("/diaries", h.Create)
+	r.Get("/diaries/by-date/{date}", h.GetByDate)
+	r.Get("/diaries/{diaryId}", h.GetByID)
+	r.Put("/diaries/{diaryId}", h.Update)
+	r.Delete("/diaries/{diaryId}", h.Delete)
 }
 
 // List handles listing diary entries

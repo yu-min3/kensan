@@ -19,7 +19,7 @@ interface TaskState {
   deleteProject: (id: string) => Promise<void>
 
   // タスク操作
-  addTask: (task: { name: string; projectId: string; parentTaskId?: string }) => Promise<void>
+  addTask: (task: { name: string; projectId: string; parentTaskId?: string; goalTag?: GoalTag }) => Promise<void>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   toggleTaskComplete: (id: string) => Promise<void>

@@ -36,6 +36,14 @@
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
+
+  /* TimeBlock colors */
+  --timeblock-plan-bg: #fef9c3;
+  --timeblock-plan-border: #fde047;
+  --timeblock-actual-bg: #dcfce7;
+  --timeblock-actual-border: #86efac;
+  --timeblock-routine-bg: #f3e8ff;
+  --timeblock-routine-border: #d8b4fe;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
   --popover: 0 0% 100%;
