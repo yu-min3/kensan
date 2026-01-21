@@ -3,12 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { TagBadge } from '@/components/common/TagBadge'
+import { TaskDialog, type TaskFormData } from '@/components/task/TaskDialog'
+import { ProjectDialog, type ProjectFormData } from '@/components/task/ProjectDialog'
+import { useDialogState } from '@/hooks/useDialogState'
 import { useTaskStore } from '@/stores/useTaskStore'
-import type { GoalTag } from '@/types'
 import {
   FolderKanban,
   Plus,
@@ -20,12 +19,18 @@ import {
   Trash2,
 } from 'lucide-react'
 
-const goalTagOptions: { value: GoalTag; label: string }[] = [
-  { value: 'GK', label: 'GK (Golden Kubestronaut)' },
-  { value: 'OSS', label: 'OSS' },
-  { value: 'Output', label: 'Output' },
-  { value: 'Other', label: 'Other' },
-]
+const initialTaskFormData: TaskFormData = {
+  name: '',
+  projectId: '',
+  parentTaskId: undefined,
+  goalTag: '',
+}
+
+const initialProjectFormData: ProjectFormData = {
+  name: '',
+  goalTag: '',
+  color: '#6366f1',
+}
 
 export function T01TaskManagement() {
   const {
@@ -49,49 +54,42 @@ export function T01TaskManagement() {
   )
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
 
-  // Task Dialog State
-  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false)
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
-  const [taskName, setTaskName] = useState('')
-  const [taskProjectId, setTaskProjectId] = useState('')
-  const [taskParentId, setTaskParentId] = useState<string | undefined>(undefined)
-  const [taskGoalTag, setTaskGoalTag] = useState<GoalTag | ''>('')
-
-  // Project Dialog State
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
-  const [projectName, setProjectName] = useState('')
-  const [projectGoalTag, setProjectGoalTag] = useState<GoalTag | ''>('')
-  const [projectColor, setProjectColor] = useState('#6366f1')
+  const taskDialog = useDialogState<TaskFormData>(initialTaskFormData)
+  const projectDialog = useDialogState<ProjectFormData>(initialProjectFormData)
 
   // Task Dialog Handlers
   const openNewTaskDialog = (projectId?: string, parentId?: string) => {
-    setEditingTaskId(null)
-    setTaskName('')
-    setTaskProjectId(projectId || projects[0]?.id || '')
-    setTaskParentId(parentId)
-    setTaskGoalTag('')
-    setIsTaskDialogOpen(true)
+    taskDialog.open({
+      projectId: projectId || projects[0]?.id || '',
+      parentTaskId: parentId,
+    })
   }
 
   const openEditTaskDialog = (task: typeof tasks[0]) => {
-    setEditingTaskId(task.id)
-    setTaskName(task.name)
-    setTaskProjectId(task.projectId)
-    setTaskParentId(task.parentTaskId)
-    setTaskGoalTag(task.goalTag || '')
-    setIsTaskDialogOpen(true)
+    taskDialog.openEdit(task.id, {
+      name: task.name,
+      projectId: task.projectId,
+      parentTaskId: task.parentTaskId,
+      goalTag: task.goalTag || '',
+    })
   }
 
-  const handleSaveTask = async () => {
-    if (!taskName || !taskProjectId) return
-
-    if (editingTaskId) {
-      await updateTask(editingTaskId, { name: taskName, projectId: taskProjectId, parentTaskId: taskParentId, goalTag: taskGoalTag || undefined })
+  const handleSaveTask = async (data: TaskFormData, editingId: string | null) => {
+    if (editingId) {
+      await updateTask(editingId, {
+        name: data.name,
+        projectId: data.projectId,
+        parentTaskId: data.parentTaskId,
+        goalTag: data.goalTag || undefined,
+      })
     } else {
-      await addTask({ name: taskName, projectId: taskProjectId, parentTaskId: taskParentId, goalTag: taskGoalTag || undefined })
+      await addTask({
+        name: data.name,
+        projectId: data.projectId,
+        parentTaskId: data.parentTaskId,
+        goalTag: data.goalTag || undefined,
+      })
     }
-    setIsTaskDialogOpen(false)
   }
 
   const handleDeleteTask = async (id: string) => {
@@ -101,39 +99,28 @@ export function T01TaskManagement() {
   }
 
   // Project Dialog Handlers
-  const openNewProjectDialog = () => {
-    setEditingProjectId(null)
-    setProjectName('')
-    setProjectGoalTag('')
-    setProjectColor('#6366f1')
-    setIsProjectDialogOpen(true)
-  }
-
   const openEditProjectDialog = (project: typeof projects[0]) => {
-    setEditingProjectId(project.id)
-    setProjectName(project.name)
-    setProjectGoalTag(project.goalTag || '')
-    setProjectColor(project.color || '#6366f1')
-    setIsProjectDialogOpen(true)
+    projectDialog.openEdit(project.id, {
+      name: project.name,
+      goalTag: project.goalTag || '',
+      color: project.color || '#6366f1',
+    })
   }
 
-  const handleSaveProject = async () => {
-    if (!projectName) return
-
-    if (editingProjectId) {
-      await updateProject(editingProjectId, {
-        name: projectName,
-        goalTag: projectGoalTag || undefined,
-        color: projectColor,
+  const handleSaveProject = async (data: ProjectFormData, editingId: string | null) => {
+    if (editingId) {
+      await updateProject(editingId, {
+        name: data.name,
+        goalTag: data.goalTag || undefined,
+        color: data.color,
       })
     } else {
       await addProject({
-        name: projectName,
-        goalTag: projectGoalTag || undefined,
-        color: projectColor,
+        name: data.name,
+        goalTag: data.goalTag || undefined,
+        color: data.color,
       })
     }
-    setIsProjectDialogOpen(false)
   }
 
   const handleDeleteProject = async (id: string) => {
@@ -185,7 +172,7 @@ export function T01TaskManagement() {
           <h1 className="text-2xl font-bold">タスク管理</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={openNewProjectDialog}>
+          <Button variant="outline" className="gap-2" onClick={() => projectDialog.open()}>
             <Plus className="h-4 w-4" />
             プロジェクト追加
           </Button>
@@ -406,145 +393,18 @@ export function T01TaskManagement() {
         })}
       </div>
 
-      {/* タスク追加/編集ダイアログ */}
-      <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingTaskId ? 'タスクを編集' : 'タスクを追加'}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Dialogs */}
+      <TaskDialog
+        dialog={taskDialog}
+        projects={projects}
+        tasks={tasks}
+        onSave={handleSaveTask}
+      />
 
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="taskName">タスク名</Label>
-              <Input
-                id="taskName"
-                value={taskName}
-                onChange={(e) => setTaskName(e.target.value)}
-                placeholder="例: ドキュメント作成"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label>プロジェクト</Label>
-              <Select value={taskProjectId} onValueChange={setTaskProjectId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="プロジェクトを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>目標タグ</Label>
-              <Select value={taskGoalTag} onValueChange={(v) => setTaskGoalTag(v as GoalTag)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タグを選択（任意）" />
-                </SelectTrigger>
-                <SelectContent>
-                  {goalTagOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {taskParentId && (
-              <div>
-                <Label className="text-muted-foreground">
-                  親タスク: {tasks.find((t) => t.id === taskParentId)?.name}
-                </Label>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTaskDialogOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSaveTask} disabled={!taskName || !taskProjectId}>
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* プロジェクト追加/編集ダイアログ */}
-      <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingProjectId ? 'プロジェクトを編集' : 'プロジェクトを追加'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="projectName">プロジェクト名</Label>
-              <Input
-                id="projectName"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="例: 新規プロジェクト"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label>目標タグ</Label>
-              <Select value={projectGoalTag} onValueChange={(v) => setProjectGoalTag(v as GoalTag)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タグを選択（任意）" />
-                </SelectTrigger>
-                <SelectContent>
-                  {goalTagOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="projectColor">カラー</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input
-                  id="projectColor"
-                  type="color"
-                  value={projectColor}
-                  onChange={(e) => setProjectColor(e.target.value)}
-                  className="w-12 h-10 p-1"
-                />
-                <Input
-                  value={projectColor}
-                  onChange={(e) => setProjectColor(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSaveProject} disabled={!projectName}>
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ProjectDialog
+        dialog={projectDialog}
+        onSave={handleSaveProject}
+      />
     </div>
   )
 }
