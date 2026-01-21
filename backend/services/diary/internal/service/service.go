@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/kensan/backend/services/diary/internal"
 	"github.com/kensan/backend/services/diary/internal/repository"
+	"github.com/kensan/backend/shared/validation"
 )
 
 var (
@@ -17,9 +17,6 @@ var (
 	ErrInvalidDate    = errors.New("date must be in YYYY-MM-DD format")
 	ErrUnauthorized   = errors.New("not authorized to access this diary entry")
 )
-
-// dateRegex validates YYYY-MM-DD format
-var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 // Service handles diary entry business logic
 type Service struct {
@@ -53,7 +50,7 @@ func (s *Service) GetByID(ctx context.Context, userID, diaryID string) (*diary.D
 // GetByDate retrieves a diary entry by date
 func (s *Service) GetByDate(ctx context.Context, userID, date string) (*diary.DiaryEntry, error) {
 	// Validate date format
-	if !dateRegex.MatchString(date) {
+	if !validation.IsValidDate(date) {
 		return nil, ErrInvalidDate
 	}
 
@@ -118,7 +115,7 @@ func (s *Service) Update(ctx context.Context, userID, diaryID string, input *dia
 		entry.Content = *input.Content
 	}
 	if input.Date != nil {
-		if !dateRegex.MatchString(*input.Date) {
+		if !validation.IsValidDate(*input.Date) {
 			return nil, ErrInvalidDate
 		}
 		entry.Date = *input.Date
@@ -160,7 +157,7 @@ func (s *Service) validateCreateInput(input *diary.CreateDiaryInput) error {
 	if input.Date == "" {
 		return ErrDateRequired
 	}
-	if !dateRegex.MatchString(input.Date) {
+	if !validation.IsValidDate(input.Date) {
 		return ErrInvalidDate
 	}
 	return nil

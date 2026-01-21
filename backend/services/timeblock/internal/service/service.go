@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/repository"
+	"github.com/kensan/backend/shared/validation"
 )
 
 var (
@@ -22,12 +22,6 @@ var (
 	ErrInvalidTime         = errors.New("invalid time format (expected HH:mm)")
 )
 
-// dateRegex matches YYYY-MM-DD format
-var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
-// timeRegex matches HH:mm format
-var timeRegex = regexp.MustCompile(`^\d{2}:\d{2}$`)
-
 // Service handles business logic for time blocks and time entries
 type Service struct {
 	repo repository.Repository
@@ -40,12 +34,12 @@ func NewService(repo repository.Repository) *Service {
 
 // validateDate validates that a date string is in YYYY-MM-DD format
 func validateDate(date string) bool {
-	return dateRegex.MatchString(date)
+	return validation.IsValidDate(date)
 }
 
 // validateTime validates that a time string is in HH:mm format
 func validateTime(t string) bool {
-	return timeRegex.MatchString(t)
+	return validation.IsValidTime(t)
 }
 
 // convertUTCToLocalDateTime converts UTC date and time to local timezone

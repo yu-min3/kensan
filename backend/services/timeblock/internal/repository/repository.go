@@ -17,6 +17,60 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// UpdateBuilder helps build dynamic UPDATE queries with optional fields
+type UpdateBuilder struct {
+	setClauses []string
+	args       []interface{}
+	argCount   int
+}
+
+// NewUpdateBuilder creates a new UpdateBuilder
+func NewUpdateBuilder() *UpdateBuilder {
+	return &UpdateBuilder{
+		setClauses: []string{},
+		args:       []interface{}{},
+		argCount:   0,
+	}
+}
+
+// AddField adds a field to the SET clause if the pointer is not nil
+func AddField[T any](b *UpdateBuilder, fieldName string, ptr *T) {
+	if ptr != nil {
+		b.argCount++
+		b.setClauses = append(b.setClauses, fmt.Sprintf("%s = $%d", fieldName, b.argCount))
+		b.args = append(b.args, *ptr)
+	}
+}
+
+// AddFieldValue adds a field with a direct value (not pointer) to the SET clause
+func (b *UpdateBuilder) AddFieldValue(fieldName string, value interface{}) {
+	b.argCount++
+	b.setClauses = append(b.setClauses, fmt.Sprintf("%s = $%d", fieldName, b.argCount))
+	b.args = append(b.args, value)
+}
+
+// AddArg adds an argument without a SET clause (for WHERE conditions)
+func (b *UpdateBuilder) AddArg(value interface{}) int {
+	b.argCount++
+	b.args = append(b.args, value)
+	return b.argCount
+}
+
+// HasUpdates returns true if any fields were added
+func (b *UpdateBuilder) HasUpdates() bool {
+	return len(b.setClauses) > 0
+}
+
+// SetClause returns the SET clause string
+func (b *UpdateBuilder) SetClause() string {
+	return strings.Join(b.setClauses, ", ")
+}
+
+// Args returns all arguments
+func (b *UpdateBuilder) Args() []interface{} {
+	return b.args
+}
+
 // Ensure PostgresRepository implements Repository interface
 var _ Repository = (*PostgresRepository)(nil)
 
@@ -217,93 +271,39 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 
 // UpdateTimeBlock updates an existing time block
 func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBlockID string, input timeblock.UpdateTimeBlockInput) (*timeblock.TimeBlock, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
+	b := NewUpdateBuilder()
 
-	if input.Date != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("date = $%d", argCount))
-		args = append(args, *input.Date)
-	}
-
-	if input.StartTime != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("start_time = $%d", argCount))
-		args = append(args, *input.StartTime)
-	}
-
-	if input.EndTime != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("end_time = $%d", argCount))
-		args = append(args, *input.EndTime)
-	}
-
-	if input.TaskID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("task_id = $%d", argCount))
-		args = append(args, *input.TaskID)
-	}
-
-	if input.TaskName != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("task_name = $%d", argCount))
-		args = append(args, *input.TaskName)
-	}
-
-	if input.ProjectID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("project_id = $%d", argCount))
-		args = append(args, *input.ProjectID)
-	}
-
-	if input.ProjectName != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("project_name = $%d", argCount))
-		args = append(args, *input.ProjectName)
-	}
-
+	AddField(b, "date", input.Date)
+	AddField(b, "start_time", input.StartTime)
+	AddField(b, "end_time", input.EndTime)
+	AddField(b, "task_id", input.TaskID)
+	AddField(b, "task_name", input.TaskName)
+	AddField(b, "project_id", input.ProjectID)
+	AddField(b, "project_name", input.ProjectName)
 	if input.GoalTag != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("goal_tag = $%d", argCount))
-		args = append(args, string(*input.GoalTag))
+		b.AddFieldValue("goal_tag", string(*input.GoalTag))
 	}
+	AddField(b, "is_routine", input.IsRoutine)
+	AddField(b, "routine_task_id", input.RoutineTaskID)
 
-	if input.IsRoutine != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("is_routine = $%d", argCount))
-		args = append(args, *input.IsRoutine)
-	}
-
-	if input.RoutineTaskID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("routine_task_id = $%d", argCount))
-		args = append(args, *input.RoutineTaskID)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetTimeBlockByID(ctx, userID, timeBlockID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, timeBlockID)
-	argCount++
-	args = append(args, userID)
+	b.AddFieldValue("updated_at", time.Now())
+	idArg := b.AddArg(timeBlockID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE time_blocks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, is_routine, routine_task_id, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var tb timeblock.TimeBlock
 	var goalTag *string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&tb.ID,
 		&tb.UserID,
 		&tb.Date,
@@ -571,93 +571,39 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 
 // UpdateTimeEntry updates an existing time entry
 func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEntryID string, input timeblock.UpdateTimeEntryInput) (*timeblock.TimeEntry, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
+	b := NewUpdateBuilder()
 
-	if input.ClockifyID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("clockify_id = $%d", argCount))
-		args = append(args, *input.ClockifyID)
-	}
-
-	if input.Date != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("date = $%d", argCount))
-		args = append(args, *input.Date)
-	}
-
-	if input.StartTime != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("start_time = $%d", argCount))
-		args = append(args, *input.StartTime)
-	}
-
-	if input.EndTime != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("end_time = $%d", argCount))
-		args = append(args, *input.EndTime)
-	}
-
-	if input.TaskID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("task_id = $%d", argCount))
-		args = append(args, *input.TaskID)
-	}
-
-	if input.TaskName != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("task_name = $%d", argCount))
-		args = append(args, *input.TaskName)
-	}
-
-	if input.ProjectID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("project_id = $%d", argCount))
-		args = append(args, *input.ProjectID)
-	}
-
-	if input.ProjectName != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("project_name = $%d", argCount))
-		args = append(args, *input.ProjectName)
-	}
-
+	AddField(b, "clockify_id", input.ClockifyID)
+	AddField(b, "date", input.Date)
+	AddField(b, "start_time", input.StartTime)
+	AddField(b, "end_time", input.EndTime)
+	AddField(b, "task_id", input.TaskID)
+	AddField(b, "task_name", input.TaskName)
+	AddField(b, "project_id", input.ProjectID)
+	AddField(b, "project_name", input.ProjectName)
 	if input.GoalTag != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("goal_tag = $%d", argCount))
-		args = append(args, string(*input.GoalTag))
+		b.AddFieldValue("goal_tag", string(*input.GoalTag))
 	}
+	AddField(b, "description", input.Description)
 
-	if input.Description != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argCount))
-		args = append(args, *input.Description)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetTimeEntryByID(ctx, userID, timeEntryID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, timeEntryID)
-	argCount++
-	args = append(args, userID)
+	b.AddFieldValue("updated_at", time.Now())
+	idArg := b.AddArg(timeEntryID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE time_entries
 		SET %s
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, clockify_id, user_id, date::text, start_time::text, end_time::text, task_id, task_name, project_id, project_name, goal_tag, description, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var te timeblock.TimeEntry
 	var goalTag *string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&te.ID,
 		&te.ClockifyID,
 		&te.UserID,

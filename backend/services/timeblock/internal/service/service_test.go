@@ -164,7 +164,7 @@ func TestValidateTime(t *testing.T) {
 		{"12:00", true},
 		{"9:30", false},
 		{"09:3", false},
-		{"24:00", true}, // Regex only checks format, not value
+		{"24:00", false}, // 24:00 is not valid (hours: 00-23)
 		{"invalid", false},
 		{"", false},
 	}

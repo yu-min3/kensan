@@ -6,6 +6,7 @@ import (
 
 	"github.com/kensan/backend/services/diary/internal"
 	"github.com/kensan/backend/services/diary/internal/repository"
+	"github.com/kensan/backend/shared/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -93,7 +94,7 @@ func TestDateValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.date, func(t *testing.T) {
-			result := dateRegex.MatchString(tc.date)
+			result := validation.IsValidDate(tc.date)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
