@@ -1,6 +1,7 @@
 // Diary Entries API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { createApiService, extendApiService } from '../createApiService'
 import type { DiaryEntry } from '@/types'
 
 // API Response type
@@ -46,32 +47,30 @@ export interface DiaryFilter {
   query?: string
 }
 
-export const diariesApi = {
-  async list(filters?: DiaryFilter): Promise<DiaryEntry[]> {
-    const params = new URLSearchParams()
-    if (filters?.startDate) params.set('start_date', filters.startDate)
-    if (filters?.endDate) params.set('end_date', filters.endDate)
-    if (filters?.tag) params.set('tag', filters.tag)
-    if (filters?.query) params.set('q', filters.query)
-
-    const query = params.toString()
-    const endpoint = `/diaries${query ? `?${query}` : ''}`
-
-    const response = await httpClient.get<DiaryEntryResponse[]>(
-      API_CONFIG.baseUrls.diary,
-      endpoint
-    )
-    return response.map(transformDiaryEntry)
+// Create base CRUD service
+const baseDiariesApi = createApiService<
+  DiaryEntryResponse,
+  DiaryEntry,
+  CreateDiaryInput,
+  UpdateDiaryInput,
+  DiaryFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.diary,
+    resourcePath: '/diaries',
+    transform: transformDiaryEntry,
   },
+  {
+    filterMappings: {
+      startDate: 'start_date',
+      endDate: 'end_date',
+      query: 'q',
+    },
+  }
+)
 
-  async get(id: string): Promise<DiaryEntry> {
-    const response = await httpClient.get<DiaryEntryResponse>(
-      API_CONFIG.baseUrls.diary,
-      `/diaries/${id}`
-    )
-    return transformDiaryEntry(response)
-  },
-
+// Extend with diary-specific methods
+export const diariesApi = extendApiService(baseDiariesApi, () => ({
   async getByDate(date: string): Promise<DiaryEntry> {
     const response = await httpClient.get<DiaryEntryResponse>(
       API_CONFIG.baseUrls.diary,
@@ -79,26 +78,4 @@ export const diariesApi = {
     )
     return transformDiaryEntry(response)
   },
-
-  async create(data: CreateDiaryInput): Promise<DiaryEntry> {
-    const response = await httpClient.post<DiaryEntryResponse>(
-      API_CONFIG.baseUrls.diary,
-      '/diaries',
-      data
-    )
-    return transformDiaryEntry(response)
-  },
-
-  async update(id: string, data: UpdateDiaryInput): Promise<DiaryEntry> {
-    const response = await httpClient.put<DiaryEntryResponse>(
-      API_CONFIG.baseUrls.diary,
-      `/diaries/${id}`,
-      data
-    )
-    return transformDiaryEntry(response)
-  },
-
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.diary, `/diaries/${id}`)
-  },
-}
+}))

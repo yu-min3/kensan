@@ -1,6 +1,7 @@
 // Learning Records API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { createApiService, extendApiService } from '../createApiService'
 import type { LearningRecord, RecordFormat, GoalTag } from '@/types'
 
 // API Response type
@@ -57,54 +58,30 @@ export interface RecordFilter {
   query?: string
 }
 
-export const recordsApi = {
-  async list(filters?: RecordFilter): Promise<LearningRecord[]> {
-    const params = new URLSearchParams()
-    if (filters?.projectId) params.set('project_id', filters.projectId)
-    if (filters?.goalTag) params.set('goal_tag', filters.goalTag)
-    if (filters?.format) params.set('format', filters.format)
-    if (filters?.query) params.set('q', filters.query)
-
-    const query = params.toString()
-    const endpoint = `/records${query ? `?${query}` : ''}`
-
-    const response = await httpClient.get<LearningRecordResponse[]>(
-      API_CONFIG.baseUrls.record,
-      endpoint
-    )
-    return response.map(transformLearningRecord)
+// Create base CRUD service
+const baseRecordsApi = createApiService<
+  LearningRecordResponse,
+  LearningRecord,
+  CreateRecordInput,
+  UpdateRecordInput,
+  RecordFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.record,
+    resourcePath: '/records',
+    transform: transformLearningRecord,
   },
+  {
+    filterMappings: {
+      projectId: 'project_id',
+      goalTag: 'goal_tag',
+      query: 'q',
+    },
+  }
+)
 
-  async get(id: string): Promise<LearningRecord> {
-    const response = await httpClient.get<LearningRecordResponse>(
-      API_CONFIG.baseUrls.record,
-      `/records/${id}`
-    )
-    return transformLearningRecord(response)
-  },
-
-  async create(data: CreateRecordInput): Promise<LearningRecord> {
-    const response = await httpClient.post<LearningRecordResponse>(
-      API_CONFIG.baseUrls.record,
-      '/records',
-      data
-    )
-    return transformLearningRecord(response)
-  },
-
-  async update(id: string, data: UpdateRecordInput): Promise<LearningRecord> {
-    const response = await httpClient.put<LearningRecordResponse>(
-      API_CONFIG.baseUrls.record,
-      `/records/${id}`,
-      data
-    )
-    return transformLearningRecord(response)
-  },
-
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.record, `/records/${id}`)
-  },
-
+// Extend with record-specific methods
+export const recordsApi = extendApiService(baseRecordsApi, () => ({
   async semanticSearch(query: string, limit?: number): Promise<LearningRecord[]> {
     const response = await httpClient.post<LearningRecordResponse[]>(
       API_CONFIG.baseUrls.record,
@@ -113,4 +90,4 @@ export const recordsApi = {
     )
     return response.map(transformLearningRecord)
   },
-}
+}))

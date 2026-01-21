@@ -10,7 +10,7 @@ import { ja } from 'date-fns/locale'
 import { BookMarked, Plus, Search, Calendar } from 'lucide-react'
 
 export function D01DiaryList() {
-  const { entries } = useDiaryStore()
+  const { items: entries } = useDiaryStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [tagFilter, setTagFilter] = useState<string>('')

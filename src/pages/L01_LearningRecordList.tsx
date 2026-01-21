@@ -11,7 +11,7 @@ import { format } from 'date-fns'
 import { BookOpen, Plus, Search, FileText, Shapes } from 'lucide-react'
 
 export function L01LearningRecordList() {
-  const { records } = useLearningRecordStore()
+  const { items: records } = useLearningRecordStore()
   const { projects } = useTaskStore()
 
   const [searchQuery, setSearchQuery] = useState('')

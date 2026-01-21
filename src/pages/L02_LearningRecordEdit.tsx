@@ -15,11 +15,11 @@ import { BookOpen, Save, Trash2, X, Clock } from 'lucide-react'
 export function L02LearningRecordEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getRecordById, addRecord, updateRecord, deleteRecord } = useLearningRecordStore()
+  const { getById, add: addRecord, update: updateRecord, remove: deleteRecord } = useLearningRecordStore()
   const { projects } = useTaskStore()
 
   const isNew = !id
-  const existingRecord = id ? getRecordById(id) : undefined
+  const existingRecord = id ? getById(id) : undefined
 
   const [title, setTitle] = useState(existingRecord?.title || '')
   const [content, setContent] = useState(existingRecord?.content || '')

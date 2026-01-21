@@ -31,7 +31,7 @@ import {
 export function S02Dashboard() {
   const { userName } = useSettingsStore()
   const { getTodayTimeBlocks, getTodayTimeEntries } = useTimeBlockStore()
-  const { records } = useLearningRecordStore()
+  const { items: records } = useLearningRecordStore()
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()

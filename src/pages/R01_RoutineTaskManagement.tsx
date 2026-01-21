@@ -20,7 +20,7 @@ const frequencyLabels: Record<RoutineFrequency, string> = {
 const dayLabels = ['日', '月', '火', '水', '木', '金', '土']
 
 export function R01RoutineTaskManagement() {
-  const { routines, addRoutine, updateRoutine, deleteRoutine, toggleRoutineEnabled } = useRoutineStore()
+  const { items: routines, add: addRoutine, update: updateRoutine, remove: deleteRoutine, toggleRoutineEnabled } = useRoutineStore()
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

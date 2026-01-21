@@ -14,11 +14,11 @@ import { BookMarked, Save, Trash2, X, Clock, Plus } from 'lucide-react'
 export function D02DiaryEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getEntryById, addEntry, updateEntry, deleteEntry } = useDiaryStore()
+  const { getById, add: addEntry, update: updateEntry, remove: deleteEntry } = useDiaryStore()
   const { getTodayTimeEntries } = useTimeBlockStore()
 
   const isNew = !id
-  const existingEntry = id ? getEntryById(id) : undefined
+  const existingEntry = id ? getById(id) : undefined
 
   const [date, setDate] = useState(existingEntry?.date || format(new Date(), 'yyyy-MM-dd'))
   const [title, setTitle] = useState(existingEntry?.title || '')

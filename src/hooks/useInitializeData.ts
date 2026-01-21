@@ -7,7 +7,6 @@ import { useDiaryStore } from '@/stores/useDiaryStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimerStore } from '@/stores/useTimerStore'
-import { syncApi } from '@/api/services/sync'
 import { getTodayInTimezone } from '@/lib/timezone'
 
 // App startup data initialization hook
@@ -27,13 +26,13 @@ export function useInitializeData() {
   const fetchTimeEntriesForLocalDate = useTimeBlockStore((state) => state.fetchTimeEntriesForLocalDate)
 
   // Routine store
-  const fetchRoutines = useRoutineStore((state) => state.fetchRoutines)
+  const fetchRoutines = useRoutineStore((state) => state.fetchAll)
 
   // Diary store
-  const fetchDiaries = useDiaryStore((state) => state.fetchEntries)
+  const fetchDiaries = useDiaryStore((state) => state.fetchAll)
 
   // Learning records store
-  const fetchRecords = useLearningRecordStore((state) => state.fetchRecords)
+  const fetchRecords = useLearningRecordStore((state) => state.fetchAll)
 
   // Settings store
   const fetchSettings = useSettingsStore((state) => state.fetchSettings)
@@ -62,15 +61,6 @@ export function useInitializeData() {
         const currentTimezone = useSettingsStore.getState().timezone || 'Asia/Tokyo'
         const todayLocal = getTodayInTimezone(currentTimezone)
         console.log(`[Kensan] Using timezone: ${currentTimezone}, today: ${todayLocal}`)
-
-        // Sync Clockify data (ignore errors - user may not have Clockify configured)
-        try {
-          console.log('[Kensan] Syncing Clockify data...')
-          await syncApi.triggerSync()
-          console.log('[Kensan] Clockify sync complete')
-        } catch {
-          console.log('[Kensan] Clockify sync skipped (not configured or failed)')
-        }
 
         // Fetch data from all stores in parallel
         // Use timezone-aware fetch for time blocks and entries

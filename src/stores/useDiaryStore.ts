@@ -1,99 +1,45 @@
-import { create } from 'zustand'
+import { createCrudStore, CrudStore } from './createCrudStore'
 import type { DiaryEntry } from '@/types'
-import { diariesApi } from '@/api/services/diaries'
+import { diariesApi, CreateDiaryInput, UpdateDiaryInput, DiaryFilter } from '@/api/services/diaries'
 
-interface DiaryState {
-  entries: DiaryEntry[]
-  isLoading: boolean
-  error: string | null
-
-  // データ取得
-  fetchEntries: () => Promise<void>
-
-  // 操作
-  addEntry: (entry: Omit<DiaryEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updateEntry: (id: string, updates: Partial<DiaryEntry>) => Promise<void>
-  deleteEntry: (id: string) => Promise<void>
-
-  // 取得
-  getEntryById: (id: string) => DiaryEntry | undefined
+// Extension state/actions specific to diary store
+interface DiaryExtensions {
   getEntryByDate: (date: string) => DiaryEntry | undefined
   getEntriesByTag: (tag: string) => DiaryEntry[]
   searchEntries: (query: string) => DiaryEntry[]
 }
 
-export const useDiaryStore = create<DiaryState>((set, get) => ({
-  entries: [],
-  isLoading: false,
-  error: null,
+// Full store type for external use
+export type DiaryStore = CrudStore<DiaryEntry, CreateDiaryInput, UpdateDiaryInput> & DiaryExtensions
 
-  fetchEntries: async () => {
-    set({ isLoading: true, error: null })
-    try {
-      const entries = await diariesApi.list()
-      set({ entries, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
+// Create the store with base CRUD + extensions
+export const useDiaryStore = createCrudStore<
+  DiaryEntry,
+  CreateDiaryInput,
+  UpdateDiaryInput,
+  DiaryFilter,
+  DiaryExtensions
+>(
+  {
+    api: diariesApi,
+    getId: (d) => d.id,
+    prependOnAdd: true,
   },
+  (_set, get) => ({
+    getEntryByDate: (date) => get().items.find((e) => e.date === date),
 
-  addEntry: async (entry) => {
-    try {
-      const newEntry = await diariesApi.create({
-        date: entry.date,
-        title: entry.title,
-        content: entry.content,
-        tags: entry.tags,
-      })
-      set((state) => ({
-        entries: [newEntry, ...state.entries],
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
+    getEntriesByTag: (tag) => get().items.filter((e) => e.tags.includes(tag)),
 
-  updateEntry: async (id, updates) => {
-    try {
-      const updatedEntry = await diariesApi.update(id, {
-        title: updates.title,
-        content: updates.content,
-        tags: updates.tags,
-      })
-      set((state) => ({
-        entries: state.entries.map((e) =>
-          e.id === id ? updatedEntry : e
-        ),
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
+    searchEntries: (query) => {
+      const lowerQuery = query.toLowerCase()
+      return get().items.filter(
+        (e) =>
+          e.title.toLowerCase().includes(lowerQuery) ||
+          e.content.toLowerCase().includes(lowerQuery)
+      )
+    },
+  })
+)
 
-  deleteEntry: async (id) => {
-    try {
-      await diariesApi.delete(id)
-      set((state) => ({
-        entries: state.entries.filter((e) => e.id !== id),
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  getEntryById: (id) => get().entries.find((e) => e.id === id),
-
-  getEntryByDate: (date) => get().entries.find((e) => e.date === date),
-
-  getEntriesByTag: (tag) =>
-    get().entries.filter((e) => e.tags.includes(tag)),
-
-  searchEntries: (query) => {
-    const lowerQuery = query.toLowerCase()
-    return get().entries.filter(
-      (e) =>
-        e.title.toLowerCase().includes(lowerQuery) ||
-        e.content.toLowerCase().includes(lowerQuery)
-    )
-  },
-}))
+// Re-export for backward compatibility with existing code using 'entries' instead of 'items'
+// Note: New code should use 'items' directly

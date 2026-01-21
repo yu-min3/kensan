@@ -14,8 +14,6 @@ import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useMemoStore } from '@/stores/useMemoStore'
-import { syncApi } from '@/api/services/sync'
-import { ApiError } from '@/api/client'
 import type { GoalTag } from '@/types'
 import { format, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -28,7 +26,6 @@ import {
   Plus,
   Sun,
   TrendingUp,
-  RefreshCw,
   Lightbulb,
   Archive,
   Trash2,
@@ -66,29 +63,6 @@ export function E01Evening() {
   const [blockEndTime, setBlockEndTime] = useState('10:00')
   const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
   const [blockGoalTag, setBlockGoalTag] = useState<GoalTag | ''>('')
-
-  // Sync State
-  const [isSyncing, setIsSyncing] = useState(false)
-
-  // Sync Handler
-  const handleSync = async () => {
-    if (isSyncing) return
-    setIsSyncing(true)
-    try {
-      await syncApi.triggerSync()
-      console.log('[Kensan] Manual sync complete')
-      window.location.reload()
-    } catch (err) {
-      console.error('[Kensan] Sync failed:', err)
-      if (err instanceof ApiError) {
-        alert(`同期エラー [${err.status}] ${err.code}\n${err.message}`)
-      } else {
-        alert(`同期に失敗しました: ${(err as Error).message}`)
-      }
-    } finally {
-      setIsSyncing(false)
-    }
-  }
 
   const openNewTimeBlockDialog = () => {
     setBlockTaskName('')
@@ -269,22 +243,11 @@ export function E01Evening() {
 
           {/* 計画 vs 実績 タイムライン */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 計画 vs 実績
               </CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1"
-                onClick={handleSync}
-                disabled={isSyncing}
-                title="Clockifyデータを同期"
-              >
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                同期
-              </Button>
             </CardHeader>
             <CardContent>
               <div className="mb-4 flex gap-4 text-sm">

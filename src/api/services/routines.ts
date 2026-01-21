@@ -1,6 +1,7 @@
 // Routine Tasks API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { createApiService, extendApiService } from '../createApiService'
 import type { RoutineTask, RoutineFrequency } from '@/types'
 
 // API Response type
@@ -50,36 +51,34 @@ export interface RoutineFilter {
   forDate?: string // YYYY-MM-DD
 }
 
-export const routinesApi = {
-  async list(filters?: RoutineFilter): Promise<RoutineTask[]> {
-    const params = new URLSearchParams()
-    if (filters?.enabled !== undefined) params.set('enabled', String(filters.enabled))
-    if (filters?.forDate) params.set('for_date', filters.forDate)
-
-    const query = params.toString()
-    const endpoint = `/routines${query ? `?${query}` : ''}`
-
-    const response = await httpClient.get<RoutineTaskResponse[]>(
-      API_CONFIG.baseUrls.routine,
-      endpoint
-    )
-    return response.map(transformRoutineTask)
+// Create base CRUD service (without get since routines doesn't have individual get)
+const baseRoutinesApi = createApiService<
+  RoutineTaskResponse,
+  RoutineTask,
+  CreateRoutineInput,
+  UpdateRoutineInput,
+  RoutineFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.routine,
+    resourcePath: '/routines',
+    transform: transformRoutineTask,
   },
+  {
+    filterMappings: {
+      forDate: 'for_date',
+    },
+  }
+)
 
+// Extend with routine-specific methods
+export const routinesApi = extendApiService(baseRoutinesApi, () => ({
+  // Override create to set default enabled value
   async create(data: CreateRoutineInput): Promise<RoutineTask> {
     const response = await httpClient.post<RoutineTaskResponse>(
       API_CONFIG.baseUrls.routine,
       '/routines',
       { ...data, enabled: data.enabled ?? true }
-    )
-    return transformRoutineTask(response)
-  },
-
-  async update(id: string, data: UpdateRoutineInput): Promise<RoutineTask> {
-    const response = await httpClient.put<RoutineTaskResponse>(
-      API_CONFIG.baseUrls.routine,
-      `/routines/${id}`,
-      data
     )
     return transformRoutineTask(response)
   },
@@ -91,8 +90,4 @@ export const routinesApi = {
     )
     return transformRoutineTask(response)
   },
-
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.routine, `/routines/${id}`)
-  },
-}
+}))
