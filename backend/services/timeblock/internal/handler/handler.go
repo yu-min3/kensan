@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -80,8 +79,6 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse timezone parameter for response conversion
-	// If provided, date/time in response will be converted to the specified timezone
-	// If empty, date/time will be returned as stored (UTC)
 	timezone := r.URL.Query().Get("timezone")
 
 	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter, timezone)
@@ -102,8 +99,7 @@ func (h *Handler) CreateTimeBlock(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input timeblock.CreateTimeBlockInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -165,8 +161,7 @@ func (h *Handler) UpdateTimeBlock(w http.ResponseWriter, r *http.Request) {
 	timeBlockID := chi.URLParam(r, "timeBlockId")
 
 	var input timeblock.UpdateTimeBlockInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -218,8 +213,7 @@ func (h *Handler) GenerateFromRoutines(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input timeblock.GenerateFromRoutinesInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -286,8 +280,6 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse timezone parameter for response conversion
-	// If provided, date/time in response will be converted to the specified timezone
-	// If empty, date/time will be returned as stored (UTC)
 	timezone := r.URL.Query().Get("timezone")
 
 	entries, err := h.service.ListTimeEntries(r.Context(), userID, filter, timezone)
@@ -312,8 +304,7 @@ func (h *Handler) CreateTimeEntry(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input timeblock.CreateTimeEntryInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -375,8 +366,7 @@ func (h *Handler) UpdateTimeEntry(w http.ResponseWriter, r *http.Request) {
 	entryID := chi.URLParam(r, "entryId")
 
 	var input timeblock.UpdateTimeEntryInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -435,7 +425,6 @@ func (h *Handler) GetCurrentTimer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return null if no timer is running (not an error)
 	middleware.JSON(w, r, http.StatusOK, timer)
 }
 
@@ -444,8 +433,7 @@ func (h *Handler) StartTimer(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input timeblock.StartTimerInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 

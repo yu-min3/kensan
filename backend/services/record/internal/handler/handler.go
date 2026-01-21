@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -81,9 +80,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordID := chi.URLParam(r, "recordId")
-	if recordID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+	recordID, ok := middleware.RequireURLParam(w, r, "recordId")
+	if !ok {
 		return
 	}
 
@@ -106,8 +104,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input record.CreateRecordInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -129,15 +126,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordID := chi.URLParam(r, "recordId")
-	if recordID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+	recordID, ok := middleware.RequireURLParam(w, r, "recordId")
+	if !ok {
 		return
 	}
 
 	var input record.UpdateRecordInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -159,9 +154,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordID := chi.URLParam(r, "recordId")
-	if recordID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Record ID is required")
+	recordID, ok := middleware.RequireURLParam(w, r, "recordId")
+	if !ok {
 		return
 	}
 
@@ -183,8 +177,7 @@ func (h *Handler) SemanticSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input record.SemanticSearchInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -38,8 +37,7 @@ func (h *Handler) GenerateReview(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input ai.GenerateReviewInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -127,8 +125,7 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input ai.AskInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 

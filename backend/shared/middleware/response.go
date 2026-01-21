@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // Response is the standard API response format
@@ -107,4 +109,25 @@ func ValidationError(w http.ResponseWriter, r *http.Request, details []ErrorDeta
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
 	json.NewEncoder(w).Encode(response)
+}
+
+// DecodeJSONBody decodes JSON request body into the provided value.
+// Returns false and writes an error response if decoding fails.
+func DecodeJSONBody(w http.ResponseWriter, r *http.Request, v interface{}) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+		return false
+	}
+	return true
+}
+
+// RequireURLParam extracts a URL parameter and validates it's not empty.
+// Returns the value and true if valid, or writes an error response and returns false.
+func RequireURLParam(w http.ResponseWriter, r *http.Request, paramName string) (string, bool) {
+	value := chi.URLParam(r, paramName)
+	if value == "" {
+		Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", paramName+" is required")
+		return "", false
+	}
+	return value, true
 }

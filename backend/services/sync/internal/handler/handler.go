@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -40,14 +39,13 @@ type GetWorkspacesRequest struct {
 // GetWorkspaces handles GET /sync/clockify/workspaces
 func (h *Handler) GetWorkspaces(w http.ResponseWriter, r *http.Request) {
 	var req GetWorkspacesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "リクエストの形式が不正です")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
 	if req.APIKey == "" {
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "apiKey", Message: "APIキーは必須です"},
+			{Field: "apiKey", Message: "API key is required"},
 		})
 		return
 	}
@@ -57,14 +55,14 @@ func (h *Handler) GetWorkspaces(w http.ResponseWriter, r *http.Request) {
 	// Validate and save API key
 	user, err := h.service.ValidateAndSaveAPIKey(r.Context(), userID, req.APIKey)
 	if err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "CLOCKIFY_ERROR", "Clockify APIキーが無効です: "+err.Error())
+		middleware.Error(w, r, http.StatusBadRequest, "CLOCKIFY_ERROR", "Invalid Clockify API key: "+err.Error())
 		return
 	}
 
 	// Get workspaces
 	workspaces, err := h.service.GetWorkspaces(r.Context(), req.APIKey)
 	if err != nil {
-		middleware.Error(w, r, http.StatusInternalServerError, "CLOCKIFY_ERROR", "ワークスペースの取得に失敗しました")
+		middleware.Error(w, r, http.StatusInternalServerError, "CLOCKIFY_ERROR", "Failed to get workspaces")
 		return
 	}
 
@@ -82,11 +80,11 @@ func (h *Handler) SyncProjects(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case service.ErrAPIKeyRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify APIキーが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify API key is not configured")
 		case service.ErrWorkspaceRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "ワークスペースが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "Workspace is not configured")
 		default:
-			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "プロジェクトの同期に失敗しました")
+			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "Failed to sync projects")
 		}
 		return
 	}
@@ -103,8 +101,7 @@ type SyncTimeEntriesRequest struct {
 // SyncTimeEntries handles POST /sync/clockify/time-entries
 func (h *Handler) SyncTimeEntries(w http.ResponseWriter, r *http.Request) {
 	var req SyncTimeEntriesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "リクエストの形式が不正です")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -112,7 +109,7 @@ func (h *Handler) SyncTimeEntries(w http.ResponseWriter, r *http.Request) {
 	startDate, err := time.Parse(time.RFC3339, req.StartDate)
 	if err != nil {
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "startDate", Message: "日付の形式が不正です（RFC3339形式で指定してください）"},
+			{Field: "startDate", Message: "Invalid date format (use RFC3339)"},
 		})
 		return
 	}
@@ -120,14 +117,14 @@ func (h *Handler) SyncTimeEntries(w http.ResponseWriter, r *http.Request) {
 	endDate, err := time.Parse(time.RFC3339, req.EndDate)
 	if err != nil {
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "endDate", Message: "日付の形式が不正です（RFC3339形式で指定してください）"},
+			{Field: "endDate", Message: "Invalid date format (use RFC3339)"},
 		})
 		return
 	}
 
 	if startDate.After(endDate) {
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "startDate", Message: "開始日は終了日より前である必要があります"},
+			{Field: "startDate", Message: "Start date must be before end date"},
 		})
 		return
 	}
@@ -138,13 +135,13 @@ func (h *Handler) SyncTimeEntries(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case service.ErrAPIKeyRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify APIキーが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify API key is not configured")
 		case service.ErrWorkspaceRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "ワークスペースが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "Workspace is not configured")
 		case service.ErrClockifyUserRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "USER_REQUIRED", "ClockifyユーザーIDが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "USER_REQUIRED", "Clockify user ID is not configured")
 		default:
-			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "時間記録の同期に失敗しました")
+			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "Failed to sync time entries")
 		}
 		return
 	}
@@ -158,7 +155,7 @@ func (h *Handler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 
 	status, err := h.service.GetSyncStatus(r.Context(), userID)
 	if err != nil {
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "同期ステータスの取得に失敗しました")
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get sync status")
 		return
 	}
 
@@ -173,13 +170,13 @@ func (h *Handler) TriggerSync(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case service.ErrAPIKeyRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify APIキーが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "API_KEY_REQUIRED", "Clockify API key is not configured")
 		case service.ErrWorkspaceRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "ワークスペースが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "WORKSPACE_REQUIRED", "Workspace is not configured")
 		case service.ErrClockifyUserRequired:
-			middleware.Error(w, r, http.StatusBadRequest, "USER_REQUIRED", "ClockifyユーザーIDが設定されていません")
+			middleware.Error(w, r, http.StatusBadRequest, "USER_REQUIRED", "Clockify user ID is not configured")
 		default:
-			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "同期に失敗しました")
+			middleware.Error(w, r, http.StatusInternalServerError, "SYNC_ERROR", "Failed to sync")
 		}
 		return
 	}

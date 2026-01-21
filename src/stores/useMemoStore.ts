@@ -37,7 +37,7 @@ export const useMemoStore = create<MemoState>((set, get) => ({
 
   addMemo: async (content) => {
     try {
-      const newMemo = await memosApi.create(content)
+      const newMemo = await memosApi.create({ content })
       set((state) => ({
         memos: [newMemo, ...state.memos],
       }))

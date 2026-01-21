@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -94,8 +93,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var input memo.CreateMemoInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -126,8 +124,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	memoID := chi.URLParam(r, "memoId")
 
 	var input memo.UpdateMemoInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 

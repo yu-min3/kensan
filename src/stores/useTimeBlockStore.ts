@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { timeblocksApi, timeentriesApi } from '@/api/services/timeblocks'
-import { format } from 'date-fns'
 
 interface TimeBlockState {
   timeBlocks: TimeBlock[]
@@ -9,14 +8,11 @@ interface TimeBlockState {
   isLoading: boolean
   error: string | null
 
-  // データ取得
-  fetchTimeBlocks: (date?: string) => Promise<void>
-  fetchTimeBlocksRange: (startDate: string, endDate: string) => Promise<void>
-  fetchTimeEntries: (date?: string) => Promise<void>
-  fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
-  // Timezone-aware fetch methods (converts local date to UTC range for proper querying)
+  // データ取得 (timezone-aware)
   fetchTimeBlocksForLocalDate: (localDate: string, timezone: string) => Promise<void>
   fetchTimeEntriesForLocalDate: (localDate: string, timezone: string) => Promise<void>
+  fetchTimeBlocksRange: (startDate: string, endDate: string) => Promise<void>
+  fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
 
   // タイムブロック操作
   addTimeBlock: (block: Omit<TimeBlock, 'id'>) => Promise<void>
@@ -41,16 +37,22 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchTimeBlocks: async (date) => {
+  // Timezone-aware fetch: converts local date to UTC range for proper querying
+  fetchTimeBlocksForLocalDate: async (localDate, timezone) => {
     set({ isLoading: true, error: null })
     try {
-      const targetDate = date || format(new Date(), 'yyyy-MM-dd')
-      const timeBlocks = await timeblocksApi.listByDate(targetDate)
-      set((state) => {
-        // Replace blocks for the fetched date, keep others
-        const otherBlocks = state.timeBlocks.filter(b => b.date !== targetDate)
-        return { timeBlocks: [...otherBlocks, ...timeBlocks], isLoading: false }
-      })
+      const timeBlocks = await timeblocksApi.listByLocalDate(localDate, timezone)
+      set({ timeBlocks, isLoading: false })
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false })
+    }
+  },
+
+  fetchTimeEntriesForLocalDate: async (localDate, timezone) => {
+    set({ isLoading: true, error: null })
+    try {
+      const timeEntries = await timeentriesApi.listByLocalDate(localDate, timezone)
+      set({ timeEntries, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
     }
@@ -101,21 +103,6 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  fetchTimeEntries: async (date) => {
-    set({ isLoading: true, error: null })
-    try {
-      const targetDate = date || format(new Date(), 'yyyy-MM-dd')
-      const timeEntries = await timeentriesApi.listByDate(targetDate)
-      set((state) => {
-        // Replace entries for the fetched date, keep others
-        const otherEntries = state.timeEntries.filter(e => e.date !== targetDate)
-        return { timeEntries: [...otherEntries, ...timeEntries], isLoading: false }
-      })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
-  },
-
   fetchTimeEntriesRange: async (startDate, endDate) => {
     set({ isLoading: true, error: null })
     try {
@@ -126,30 +113,7 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  // Timezone-aware fetch: converts local date to UTC range for proper querying
-  fetchTimeBlocksForLocalDate: async (localDate, timezone) => {
-    set({ isLoading: true, error: null })
-    try {
-      const timeBlocks = await timeblocksApi.listByLocalDate(localDate, timezone)
-      // Replace all blocks since the query is already filtered for the correct range
-      set({ timeBlocks, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
-  },
-
-  fetchTimeEntriesForLocalDate: async (localDate, timezone) => {
-    set({ isLoading: true, error: null })
-    try {
-      const timeEntries = await timeentriesApi.listByLocalDate(localDate, timezone)
-      // Replace all entries since the query is already filtered for the correct range
-      set({ timeEntries, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
-  },
-
-  // TimeEntry CRUD operations (API connected)
+  // TimeEntry CRUD operations
   addTimeEntry: async (entry) => {
     try {
       const newEntry = await timeentriesApi.create(entry)

@@ -1,9 +1,11 @@
 // Timeblocks API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { createApiService, extendApiService } from '../createApiService'
 import type { TimeBlock, TimeEntry, GoalTag } from '@/types'
 import { localDateToUtcRange } from '@/lib/timezone'
 
+// API Response types
 interface TimeBlockResponse {
   id: string
   date: string
@@ -18,6 +20,20 @@ interface TimeBlockResponse {
   routineTaskId?: string
 }
 
+interface TimeEntryResponse {
+  id: string
+  date: string
+  startTime: string
+  endTime: string
+  taskId?: string
+  taskName: string
+  projectId?: string
+  projectName?: string
+  goalTag?: GoalTag
+  description?: string
+}
+
+// Transform functions
 const transformTimeBlock = (tb: TimeBlockResponse): TimeBlock => ({
   id: tb.id,
   date: tb.date,
@@ -32,7 +48,96 @@ const transformTimeBlock = (tb: TimeBlockResponse): TimeBlock => ({
   routineTaskId: tb.routineTaskId,
 })
 
-export const timeblocksApi = {
+const transformTimeEntry = (te: TimeEntryResponse): TimeEntry => ({
+  id: te.id,
+  date: te.date,
+  startTime: te.startTime,
+  endTime: te.endTime,
+  taskId: te.taskId,
+  taskName: te.taskName,
+  projectId: te.projectId,
+  projectName: te.projectName,
+  goalTag: te.goalTag,
+  description: te.description,
+})
+
+// Input types
+export interface CreateTimeBlockInput {
+  date: string
+  startTime: string
+  endTime: string
+  taskId?: string
+  taskName: string
+  projectId?: string
+  projectName?: string
+  goalTag?: GoalTag
+  isRoutine?: boolean
+  routineTaskId?: string
+}
+
+export interface UpdateTimeBlockInput {
+  date?: string
+  startTime?: string
+  endTime?: string
+  taskId?: string
+  taskName?: string
+  projectId?: string
+  projectName?: string
+  goalTag?: GoalTag
+  isRoutine?: boolean
+  routineTaskId?: string
+}
+
+export interface CreateTimeEntryInput {
+  date: string
+  startTime: string
+  endTime: string
+  taskId?: string
+  taskName: string
+  projectId?: string
+  projectName?: string
+  goalTag?: GoalTag
+  description?: string
+}
+
+export interface UpdateTimeEntryInput {
+  date?: string
+  startTime?: string
+  endTime?: string
+  taskId?: string
+  taskName?: string
+  projectId?: string
+  projectName?: string
+  goalTag?: GoalTag
+  description?: string
+}
+
+// Base TimeBlocks API (CRUD operations)
+const baseTimeBlocksApi = createApiService<
+  TimeBlockResponse,
+  TimeBlock,
+  CreateTimeBlockInput,
+  UpdateTimeBlockInput
+>({
+  baseUrl: API_CONFIG.baseUrls.timeblock,
+  resourcePath: '/timeblocks',
+  transform: transformTimeBlock,
+})
+
+// Base TimeEntries API (CRUD operations)
+const baseTimeEntriesApi = createApiService<
+  TimeEntryResponse,
+  TimeEntry,
+  CreateTimeEntryInput,
+  UpdateTimeEntryInput
+>({
+  baseUrl: API_CONFIG.baseUrls.timeblock,
+  resourcePath: '/time-entries',
+  transform: transformTimeEntry,
+})
+
+// Extended TimeBlocks API with date-based queries
+export const timeblocksApi = extendApiService(baseTimeBlocksApi, () => ({
   /**
    * List time blocks by local date with timezone conversion.
    * Converts the local date to UTC timestamp range for querying.
@@ -50,17 +155,6 @@ export const timeblocksApi = {
     return response.map(transformTimeBlock)
   },
 
-  /**
-   * @deprecated Use listByLocalDate with timezone instead
-   */
-  async listByDate(date: string): Promise<TimeBlock[]> {
-    const response = await httpClient.get<TimeBlockResponse[]>(
-      API_CONFIG.baseUrls.timeblock,
-      `/timeblocks?date=${date}`
-    )
-    return response.map(transformTimeBlock)
-  },
-
   async listByDateRange(startDate: string, endDate: string): Promise<TimeBlock[]> {
     const response = await httpClient.get<TimeBlockResponse[]>(
       API_CONFIG.baseUrls.timeblock,
@@ -68,58 +162,10 @@ export const timeblocksApi = {
     )
     return response.map(transformTimeBlock)
   },
+}))
 
-  async create(data: Omit<TimeBlock, 'id'>): Promise<TimeBlock> {
-    const response = await httpClient.post<TimeBlockResponse>(
-      API_CONFIG.baseUrls.timeblock,
-      '/timeblocks',
-      data
-    )
-    return transformTimeBlock(response)
-  },
-
-  async update(id: string, data: Partial<Omit<TimeBlock, 'id'>>): Promise<TimeBlock> {
-    const response = await httpClient.put<TimeBlockResponse>(
-      API_CONFIG.baseUrls.timeblock,
-      `/timeblocks/${id}`,
-      data
-    )
-    return transformTimeBlock(response)
-  },
-
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.timeblock, `/timeblocks/${id}`)
-  },
-}
-
-// TimeEntry response type
-interface TimeEntryResponse {
-  id: string
-  date: string
-  startTime: string
-  endTime: string
-  taskId?: string
-  taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
-  description?: string
-}
-
-const transformTimeEntry = (te: TimeEntryResponse): TimeEntry => ({
-  id: te.id,
-  date: te.date,
-  startTime: te.startTime,
-  endTime: te.endTime,
-  taskId: te.taskId,
-  taskName: te.taskName,
-  projectId: te.projectId,
-  projectName: te.projectName,
-  goalTag: te.goalTag,
-  description: te.description,
-})
-
-export const timeentriesApi = {
+// Extended TimeEntries API with date-based queries
+export const timeentriesApi = extendApiService(baseTimeEntriesApi, () => ({
   /**
    * List time entries by local date with timezone conversion.
    * Converts the local date to UTC timestamp range for querying.
@@ -137,17 +183,6 @@ export const timeentriesApi = {
     return response.map(transformTimeEntry)
   },
 
-  /**
-   * @deprecated Use listByLocalDate with timezone instead
-   */
-  async listByDate(date: string): Promise<TimeEntry[]> {
-    const response = await httpClient.get<TimeEntryResponse[]>(
-      API_CONFIG.baseUrls.timeblock,
-      `/time-entries?date=${date}`
-    )
-    return response.map(transformTimeEntry)
-  },
-
   async listByDateRange(startDate: string, endDate: string): Promise<TimeEntry[]> {
     const response = await httpClient.get<TimeEntryResponse[]>(
       API_CONFIG.baseUrls.timeblock,
@@ -155,26 +190,4 @@ export const timeentriesApi = {
     )
     return response.map(transformTimeEntry)
   },
-
-  async create(data: Omit<TimeEntry, 'id'>): Promise<TimeEntry> {
-    const response = await httpClient.post<TimeEntryResponse>(
-      API_CONFIG.baseUrls.timeblock,
-      '/time-entries',
-      data
-    )
-    return transformTimeEntry(response)
-  },
-
-  async update(id: string, data: Partial<Omit<TimeEntry, 'id'>>): Promise<TimeEntry> {
-    const response = await httpClient.put<TimeEntryResponse>(
-      API_CONFIG.baseUrls.timeblock,
-      `/time-entries/${id}`,
-      data
-    )
-    return transformTimeEntry(response)
-  },
-
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.timeblock, `/time-entries/${id}`)
-  },
-}
+}))

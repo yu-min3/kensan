@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -75,9 +74,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diaryID := chi.URLParam(r, "diaryId")
-	if diaryID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Diary ID is required")
+	diaryID, ok := middleware.RequireURLParam(w, r, "diaryId")
+	if !ok {
 		return
 	}
 
@@ -99,9 +97,8 @@ func (h *Handler) GetByDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	date := chi.URLParam(r, "date")
-	if date == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Date is required")
+	date, ok := middleware.RequireURLParam(w, r, "date")
+	if !ok {
 		return
 	}
 
@@ -124,8 +121,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input diary.CreateDiaryInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -147,15 +143,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diaryID := chi.URLParam(r, "diaryId")
-	if diaryID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Diary ID is required")
+	diaryID, ok := middleware.RequireURLParam(w, r, "diaryId")
+	if !ok {
 		return
 	}
 
 	var input diary.UpdateDiaryInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &input) {
 		return
 	}
 
@@ -177,9 +171,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diaryID := chi.URLParam(r, "diaryId")
-	if diaryID == "" {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Diary ID is required")
+	diaryID, ok := middleware.RequireURLParam(w, r, "diaryId")
+	if !ok {
 		return
 	}
 

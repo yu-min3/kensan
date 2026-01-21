@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -41,8 +40,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 // POST /auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req user.RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -59,8 +57,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // POST /auth/login
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req user.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -101,8 +98,7 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req user.UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -143,8 +139,7 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req user.UpdateSettingsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -167,8 +162,7 @@ func (h *Handler) GiveAIConsent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req user.AIConsentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.Error(w, r, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !middleware.DecodeJSONBody(w, r, &req) {
 		return
 	}
 

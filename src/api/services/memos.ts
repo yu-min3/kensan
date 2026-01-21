@@ -1,7 +1,9 @@
 // Memos API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { createApiService } from '../createApiService'
 
+// Types
 export interface Memo {
   id: string
   userId: string
@@ -29,58 +31,53 @@ const transformMemo = (m: MemoResponse): Memo => ({
   updatedAt: m.updatedAt,
 })
 
-export interface ListMemosParams {
+// Input types
+export interface CreateMemoInput {
+  content: string
+}
+
+export interface UpdateMemoInput {
+  content?: string
+  archived?: boolean
+}
+
+export interface MemoFilter {
   archived?: boolean
   includeAll?: boolean
   date?: string
   limit?: number
 }
 
+// Base CRUD API
+const baseMemosApi = createApiService<
+  MemoResponse,
+  Memo,
+  CreateMemoInput,
+  UpdateMemoInput,
+  MemoFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.memo,
+    resourcePath: '/memos',
+    transform: transformMemo,
+  },
+  {
+    filterMappings: {
+      includeAll: 'include_all',
+    },
+  }
+)
+
+// Extended API with PATCH update and archive method
 export const memosApi = {
-  /**
-   * List memos with optional filters
-   */
-  async list(params?: ListMemosParams): Promise<Memo[]> {
-    const searchParams = new URLSearchParams()
-    if (params?.archived !== undefined) {
-      searchParams.set('archived', String(params.archived))
-    }
-    if (params?.includeAll) {
-      searchParams.set('include_all', 'true')
-    }
-    if (params?.date) {
-      searchParams.set('date', params.date)
-    }
-    if (params?.limit) {
-      searchParams.set('limit', String(params.limit))
-    }
+  // Inherit list, get, create, delete from base
+  list: baseMemosApi.list,
+  get: baseMemosApi.get,
+  create: baseMemosApi.create,
+  delete: baseMemosApi.delete,
 
-    const query = searchParams.toString()
-    const path = query ? `/memos?${query}` : '/memos'
-
-    const response = await httpClient.get<MemoResponse[]>(
-      API_CONFIG.baseUrls.memo,
-      path
-    )
-    return response.map(transformMemo)
-  },
-
-  /**
-   * Create a new memo
-   */
-  async create(content: string): Promise<Memo> {
-    const response = await httpClient.post<MemoResponse>(
-      API_CONFIG.baseUrls.memo,
-      '/memos',
-      { content }
-    )
-    return transformMemo(response)
-  },
-
-  /**
-   * Update a memo
-   */
-  async update(id: string, data: { content?: string; archived?: boolean }): Promise<Memo> {
+  // Override update to use PATCH instead of PUT
+  async update(id: string, data: UpdateMemoInput): Promise<Memo> {
     const response = await httpClient.patch<MemoResponse>(
       API_CONFIG.baseUrls.memo,
       `/memos/${id}`,
@@ -89,9 +86,7 @@ export const memosApi = {
     return transformMemo(response)
   },
 
-  /**
-   * Archive a memo
-   */
+  // Archive a memo
   async archive(id: string): Promise<Memo> {
     const response = await httpClient.post<MemoResponse>(
       API_CONFIG.baseUrls.memo,
@@ -99,12 +94,5 @@ export const memosApi = {
       {}
     )
     return transformMemo(response)
-  },
-
-  /**
-   * Delete a memo
-   */
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(API_CONFIG.baseUrls.memo, `/memos/${id}`)
   },
 }
