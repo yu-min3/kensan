@@ -9,14 +9,14 @@ import { MarkdownEditorPlaceholder } from '@/components/editor/MarkdownEditorPla
 import { DrawioEditorPlaceholder } from '@/components/editor/DrawioEditorPlaceholder'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useTaskStore } from '@/stores/useTaskStore'
-import type { RecordFormat, GoalTag } from '@/types'
+import type { RecordFormat } from '@/types'
 import { BookOpen, Save, Trash2, X, Clock } from 'lucide-react'
 
 export function L02LearningRecordEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { getById, add: addRecord, update: updateRecord, remove: deleteRecord } = useLearningRecordStore()
-  const { projects } = useTaskStore()
+  const { goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
 
   const isNew = !id
   const existingRecord = id ? getById(id) : undefined
@@ -24,29 +24,30 @@ export function L02LearningRecordEdit() {
   const [title, setTitle] = useState(existingRecord?.title || '')
   const [content, setContent] = useState(existingRecord?.content || '')
   const [format, setFormat] = useState<RecordFormat>(existingRecord?.format || 'markdown')
-  const [projectId, setProjectId] = useState(existingRecord?.projectId || '')
-  const [goalTag, setGoalTag] = useState<GoalTag | ''>(existingRecord?.goalTag || '')
+  const [milestoneId, setMilestoneId] = useState(existingRecord?.milestoneId || '')
 
   useEffect(() => {
     if (existingRecord) {
       setTitle(existingRecord.title)
       setContent(existingRecord.content)
       setFormat(existingRecord.format)
-      setProjectId(existingRecord.projectId || '')
-      setGoalTag(existingRecord.goalTag || '')
+      setMilestoneId(existingRecord.milestoneId || '')
     }
   }, [existingRecord])
 
-  const selectedProject = projects.find((p) => p.id === projectId)
+  const selectedMilestone = milestoneId ? getMilestoneById(milestoneId) : undefined
+  const selectedGoal = selectedMilestone ? getGoalById(selectedMilestone.goalId) : undefined
 
   const handleSave = () => {
     const recordData = {
       title,
       content,
       format,
-      projectId: projectId || undefined,
-      projectName: selectedProject?.name,
-      goalTag: (goalTag || selectedProject?.goalTag) as GoalTag | undefined,
+      milestoneId: milestoneId || undefined,
+      milestoneName: selectedMilestone?.name,
+      goalId: selectedGoal?.id,
+      goalName: selectedGoal?.name,
+      goalColor: selectedGoal?.color,
     }
 
     if (isNew) {
@@ -151,39 +152,51 @@ export function L02LearningRecordEdit() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>プロジェクト</Label>
-                <Select value={projectId} onValueChange={setProjectId}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="選択..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">なし</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>目標タグ</Label>
+                <Label>マイルストーン</Label>
                 <Select
-                  value={goalTag || selectedProject?.goalTag || ''}
-                  onValueChange={(v) => setGoalTag(v as GoalTag)}
+                  value={milestoneId || ''}
+                  onValueChange={(v) => setMilestoneId(v || '')}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="選択..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">なし</SelectItem>
-                    <SelectItem value="GK">GK (Golden Kube)</SelectItem>
-                    <SelectItem value="OSS">OSS</SelectItem>
-                    <SelectItem value="Output">Output</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {goals
+                      .filter(g => !g.isArchived)
+                      .map(goal => {
+                        const goalMilestones = milestones.filter(
+                          m => m.goalId === goal.id && m.status === 'active'
+                        )
+                        if (goalMilestones.length === 0) return null
+                        return (
+                          <div key={goal.id}>
+                            <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                              <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: goal.color }}
+                              />
+                              {goal.name}
+                            </div>
+                            {goalMilestones.map(milestone => (
+                              <SelectItem key={milestone.id} value={milestone.id}>
+                                {milestone.name}
+                              </SelectItem>
+                            ))}
+                          </div>
+                        )
+                      })}
                   </SelectContent>
                 </Select>
+                {selectedGoal && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: selectedGoal.color }}
+                    />
+                    Goal: {selectedGoal.name}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

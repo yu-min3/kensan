@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { TagBadge } from '@/components/common/TagBadge'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
@@ -56,7 +56,7 @@ export function S02Dashboard() {
           <h1 className="text-2xl font-bold">
             おかえりなさい、{userName}さん
           </h1>
-          <p className="text-muted-foreground">{today}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 font-light">{today}</p>
         </div>
         <div className="flex gap-2">
           <Link to="/morning">
@@ -161,13 +161,15 @@ export function S02Dashboard() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium">{block.taskName}</p>
-                    {block.projectName && (
+                    {block.milestoneName && (
                       <p className="text-xs text-muted-foreground">
-                        {block.projectName}
+                        {block.milestoneName}
                       </p>
                     )}
                   </div>
-                  {block.goalTag && <TagBadge tag={block.goalTag} size="sm" />}
+                  {block.goalName && block.goalColor && (
+                    <GoalBadge name={block.goalName} color={block.goalColor} size="sm" />
+                  )}
                 </div>
               ))}
               {todayBlocks.length === 0 && (
@@ -216,53 +218,23 @@ export function S02Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="GK" />
-                  <span className="text-sm">Golden Kubestronaut</span>
+            {mockWeeklySummary.byGoal.map((goal) => (
+              <div key={goal.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <GoalBadge name={goal.name} color={goal.color} size="sm" />
+                    <span className="text-sm">{goal.name}</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {Math.floor(goal.minutes / 60)}h
+                  </span>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.GK / 60)}h / 20h
-                </span>
+                <Progress
+                  value={(goal.minutes / (20 * 60)) * 100}
+                  className="h-2"
+                />
               </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
-                className="h-2"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="OSS" />
-                  <span className="text-sm">OSS活動</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.OSS / 60)}h / 15h
-                </span>
-              </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
-                className="h-2"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="Output" />
-                  <span className="text-sm">アウトプット</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.Output / 60)}h / 5h
-                </span>
-              </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.Output / (5 * 60)) * 100}
-                className="h-2"
-              />
-            </div>
+            ))}
           </CardContent>
         </Card>
 
@@ -296,8 +268,10 @@ export function S02Dashboard() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {record.goalTag && <TagBadge tag={record.goalTag} size="sm" />}
-                    <span>{record.projectName}</span>
+                    {record.goalName && record.goalColor && (
+                      <GoalBadge name={record.goalName} color={record.goalColor} size="sm" />
+                    )}
+                    {record.milestoneName && <span>{record.milestoneName}</span>}
                     <span>•</span>
                     <span>{formatMonthDay(record.createdAt)}</span>
                   </div>

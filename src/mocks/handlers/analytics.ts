@@ -1,7 +1,6 @@
 // Analytics MSW handlers
 import { http, HttpResponse } from 'msw'
-import { weeklySummary, dailyStudyHours } from '../data'
-import type { GoalTag } from '@/types'
+import { weeklySummary, dailyStudyHours, goals } from '../data'
 
 const BASE_URL = 'http://localhost:8088/api/v1'
 
@@ -21,8 +20,9 @@ export const analyticsHandlers = [
       year: year ? parseInt(year) : new Date().getFullYear(),
       month: month ? parseInt(month) : new Date().getMonth() + 1,
       totalMinutes: weeklySummary.totalMinutes * 4,
-      byGoalTag: weeklySummary.byGoalTag,
-      byProject: weeklySummary.byProject,
+      byGoal: weeklySummary.byGoal,
+      byTag: weeklySummary.byTag,
+      byMilestone: weeklySummary.byMilestone,
       completedTasks: weeklySummary.completedTasks * 4,
       weeklyBreakdown: [weeklySummary],
     })
@@ -38,12 +38,12 @@ export const analyticsHandlers = [
       data: dailyStudyHours.map(d => ({
         period: d.date,
         totalMinutes: d.hours * 60,
-        byGoalTag: {
-          GK: d.hours * 30,
-          OSS: d.hours * 15,
-          Output: d.hours * 10,
-          Other: d.hours * 5,
-        },
+        byGoal: goals.map(g => ({
+          id: g.id,
+          name: g.name,
+          color: g.color,
+          minutes: Math.floor(d.hours * 60 * Math.random()),
+        })),
         completedTasks: Math.floor(d.hours),
       })),
     })
@@ -52,17 +52,20 @@ export const analyticsHandlers = [
   // GET /analytics/goal-progress
   http.get(`${BASE_URL}/analytics/goal-progress`, ({ request }) => {
     const url = new URL(request.url)
-    const goalTag = url.searchParams.get('goal_tag') as GoalTag | null
+    const goalId = url.searchParams.get('goal_id')
 
-    const items = [
-      { goalTag: 'GK' as GoalTag, targetMinutes: 1200, actualMinutes: 960, progressPercent: 80, trend: 'up' as const },
-      { goalTag: 'OSS' as GoalTag, targetMinutes: 600, actualMinutes: 480, progressPercent: 80, trend: 'stable' as const },
-      { goalTag: 'Output' as GoalTag, targetMinutes: 300, actualMinutes: 180, progressPercent: 60, trend: 'down' as const },
-      { goalTag: 'Other' as GoalTag, targetMinutes: 300, actualMinutes: 240, progressPercent: 80, trend: 'stable' as const },
-    ]
+    const items = goals.map(g => ({
+      goalId: g.id,
+      goalName: g.name,
+      goalColor: g.color,
+      targetMinutes: 1200,
+      actualMinutes: Math.floor(Math.random() * 1000) + 200,
+      progressPercent: Math.floor(Math.random() * 40) + 60,
+      trend: ['up', 'down', 'stable'][Math.floor(Math.random() * 3)] as 'up' | 'down' | 'stable',
+    }))
 
     return HttpResponse.json({
-      items: goalTag ? items.filter(i => i.goalTag === goalTag) : items,
+      items: goalId ? items.filter(i => i.goalId === goalId) : items,
       overallProgress: 75,
     })
   }),

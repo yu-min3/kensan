@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import type { Project, Task, GoalTag } from '@/types'
-import { projectsApi, tasksApi } from '@/api/services/tasks'
+import type { Goal, Milestone, Tag, Task } from '@/types'
+import { goalsApi, milestonesApi, tagsApi, tasksApi } from '@/api/services/tasks'
 
 interface TaskState {
-  projects: Project[]
+  goals: Goal[]
+  milestones: Milestone[]
+  tags: Tag[]
   tasks: Task[]
   isLoading: boolean
   error: string | null
@@ -11,77 +13,168 @@ interface TaskState {
   // データ取得
   fetchAll: () => Promise<void>
 
-  // プロジェクト操作
-  addProject: (project: { name: string; goalTag?: GoalTag; color?: string }) => Promise<void>
-  updateProject: (id: string, updates: Partial<Project>) => Promise<void>
-  deleteProject: (id: string) => Promise<void>
+  // Goal操作
+  addGoal: (goal: { name: string; description?: string; color: string }) => Promise<void>
+  updateGoal: (id: string, updates: Partial<Goal>) => Promise<void>
+  deleteGoal: (id: string) => Promise<void>
 
-  // タスク操作
-  addTask: (task: { name: string; projectId: string; parentTaskId?: string; goalTag?: GoalTag }) => Promise<void>
+  // Milestone操作
+  addMilestone: (milestone: { goalId: string; name: string; description?: string; targetDate?: string }) => Promise<void>
+  updateMilestone: (id: string, updates: Partial<Milestone>) => Promise<void>
+  deleteMilestone: (id: string) => Promise<void>
+
+  // Tag操作
+  addTag: (tag: { name: string; color: string }) => Promise<void>
+  updateTag: (id: string, updates: Partial<Tag>) => Promise<void>
+  deleteTag: (id: string) => Promise<void>
+
+  // Task操作
+  addTask: (task: { name: string; milestoneId?: string; parentTaskId?: string; tagIds?: string[]; estimatedMinutes?: number; dueDate?: string }) => Promise<void>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   toggleTaskComplete: (id: string) => Promise<void>
 
   // 取得（同期）
-  getProjectById: (id: string) => Project | undefined
+  getGoalById: (id: string) => Goal | undefined
+  getMilestoneById: (id: string) => Milestone | undefined
+  getTagById: (id: string) => Tag | undefined
+  getTagsByIds: (ids: string[]) => Tag[]
   getTaskById: (id: string) => Task | undefined
-  getTasksByProject: (projectId: string) => Task[]
+  getMilestonesByGoal: (goalId: string) => Milestone[]
+  getTasksByMilestone: (milestoneId: string) => Task[]
   getChildTasks: (parentTaskId: string) => Task[]
+  getStandaloneTasks: () => Task[]
+
+  // 後方互換性 (移行期間中)
+  /** @deprecated Use goals instead */
+  projects: Goal[]
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
-  projects: [],
+  goals: [],
+  milestones: [],
+  tags: [],
   tasks: [],
   isLoading: false,
   error: null,
 
+  // 後方互換性
+  get projects() {
+    return get().goals
+  },
+
   fetchAll: async () => {
     set({ isLoading: true, error: null })
     try {
-      const [projects, tasks] = await Promise.all([
-        projectsApi.list(),
+      const [goals, milestones, tags, tasks] = await Promise.all([
+        goalsApi.list(),
+        milestonesApi.list(),
+        tagsApi.list(),
         tasksApi.list(),
       ])
-      set({ projects, tasks, isLoading: false })
+      set({ goals, milestones, tags, tasks, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
     }
   },
 
-  addProject: async (project) => {
+  // Goal操作
+  addGoal: async (goal) => {
     try {
-      const newProject = await projectsApi.create(project)
-      set((state) => ({ projects: [...state.projects, newProject] }))
+      const newGoal = await goalsApi.create(goal)
+      set((state) => ({ goals: [...state.goals, newGoal] }))
     } catch (error) {
       set({ error: (error as Error).message })
     }
   },
 
-  updateProject: async (id, updates) => {
+  updateGoal: async (id, updates) => {
     try {
-      const updatedProject = await projectsApi.update(id, updates)
+      const updatedGoal = await goalsApi.update(id, updates)
       set((state) => ({
-        projects: state.projects.map((p) =>
-          p.id === id ? updatedProject : p
-        ),
+        goals: state.goals.map((g) => (g.id === id ? updatedGoal : g)),
       }))
     } catch (error) {
       set({ error: (error as Error).message })
     }
   },
 
-  deleteProject: async (id) => {
+  deleteGoal: async (id) => {
     try {
-      await projectsApi.delete(id)
+      await goalsApi.delete(id)
       set((state) => ({
-        projects: state.projects.filter((p) => p.id !== id),
-        tasks: state.tasks.filter((t) => t.projectId !== id),
+        goals: state.goals.filter((g) => g.id !== id),
+        milestones: state.milestones.filter((m) => m.goalId !== id),
       }))
     } catch (error) {
       set({ error: (error as Error).message })
     }
   },
 
+  // Milestone操作
+  addMilestone: async (milestone) => {
+    try {
+      const newMilestone = await milestonesApi.create(milestone)
+      set((state) => ({ milestones: [...state.milestones, newMilestone] }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  updateMilestone: async (id, updates) => {
+    try {
+      const updatedMilestone = await milestonesApi.update(id, updates)
+      set((state) => ({
+        milestones: state.milestones.map((m) => (m.id === id ? updatedMilestone : m)),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  deleteMilestone: async (id) => {
+    try {
+      await milestonesApi.delete(id)
+      set((state) => ({
+        milestones: state.milestones.filter((m) => m.id !== id),
+        tasks: state.tasks.filter((t) => t.milestoneId !== id),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  // Tag操作
+  addTag: async (tag) => {
+    try {
+      const newTag = await tagsApi.create(tag)
+      set((state) => ({ tags: [...state.tags, newTag] }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  updateTag: async (id, updates) => {
+    try {
+      const updatedTag = await tagsApi.update(id, updates)
+      set((state) => ({
+        tags: state.tags.map((t) => (t.id === id ? updatedTag : t)),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  deleteTag: async (id) => {
+    try {
+      await tagsApi.delete(id)
+      set((state) => ({ tags: state.tags.filter((t) => t.id !== id) }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  // Task操作
   addTask: async (task) => {
     try {
       const newTask = await tasksApi.create(task)
@@ -95,9 +188,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const updatedTask = await tasksApi.update(id, updates)
       set((state) => ({
-        tasks: state.tasks.map((t) =>
-          t.id === id ? updatedTask : t
-        ),
+        tasks: state.tasks.map((t) => (t.id === id ? updatedTask : t)),
       }))
     } catch (error) {
       set({ error: (error as Error).message })
@@ -119,22 +210,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const updatedTask = await tasksApi.toggleComplete(id)
       set((state) => ({
-        tasks: state.tasks.map((t) =>
-          t.id === id ? updatedTask : t
-        ),
+        tasks: state.tasks.map((t) => (t.id === id ? updatedTask : t)),
       }))
     } catch (error) {
       set({ error: (error as Error).message })
     }
   },
 
-  getProjectById: (id) => get().projects.find((p) => p.id === id),
-
+  // 取得（同期）
+  getGoalById: (id) => get().goals.find((g) => g.id === id),
+  getMilestoneById: (id) => get().milestones.find((m) => m.id === id),
+  getTagById: (id) => get().tags.find((t) => t.id === id),
+  getTagsByIds: (ids) => get().tags.filter((t) => ids.includes(t.id)),
   getTaskById: (id) => get().tasks.find((t) => t.id === id),
-
-  getTasksByProject: (projectId) =>
-    get().tasks.filter((t) => t.projectId === projectId && !t.parentTaskId),
-
+  getMilestonesByGoal: (goalId) => get().milestones.filter((m) => m.goalId === goalId),
+  getTasksByMilestone: (milestoneId) =>
+    get().tasks.filter((t) => t.milestoneId === milestoneId && !t.parentTaskId),
   getChildTasks: (parentTaskId) =>
     get().tasks.filter((t) => t.parentTaskId === parentTaskId),
+  getStandaloneTasks: () =>
+    get().tasks.filter((t) => !t.milestoneId && !t.parentTaskId),
 }))

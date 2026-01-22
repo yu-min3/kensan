@@ -1,11 +1,11 @@
 import { createCrudStore, CrudStore } from './createCrudStore'
-import type { LearningRecord, GoalTag } from '@/types'
+import type { LearningRecord } from '@/types'
 import { recordsApi, CreateRecordInput, UpdateRecordInput, RecordFilter } from '@/api/services/records'
 
 // Extension state/actions specific to learning record store
 interface LearningRecordExtensions {
-  getRecordsByProject: (projectId: string) => LearningRecord[]
-  getRecordsByGoalTag: (goalTag: GoalTag) => LearningRecord[]
+  getRecordsByMilestone: (milestoneId: string) => LearningRecord[]
+  getRecordsByGoal: (goalId: string) => LearningRecord[]
   searchRecords: (query: string) => LearningRecord[]
 }
 
@@ -26,11 +26,11 @@ export const useLearningRecordStore = createCrudStore<
     prependOnAdd: true,
   },
   (_set, get) => ({
-    getRecordsByProject: (projectId) =>
-      get().items.filter((r) => r.projectId === projectId),
+    getRecordsByMilestone: (milestoneId) =>
+      get().items.filter((r) => r.milestoneId === milestoneId),
 
-    getRecordsByGoalTag: (goalTag) =>
-      get().items.filter((r) => r.goalTag === goalTag),
+    getRecordsByGoal: (goalId) =>
+      get().items.filter((r) => r.goalId === goalId),
 
     searchRecords: (query) => {
       const lowerQuery = query.toLowerCase()

@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TagBadge } from '@/components/common/TagBadge'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeEntryForm } from '@/components/common/TimeEntryForm'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
-import type { TimeEntry, GoalTag } from '@/types'
+import type { TimeEntry } from '@/types'
 import { format, parseISO } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Clock, Plus, Pencil, Trash2 } from 'lucide-react'
@@ -26,7 +26,7 @@ export function TimeEntryList({
   groupByDate = false,
 }: TimeEntryListProps) {
   const { addTimeEntry, updateTimeEntry, deleteTimeEntry } = useTimeBlockStore()
-  const { projects } = useTaskStore()
+  const { milestones } = useTaskStore()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
@@ -70,12 +70,14 @@ export function TimeEntryList({
     date: string
     startTime: string
     endTime: string
-    projectId?: string
-    goalTag?: GoalTag
+    milestoneId?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
     description?: string
   }) => {
-    const project = data.projectId
-      ? projects.find((p) => p.id === data.projectId)
+    const milestone = data.milestoneId
+      ? milestones.find((m) => m.id === data.milestoneId)
       : undefined
 
     await addTimeEntry({
@@ -83,9 +85,11 @@ export function TimeEntryList({
       date: data.date,
       startTime: data.startTime,
       endTime: data.endTime,
-      projectId: data.projectId,
-      projectName: project?.name,
-      goalTag: data.goalTag,
+      milestoneId: data.milestoneId,
+      milestoneName: milestone?.name,
+      goalId: data.goalId,
+      goalName: data.goalName,
+      goalColor: data.goalColor,
       description: data.description,
     })
   }
@@ -95,14 +99,16 @@ export function TimeEntryList({
     date: string
     startTime: string
     endTime: string
-    projectId?: string
-    goalTag?: GoalTag
+    milestoneId?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
     description?: string
   }) => {
     if (!editingEntry) return
 
-    const project = data.projectId
-      ? projects.find((p) => p.id === data.projectId)
+    const milestone = data.milestoneId
+      ? milestones.find((m) => m.id === data.milestoneId)
       : undefined
 
     await updateTimeEntry(editingEntry.id, {
@@ -110,9 +116,11 @@ export function TimeEntryList({
       date: data.date,
       startTime: data.startTime,
       endTime: data.endTime,
-      projectId: data.projectId,
-      projectName: project?.name,
-      goalTag: data.goalTag,
+      milestoneId: data.milestoneId,
+      milestoneName: milestone?.name,
+      goalId: data.goalId,
+      goalName: data.goalName,
+      goalColor: data.goalColor,
       description: data.description,
     })
     setEditingEntry(null)
@@ -154,18 +162,20 @@ export function TimeEntryList({
           {entry.startTime} - {entry.endTime}
         </div>
 
-        {/* Task Name and Project */}
+        {/* Task Name and Milestone */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{entry.taskName}</p>
-          {entry.projectName && (
+          {entry.milestoneName && (
             <p className="text-xs text-muted-foreground truncate">
-              {entry.projectName}
+              {entry.milestoneName}
             </p>
           )}
         </div>
 
-        {/* Goal Tag */}
-        {entry.goalTag && <TagBadge tag={entry.goalTag} size="sm" />}
+        {/* Goal Badge */}
+        {entry.goalName && entry.goalColor && (
+          <GoalBadge name={entry.goalName} color={entry.goalColor} size="sm" />
+        )}
 
         {/* Duration */}
         <div className="text-sm text-muted-foreground whitespace-nowrap">

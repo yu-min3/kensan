@@ -4,17 +4,21 @@ import { httpClient } from '../client'
 export interface RunningTimer {
   id: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: 'GK' | 'OSS' | 'Output' | 'Other'
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
   description?: string
   startedAt: string // ISO timestamp
 }
 
 export interface StartTimerInput {
   taskName: string
-  projectId?: string
-  goalTag?: 'GK' | 'OSS' | 'Output' | 'Other'
+  milestoneId?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
   description?: string
 }
 

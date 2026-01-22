@@ -1,15 +1,16 @@
 // Analytics API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
-import type { GoalTag, WeeklySummary } from '@/types'
+import type { WeeklySummary, GoalSummary, TagSummary, MilestoneSummary } from '@/types'
 
 // API Response types
 interface WeeklySummaryResponse {
   weekStart: string
   weekEnd: string
   totalMinutes: number
-  byGoalTag: Record<GoalTag, number>
-  byProject: Record<string, number>
+  byGoal: GoalSummary[]
+  byTag: TagSummary[]
+  byMilestone: MilestoneSummary[]
   completedTasks: number
   plannedVsActual: {
     planned: number
@@ -21,8 +22,9 @@ interface MonthlySummaryResponse {
   year: number
   month: number
   totalMinutes: number
-  byGoalTag: Record<GoalTag, number>
-  byProject: Record<string, number>
+  byGoal: GoalSummary[]
+  byTag: TagSummary[]
+  byMilestone: MilestoneSummary[]
   completedTasks: number
   weeklyBreakdown: WeeklySummaryResponse[]
 }
@@ -30,7 +32,7 @@ interface MonthlySummaryResponse {
 interface TrendDataPoint {
   period: string
   totalMinutes: number
-  byGoalTag: Record<GoalTag, number>
+  byGoal: GoalSummary[]
   completedTasks: number
 }
 
@@ -40,7 +42,9 @@ interface TrendsResponse {
 }
 
 interface GoalProgressItem {
-  goalTag: GoalTag
+  goalId: string
+  goalName: string
+  goalColor: string
   targetMinutes: number
   actualMinutes: number
   progressPercent: number
@@ -55,7 +59,7 @@ interface GoalProgressResponse {
 export interface DailyStudyHour {
   date: string
   hours: number
-  byGoalTag?: Record<GoalTag, number>
+  byGoal?: GoalSummary[]
 }
 
 export const analyticsApi = {
@@ -101,9 +105,9 @@ export const analyticsApi = {
     )
   },
 
-  async getGoalProgress(goalTag?: GoalTag): Promise<GoalProgressResponse> {
+  async getGoalProgress(goalId?: string): Promise<GoalProgressResponse> {
     const params = new URLSearchParams()
-    if (goalTag) params.set('goal_tag', goalTag)
+    if (goalId) params.set('goal_id', goalId)
 
     const query = params.toString()
     const endpoint = `/analytics/goal-progress${query ? `?${query}` : ''}`
@@ -122,7 +126,7 @@ export const analyticsApi = {
     return trends.data.map(d => ({
       date: d.period,
       hours: d.totalMinutes / 60,
-      byGoalTag: d.byGoalTag,
+      byGoal: d.byGoal,
     }))
   },
 }

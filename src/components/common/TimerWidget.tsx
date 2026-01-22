@@ -18,10 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { TagBadge } from '@/components/common/TagBadge'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { useTaskStore } from '@/stores/useTaskStore'
-import type { GoalTag } from '@/types'
 import { cn } from '@/lib/utils'
 
 // Format elapsed seconds to HH:MM:SS
@@ -44,40 +43,37 @@ export function TimerWidget() {
     stopTimer,
   } = useTimerStore()
 
-  const { projects } = useTaskStore()
+  const { goals, milestones } = useTaskStore()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [taskName, setTaskName] = useState('')
-  const [projectId, setProjectId] = useState<string>('')
-  const [goalTag, setGoalTag] = useState<GoalTag | ''>('')
+  const [milestoneId, setMilestoneId] = useState<string>('')
+
+  // Get goal from selected milestone
+  const selectedMilestone = milestones.find(m => m.id === milestoneId)
+  const selectedGoal = selectedMilestone
+    ? goals.find(g => g.id === selectedMilestone.goalId)
+    : undefined
 
   const handleStartTimer = async () => {
     if (!taskName.trim()) return
 
     await startTimer({
       taskName: taskName.trim(),
-      projectId: projectId || undefined,
-      goalTag: (goalTag as GoalTag) || undefined,
+      milestoneId: milestoneId || undefined,
+      goalId: selectedGoal?.id,
+      goalName: selectedGoal?.name,
+      goalColor: selectedGoal?.color,
     })
 
     // Reset form and close dialog
     setTaskName('')
-    setProjectId('')
-    setGoalTag('')
+    setMilestoneId('')
     setDialogOpen(false)
   }
 
   const handleStopTimer = async () => {
     await stopTimer()
-  }
-
-  const handleProjectChange = (value: string) => {
-    setProjectId(value)
-    // Auto-set goal tag from project
-    const project = projects.find(p => p.id === value)
-    if (project?.goalTag) {
-      setGoalTag(project.goalTag)
-    }
   }
 
   // Timer is running
@@ -91,8 +87,12 @@ export function TimerWidget() {
             'animate-pulse'
           )}
         >
-          {currentTimer.goalTag && (
-            <TagBadge tag={currentTimer.goalTag} size="sm" />
+          {currentTimer.goalName && currentTimer.goalColor && (
+            <GoalBadge
+              name={currentTimer.goalName}
+              color={currentTimer.goalColor}
+              size="sm"
+            />
           )}
           <span className="text-sm font-medium max-w-32 truncate">
             {currentTimer.taskName}
@@ -117,13 +117,9 @@ export function TimerWidget() {
   // No timer running
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-      <DialogTrigger>
-        <Button size="sm" disabled={isLoading} asChild>
-          <span>
-            <Play className="h-4 w-4" />
-            <span className="hidden sm:inline">Start Timer</span>
-          </span>
-        </Button>
+      <DialogTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-8 px-3" disabled={isLoading}>
+        <Play className="h-4 w-4" />
+        <span className="hidden sm:inline">Start Timer</span>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -142,64 +138,55 @@ export function TimerWidget() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="project">Project</Label>
-            <Select value={projectId} onValueChange={handleProjectChange}>
+            <Label htmlFor="milestone">Milestone</Label>
+            <Select value={milestoneId} onValueChange={setMilestoneId}>
               <SelectTrigger>
-                <SelectValue placeholder="Select project (optional)" />
+                <SelectValue placeholder="Select milestone (optional)" />
               </SelectTrigger>
               <SelectContent>
-                {projects
-                  .filter(p => !p.isArchived)
-                  .map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex items-center gap-2">
-                        {project.goalTag && (
-                          <TagBadge tag={project.goalTag} size="sm" />
-                        )}
-                        <span>{project.name}</span>
+                {goals
+                  .filter(g => !g.isArchived)
+                  .map(goal => {
+                    const goalMilestones = milestones.filter(
+                      m => m.goalId === goal.id && m.status === 'active'
+                    )
+                    if (goalMilestones.length === 0) return null
+                    return (
+                      <div key={goal.id}>
+                        <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: goal.color }}
+                          />
+                          {goal.name}
+                        </div>
+                        {goalMilestones.map(milestone => (
+                          <SelectItem key={milestone.id} value={milestone.id}>
+                            <div className="flex items-center gap-2">
+                              <span>{milestone.name}</span>
+                              {milestone.targetDate && (
+                                <span className="text-xs text-muted-foreground">
+                                  ({milestone.targetDate})
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
                       </div>
-                    </SelectItem>
-                  ))}
+                    )
+                  })}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="goalTag">Goal Tag</Label>
-            <Select
-              value={goalTag}
-              onValueChange={(v) => setGoalTag(v as GoalTag | '')}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select goal tag (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="GK">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="GK" size="sm" />
-                    <span>Golden Kubestronaut</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="OSS">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="OSS" size="sm" />
-                    <span>OSS Contribution</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="Output">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="Output" size="sm" />
-                    <span>Output (Blog, etc.)</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="Other">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="Other" size="sm" />
-                    <span>Other</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            {selectedGoal && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Goal:</span>
+                <GoalBadge
+                  name={selectedGoal.name}
+                  color={selectedGoal.color}
+                  size="sm"
+                />
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>

@@ -2,7 +2,7 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { LearningRecord, RecordFormat, GoalTag } from '@/types'
+import type { LearningRecord, RecordFormat } from '@/types'
 
 // API Response type
 interface LearningRecordResponse {
@@ -11,9 +11,12 @@ interface LearningRecordResponse {
   title: string
   content: string
   format: RecordFormat
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   relatedTimeEntryIds?: string[]
   createdAt: string
   updatedAt: string
@@ -25,9 +28,12 @@ const transformLearningRecord = (r: LearningRecordResponse): LearningRecord => (
   title: r.title,
   content: r.content,
   format: r.format,
-  projectId: r.projectId,
-  projectName: r.projectName,
-  goalTag: r.goalTag,
+  milestoneId: r.milestoneId,
+  milestoneName: r.milestoneName,
+  goalId: r.goalId,
+  goalName: r.goalName,
+  goalColor: r.goalColor,
+  tagIds: r.tagIds,
   relatedTimeEntryIds: r.relatedTimeEntryIds,
   createdAt: new Date(r.createdAt),
   updatedAt: new Date(r.updatedAt),
@@ -37,8 +43,9 @@ export interface CreateRecordInput {
   title: string
   content: string
   format: RecordFormat
-  projectId?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  goalId?: string
+  tagIds?: string[]
   relatedTimeEntryIds?: string[]
 }
 
@@ -46,14 +53,15 @@ export interface UpdateRecordInput {
   title?: string
   content?: string
   format?: RecordFormat
-  projectId?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  goalId?: string
+  tagIds?: string[]
   relatedTimeEntryIds?: string[]
 }
 
 export interface RecordFilter {
-  projectId?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  goalId?: string
   format?: RecordFormat
   query?: string
 }
@@ -73,8 +81,8 @@ const baseRecordsApi = createApiService<
   },
   {
     filterMappings: {
-      projectId: 'project_id',
-      goalTag: 'goal_tag',
+      milestoneId: 'milestone_id',
+      goalId: 'goal_id',
       query: 'q',
     },
   }

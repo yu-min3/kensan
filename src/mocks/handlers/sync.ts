@@ -13,9 +13,12 @@ const toTimeEntryResponse = (te: TimeEntry) => ({
   endTime: te.endTime,
   taskId: te.taskId,
   taskName: te.taskName,
-  projectId: te.projectId,
-  projectName: te.projectName,
-  goalTag: te.goalTag,
+  milestoneId: te.milestoneId,
+  milestoneName: te.milestoneName,
+  goalId: te.goalId,
+  goalName: te.goalName,
+  goalColor: te.goalColor,
+  tagIds: te.tagIds,
   description: te.description,
 })
 

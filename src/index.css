@@ -45,13 +45,16 @@
   --brand: 199 89% 48%;
   --brand-foreground: 0 0% 100%;
 
-  /* TimeBlock colors - Grayscale design */
+  /* TimeBlock colors - Grayscale with contrast differentiation */
+  /* Plan: Light/subtle (未確定) */
   --timeblock-plan-bg: #f8fafc;
-  --timeblock-plan-border: #cbd5e1;
-  --timeblock-actual-bg: #f1f5f9;
-  --timeblock-actual-border: #94a3b8;
+  --timeblock-plan-border: #e2e8f0;
+  /* Actual: Darker/solid (確定済み) */
+  --timeblock-actual-bg: #e2e8f0;
+  --timeblock-actual-border: #64748b;
+  /* Routine: Same as plan */
   --timeblock-routine-bg: #f8fafc;
-  --timeblock-routine-border: #cbd5e1;
+  --timeblock-routine-border: #e2e8f0;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
   --popover: 0 0% 100%;
@@ -84,6 +87,14 @@
   /* Kensan Brand - Lighter blue for dark mode */
   --brand: 199 89% 60%;
   --brand-foreground: 222.2 47.4% 11.2%;
+
+  /* TimeBlock colors - Dark mode (grayscale) */
+  --timeblock-plan-bg: #1e293b;
+  --timeblock-plan-border: #334155;
+  --timeblock-actual-bg: #334155;
+  --timeblock-actual-border: #64748b;
+  --timeblock-routine-bg: #1e293b;
+  --timeblock-routine-border: #334155;
 
   --card: 222.2 84% 4.9%;
   --card-foreground: 210 40% 98%;

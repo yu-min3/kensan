@@ -4,32 +4,25 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import type { DialogState } from '@/hooks/useDialogState'
-import type { GoalTag, Project, Task } from '@/types'
-
-const goalTagOptions: { value: GoalTag; label: string }[] = [
-  { value: 'GK', label: 'GK (Golden Kubestronaut)' },
-  { value: 'OSS', label: 'OSS' },
-  { value: 'Output', label: 'Output' },
-  { value: 'Other', label: 'Other' },
-]
+import type { Goal, Milestone, Task } from '@/types'
 
 export interface TaskFormData {
   name: string
-  projectId: string
+  milestoneId: string
   parentTaskId?: string
-  goalTag: GoalTag | ''
 }
 
 interface TaskDialogProps {
   dialog: DialogState<TaskFormData>
-  projects: Project[]
+  goals: Goal[]
+  milestones: Milestone[]
   tasks: Task[]
   onSave: (data: TaskFormData, editingId: string | null) => Promise<void>
 }
 
-export function TaskDialog({ dialog, projects, tasks, onSave }: TaskDialogProps) {
+export function TaskDialog({ dialog, goals, milestones, tasks, onSave }: TaskDialogProps) {
   const handleSave = async () => {
-    if (!dialog.data.name || !dialog.data.projectId) return
+    if (!dialog.data.name) return
     await onSave(dialog.data, dialog.editingId)
     dialog.close()
   }
@@ -37,6 +30,14 @@ export function TaskDialog({ dialog, projects, tasks, onSave }: TaskDialogProps)
   const parentTask = dialog.data.parentTaskId
     ? tasks.find((t) => t.id === dialog.data.parentTaskId)
     : null
+
+  // Get the goal for the selected milestone
+  const selectedMilestone = dialog.data.milestoneId
+    ? milestones.find((m) => m.id === dialog.data.milestoneId)
+    : undefined
+  const selectedGoal = selectedMilestone
+    ? goals.find((g) => g.id === selectedMilestone.goalId)
+    : undefined
 
   return (
     <Dialog open={dialog.isOpen} onOpenChange={dialog.setIsOpen}>
@@ -60,38 +61,51 @@ export function TaskDialog({ dialog, projects, tasks, onSave }: TaskDialogProps)
           </div>
 
           <div>
-            <Label>プロジェクト</Label>
-            <Select value={dialog.data.projectId} onValueChange={(v) => dialog.setField('projectId', v)}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="プロジェクトを選択" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label>目標タグ</Label>
+            <Label>マイルストーン（任意）</Label>
             <Select
-              value={dialog.data.goalTag}
-              onValueChange={(v) => dialog.setField('goalTag', v as GoalTag)}
+              value={dialog.data.milestoneId || ''}
+              onValueChange={(v) => dialog.setField('milestoneId', v || '')}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="タグを選択（任意）" />
+                <SelectValue placeholder="マイルストーンを選択" />
               </SelectTrigger>
               <SelectContent>
-                {goalTagOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+                <SelectItem value="">なし</SelectItem>
+                {goals
+                  .filter(g => !g.isArchived)
+                  .map(goal => {
+                    const goalMilestones = milestones.filter(
+                      m => m.goalId === goal.id && m.status === 'active'
+                    )
+                    if (goalMilestones.length === 0) return null
+                    return (
+                      <div key={goal.id}>
+                        <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: goal.color }}
+                          />
+                          {goal.name}
+                        </div>
+                        {goalMilestones.map(milestone => (
+                          <SelectItem key={milestone.id} value={milestone.id}>
+                            {milestone.name}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    )
+                  })}
               </SelectContent>
             </Select>
+            {selectedGoal && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: selectedGoal.color }}
+                />
+                Goal: {selectedGoal.name}
+              </p>
+            )}
           </div>
 
           {parentTask && (
@@ -107,7 +121,7 @@ export function TaskDialog({ dialog, projects, tasks, onSave }: TaskDialogProps)
           <Button variant="outline" onClick={dialog.close}>
             キャンセル
           </Button>
-          <Button onClick={handleSave} disabled={!dialog.data.name || !dialog.data.projectId}>
+          <Button onClick={handleSave} disabled={!dialog.data.name}>
             保存
           </Button>
         </DialogFooter>

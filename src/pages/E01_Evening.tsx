@@ -7,14 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { TagBadge } from '@/components/common/TagBadge'
+import { TimeRangeInput } from '@/components/ui/time-range-input'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
 import { TimeEntryList } from '@/components/common/TimeEntryList'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useMemoStore } from '@/stores/useMemoStore'
-import type { GoalTag } from '@/types'
 import { addDays } from 'date-fns'
 import { formatDateJa, formatDateShortJa, formatDateIso, formatTime, formatDurationShort } from '@/lib/dateFormat'
 import {
@@ -40,8 +40,8 @@ import {
 
 export function E01Evening() {
   const { userName } = useSettingsStore()
-  const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, addTimeBlock } = useTimeBlockStore()
-  const { tasks, projects } = useTaskStore()
+  const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, addTimeBlock, updateTimeBlock } = useTimeBlockStore()
+  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
   const { fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
 
   // Fetch memos on mount
@@ -62,12 +62,16 @@ export function E01Evening() {
   const [blockStartTime, setBlockStartTime] = useState('09:00')
   const [blockEndTime, setBlockEndTime] = useState('10:00')
   const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
-  const [blockGoalTag, setBlockGoalTag] = useState<GoalTag | ''>('')
+  const [blockMilestoneId, setBlockMilestoneId] = useState<string | undefined>(undefined)
+
+  // Get goal from selected milestone
+  const selectedMilestone = blockMilestoneId ? getMilestoneById(blockMilestoneId) : undefined
+  const selectedGoal = selectedMilestone ? getGoalById(selectedMilestone.goalId) : undefined
 
   const openNewTimeBlockDialog = () => {
     setBlockTaskName('')
     setBlockTaskId(undefined)
-    setBlockGoalTag('')
+    setBlockMilestoneId(undefined)
     setBlockStartTime('09:00')
     setBlockEndTime('10:00')
     setIsTimeBlockDialogOpen(true)
@@ -82,7 +86,11 @@ export function E01Evening() {
       endTime: blockEndTime,
       taskName: blockTaskName,
       taskId: blockTaskId,
-      goalTag: blockGoalTag || undefined,
+      milestoneId: blockMilestoneId,
+      milestoneName: selectedMilestone?.name,
+      goalId: selectedGoal?.id,
+      goalName: selectedGoal?.name,
+      goalColor: selectedGoal?.color,
       isRoutine: false,
     })
     setIsTimeBlockDialogOpen(false)
@@ -102,24 +110,24 @@ export function E01Evening() {
   const difference = actualMinutes - plannedMinutes
 
   // 目標別の時間配分
-  const timeByGoal = todayEntries.reduce(
+  const timeByGoalMap = todayEntries.reduce(
     (acc, entry) => {
-      const tag = entry.goalTag || 'Other'
+      const goalId = entry.goalId || 'other'
+      const goalName = entry.goalName || 'その他'
+      const goalColor = entry.goalColor || '#a0aec0'
       const [sh, sm] = entry.startTime.split(':').map(Number)
       const [eh, em] = entry.endTime.split(':').map(Number)
       const minutes = (eh * 60 + em) - (sh * 60 + sm)
-      acc[tag] = (acc[tag] || 0) + minutes
+      if (!acc[goalId]) {
+        acc[goalId] = { name: goalName, color: goalColor, value: 0 }
+      }
+      acc[goalId].value += minutes
       return acc
     },
-    {} as Record<string, number>
+    {} as Record<string, { name: string; color: string; value: number }>
   )
 
-  const pieData = [
-    { name: 'GK', value: timeByGoal['GK'] || 0, color: '#ecc94b' },
-    { name: 'OSS', value: timeByGoal['OSS'] || 0, color: '#48bb78' },
-    { name: 'Output', value: timeByGoal['Output'] || 0, color: '#4299e1' },
-    { name: 'Other', value: timeByGoal['Other'] || 0, color: '#a0aec0' },
-  ].filter((d) => d.value > 0)
+  const pieData = Object.values(timeByGoalMap).filter((d) => d.value > 0)
 
   // 時間ベースの計画達成率
   const completionRate = plannedMinutes > 0 ? Math.round((actualMinutes / plannedMinutes) * 100) : 0
@@ -260,6 +268,9 @@ export function E01Evening() {
                 showComparison={true}
                 startHour={8}
                 endHour={19}
+                onBlockResize={(blockId, startTime, endTime) => {
+                  updateTimeBlock(blockId, { startTime, endTime })
+                }}
               />
             </CardContent>
           </Card>
@@ -361,7 +372,9 @@ export function E01Evening() {
                       {block.startTime} - {block.endTime}
                     </span>
                     <span className="text-sm flex-1 truncate">{block.taskName}</span>
-                    {block.goalTag && <TagBadge tag={block.goalTag} size="sm" />}
+                    {block.goalName && block.goalColor && (
+                      <GoalBadge name={block.goalName} color={block.goalColor} size="sm" />
+                    )}
                   </div>
                 ))}
                 <Button
@@ -414,42 +427,64 @@ export function E01Evening() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="blockStartTime">開始時刻</Label>
-                <Input
-                  id="blockStartTime"
-                  type="time"
-                  value={blockStartTime}
-                  onChange={(e) => setBlockStartTime(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="blockEndTime">終了時刻</Label>
-                <Input
-                  id="blockEndTime"
-                  type="time"
-                  value={blockEndTime}
-                  onChange={(e) => setBlockEndTime(e.target.value)}
-                  className="mt-1"
+            <div>
+              <Label>時間</Label>
+              <div className="mt-1">
+                <TimeRangeInput
+                  startTime={blockStartTime}
+                  endTime={blockEndTime}
+                  onStartTimeChange={setBlockStartTime}
+                  onEndTimeChange={setBlockEndTime}
                 />
               </div>
             </div>
 
             <div>
-              <Label>目標タグ（任意）</Label>
-              <Select value={blockGoalTag} onValueChange={(v) => setBlockGoalTag(v as GoalTag)}>
+              <Label>マイルストーン（任意）</Label>
+              <Select
+                value={blockMilestoneId || ''}
+                onValueChange={(v) => setBlockMilestoneId(v || undefined)}
+              >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タグを選択" />
+                  <SelectValue placeholder="マイルストーンを選択" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GK">GK (Golden Kubestronaut)</SelectItem>
-                  <SelectItem value="OSS">OSS</SelectItem>
-                  <SelectItem value="Output">Output</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  <SelectItem value="">なし</SelectItem>
+                  {goals
+                    .filter(g => !g.isArchived)
+                    .map(goal => {
+                      const goalMilestones = milestones.filter(
+                        m => m.goalId === goal.id && m.status === 'active'
+                      )
+                      if (goalMilestones.length === 0) return null
+                      return (
+                        <div key={goal.id}>
+                          <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: goal.color }}
+                            />
+                            {goal.name}
+                          </div>
+                          {goalMilestones.map(milestone => (
+                            <SelectItem key={milestone.id} value={milestone.id}>
+                              {milestone.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      )
+                    })}
                 </SelectContent>
               </Select>
+              {selectedGoal && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: selectedGoal.color }}
+                  />
+                  Goal: {selectedGoal.name}
+                </p>
+              )}
             </div>
 
             <div>
@@ -461,9 +496,8 @@ export function E01Evening() {
                   if (task) {
                     setBlockTaskId(v)
                     setBlockTaskName(task.name)
-                    const project = projects.find((p) => p.id === task.projectId)
-                    if (project?.goalTag) {
-                      setBlockGoalTag(project.goalTag)
+                    if (task.milestoneId) {
+                      setBlockMilestoneId(task.milestoneId)
                     }
                   }
                 }}

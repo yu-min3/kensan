@@ -2,7 +2,7 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { TimeBlock, TimeEntry, GoalTag } from '@/types'
+import type { TimeBlock, TimeEntry } from '@/types'
 import { localDateToUtcRange } from '@/lib/timezone'
 
 // API Response types
@@ -13,9 +13,12 @@ interface TimeBlockResponse {
   endTime: string
   taskId?: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   isRoutine: boolean
   routineTaskId?: string
 }
@@ -27,9 +30,12 @@ interface TimeEntryResponse {
   endTime: string
   taskId?: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   description?: string
 }
 
@@ -41,9 +47,12 @@ const transformTimeBlock = (tb: TimeBlockResponse): TimeBlock => ({
   endTime: tb.endTime,
   taskId: tb.taskId,
   taskName: tb.taskName,
-  projectId: tb.projectId,
-  projectName: tb.projectName,
-  goalTag: tb.goalTag,
+  milestoneId: tb.milestoneId,
+  milestoneName: tb.milestoneName,
+  goalId: tb.goalId,
+  goalName: tb.goalName,
+  goalColor: tb.goalColor,
+  tagIds: tb.tagIds,
   isRoutine: tb.isRoutine,
   routineTaskId: tb.routineTaskId,
 })
@@ -55,9 +64,12 @@ const transformTimeEntry = (te: TimeEntryResponse): TimeEntry => ({
   endTime: te.endTime,
   taskId: te.taskId,
   taskName: te.taskName,
-  projectId: te.projectId,
-  projectName: te.projectName,
-  goalTag: te.goalTag,
+  milestoneId: te.milestoneId,
+  milestoneName: te.milestoneName,
+  goalId: te.goalId,
+  goalName: te.goalName,
+  goalColor: te.goalColor,
+  tagIds: te.tagIds,
   description: te.description,
 })
 
@@ -68,9 +80,12 @@ export interface CreateTimeBlockInput {
   endTime: string
   taskId?: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   isRoutine?: boolean
   routineTaskId?: string
 }
@@ -81,9 +96,12 @@ export interface UpdateTimeBlockInput {
   endTime?: string
   taskId?: string
   taskName?: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   isRoutine?: boolean
   routineTaskId?: string
 }
@@ -94,9 +112,12 @@ export interface CreateTimeEntryInput {
   endTime: string
   taskId?: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   description?: string
 }
 
@@ -106,9 +127,12 @@ export interface UpdateTimeEntryInput {
   endTime?: string
   taskId?: string
   taskName?: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
   description?: string
 }
 

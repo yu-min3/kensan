@@ -7,14 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { TagBadge } from '@/components/common/TagBadge'
+import { TimeRangeInput } from '@/components/ui/time-range-input'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useRoutineStore } from '@/stores/useRoutineStore'
 import { weeklySummary as mockWeeklySummary } from '@/mocks/data'
-import type { GoalTag } from '@/types'
 import { formatDateJa, formatDateIso, formatMinutes, formatTime } from '@/lib/dateFormat'
 import {
   Sun,
@@ -30,7 +30,7 @@ import {
 export function M01Morning() {
   const { userName } = useSettingsStore()
   const { getTodayTimeBlocks, getTodayTimeEntries, addTimeBlock, updateTimeBlock, deleteTimeBlock, addTimeEntry } = useTimeBlockStore()
-  const { tasks, projects } = useTaskStore()
+  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
   const { getTodayRoutines } = useRoutineStore()
 
   const todayBlocks = getTodayTimeBlocks()
@@ -46,25 +46,29 @@ export function M01Morning() {
   const [blockStartTime, setBlockStartTime] = useState('09:00')
   const [blockEndTime, setBlockEndTime] = useState('10:00')
   const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
-  const [blockGoalTag, setBlockGoalTag] = useState<GoalTag | ''>('')
+  const [blockMilestoneId, setBlockMilestoneId] = useState<string | undefined>(undefined)
 
   // Timer State
   const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined)
   const [timerTaskName, setTimerTaskName] = useState('')
-  const [timerGoalTag, setTimerGoalTag] = useState<GoalTag | undefined>(undefined)
+  const [timerMilestoneId, setTimerMilestoneId] = useState<string | undefined>(undefined)
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null)
+
+  // Get goal from selected milestone
+  const selectedMilestone = blockMilestoneId ? getMilestoneById(blockMilestoneId) : undefined
+  const selectedGoal = selectedMilestone ? getGoalById(selectedMilestone.goalId) : undefined
 
   // Timer Dialog State
   const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false)
   const [selectedTimerTaskId, setSelectedTimerTaskId] = useState<string>('')
 
   // TimeBlock Dialog Handlers
-  const openNewTimeBlockDialog = (taskId?: string, taskName?: string, goalTag?: GoalTag) => {
+  const openNewTimeBlockDialog = (taskId?: string, taskName?: string, milestoneId?: string) => {
     setEditingBlockId(null)
     setBlockTaskName(taskName || '')
     setBlockTaskId(taskId)
-    setBlockGoalTag(goalTag || '')
+    setBlockMilestoneId(milestoneId)
     // 現在時刻を開始時刻として設定
     const now = new Date()
     const startH = now.getHours().toString().padStart(2, '0')
@@ -80,7 +84,7 @@ export function M01Morning() {
     setEditingBlockId(block.id)
     setBlockTaskName(block.taskName)
     setBlockTaskId(block.taskId)
-    setBlockGoalTag(block.goalTag || '')
+    setBlockMilestoneId(block.milestoneId)
     // バックエンドは HH:mm:ss 形式で返すが、<input type="time"> と API は HH:mm を期待
     setBlockStartTime(block.startTime.slice(0, 5))
     setBlockEndTime(block.endTime.slice(0, 5))
@@ -96,7 +100,11 @@ export function M01Morning() {
         endTime: blockEndTime,
         taskName: blockTaskName,
         taskId: blockTaskId,
-        goalTag: blockGoalTag || undefined,
+        milestoneId: blockMilestoneId,
+        milestoneName: selectedMilestone?.name,
+        goalId: selectedGoal?.id,
+        goalName: selectedGoal?.name,
+        goalColor: selectedGoal?.color,
       })
     } else {
       await addTimeBlock({
@@ -105,7 +113,11 @@ export function M01Morning() {
         endTime: blockEndTime,
         taskName: blockTaskName,
         taskId: blockTaskId,
-        goalTag: blockGoalTag || undefined,
+        milestoneId: blockMilestoneId,
+        milestoneName: selectedMilestone?.name,
+        goalId: selectedGoal?.id,
+        goalName: selectedGoal?.name,
+        goalColor: selectedGoal?.color,
         isRoutine: false,
       })
     }
@@ -128,18 +140,17 @@ export function M01Morning() {
     if (!selectedTimerTaskId) return
     const task = tasks.find((t) => t.id === selectedTimerTaskId)
     if (task) {
-      const project = projects.find((p) => p.id === task.projectId)
-      handleStartTimer(task.id, task.name, project?.goalTag)
+      handleStartTimer(task.id, task.name, task.milestoneId)
     }
     setIsTimerDialogOpen(false)
   }
 
   // Timer Handlers
-  const handleStartTimer = (taskId?: string, taskName?: string, goalTag?: GoalTag) => {
+  const handleStartTimer = (taskId?: string, taskName?: string, milestoneId?: string) => {
     setIsTimerRunning(true)
     setTimerTaskId(taskId)
     setTimerTaskName(taskName || '')
-    setTimerGoalTag(goalTag)
+    setTimerMilestoneId(milestoneId)
     setTimerStartTime(new Date())
   }
 
@@ -152,19 +163,26 @@ export function M01Morning() {
       const endH = endTime.getHours().toString().padStart(2, '0')
       const endM = endTime.getMinutes().toString().padStart(2, '0')
 
+      const timerMilestone = timerMilestoneId ? getMilestoneById(timerMilestoneId) : undefined
+      const timerGoal = timerMilestone ? getGoalById(timerMilestone.goalId) : undefined
+
       addTimeEntry({
         date: todayDate,
         startTime: `${startH}:${startM}`,
         endTime: `${endH}:${endM}`,
         taskId: timerTaskId,
         taskName: timerTaskName,
-        goalTag: timerGoalTag,
+        milestoneId: timerMilestoneId,
+        milestoneName: timerMilestone?.name,
+        goalId: timerGoal?.id,
+        goalName: timerGoal?.name,
+        goalColor: timerGoal?.color,
       })
     }
     setIsTimerRunning(false)
     setTimerTaskId(undefined)
     setTimerTaskName('')
-    setTimerGoalTag(undefined)
+    setTimerMilestoneId(undefined)
     setTimerStartTime(null)
   }
 
@@ -230,6 +248,9 @@ export function M01Morning() {
                 endHour={19}
                 onBlockClick={openEditTimeBlockDialog}
                 onBlockDelete={handleDeleteTimeBlock}
+                onBlockResize={(blockId, startTime, endTime) => {
+                  updateTimeBlock(blockId, { startTime, endTime })
+                }}
               />
             </CardContent>
           </Card>
@@ -333,37 +354,22 @@ export function M01Morning() {
               <CardTitle className="text-base">今週の進捗</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="GK" size="sm" />
-                    <span className="text-sm">GK目標</span>
+              {mockWeeklySummary.byGoal.slice(0, 3).map((goal) => (
+                <div key={goal.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <GoalBadge name={goal.name} color={goal.color} size="sm" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.floor(goal.minutes / 60)}h
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {Math.floor(mockWeeklySummary.byGoalTag.GK / 60)}h / 20h
-                  </span>
+                  <Progress
+                    value={(goal.minutes / (20 * 60)) * 100}
+                    className="h-2"
+                  />
                 </div>
-                <Progress
-                  value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
-                  className="h-2"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <TagBadge tag="OSS" size="sm" />
-                    <span className="text-sm">OSS</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {Math.floor(mockWeeklySummary.byGoalTag.OSS / 60)}h / 15h
-                  </span>
-                </div>
-                <Progress
-                  value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
-                  className="h-2"
-                />
-              </div>
+              ))}
             </CardContent>
           </Card>
 
@@ -422,42 +428,64 @@ export function M01Morning() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="blockStartTime">開始時刻</Label>
-                <Input
-                  id="blockStartTime"
-                  type="time"
-                  value={blockStartTime}
-                  onChange={(e) => setBlockStartTime(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="blockEndTime">終了時刻</Label>
-                <Input
-                  id="blockEndTime"
-                  type="time"
-                  value={blockEndTime}
-                  onChange={(e) => setBlockEndTime(e.target.value)}
-                  className="mt-1"
+            <div>
+              <Label>時間</Label>
+              <div className="mt-1">
+                <TimeRangeInput
+                  startTime={blockStartTime}
+                  endTime={blockEndTime}
+                  onStartTimeChange={setBlockStartTime}
+                  onEndTimeChange={setBlockEndTime}
                 />
               </div>
             </div>
 
             <div>
-              <Label>目標タグ（任意）</Label>
-              <Select value={blockGoalTag} onValueChange={(v) => setBlockGoalTag(v as GoalTag)}>
+              <Label>マイルストーン（任意）</Label>
+              <Select
+                value={blockMilestoneId || ''}
+                onValueChange={(v) => setBlockMilestoneId(v || undefined)}
+              >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タグを選択" />
+                  <SelectValue placeholder="マイルストーンを選択" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GK">GK (Golden Kubestronaut)</SelectItem>
-                  <SelectItem value="OSS">OSS</SelectItem>
-                  <SelectItem value="Output">Output</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  <SelectItem value="">なし</SelectItem>
+                  {goals
+                    .filter(g => !g.isArchived)
+                    .map(goal => {
+                      const goalMilestones = milestones.filter(
+                        m => m.goalId === goal.id && m.status === 'active'
+                      )
+                      if (goalMilestones.length === 0) return null
+                      return (
+                        <div key={goal.id}>
+                          <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: goal.color }}
+                            />
+                            {goal.name}
+                          </div>
+                          {goalMilestones.map(milestone => (
+                            <SelectItem key={milestone.id} value={milestone.id}>
+                              {milestone.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      )
+                    })}
                 </SelectContent>
               </Select>
+              {selectedGoal && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: selectedGoal.color }}
+                  />
+                  Goal: {selectedGoal.name}
+                </p>
+              )}
             </div>
 
             <div>
@@ -469,9 +497,8 @@ export function M01Morning() {
                   if (task) {
                     setBlockTaskId(v)
                     setBlockTaskName(task.name)
-                    const project = projects.find((p) => p.id === task.projectId)
-                    if (project?.goalTag) {
-                      setBlockGoalTag(project.goalTag)
+                    if (task.milestoneId) {
+                      setBlockMilestoneId(task.milestoneId)
                     }
                   }
                 }}
@@ -517,14 +544,15 @@ export function M01Morning() {
                 </SelectTrigger>
                 <SelectContent>
                   {tasks.filter((t) => !t.completed && !t.parentTaskId).map((task) => {
-                    const project = projects.find((p) => p.id === task.projectId)
+                    const milestone = task.milestoneId ? getMilestoneById(task.milestoneId) : undefined
+                    const goal = milestone ? getGoalById(milestone.goalId) : undefined
                     return (
                       <SelectItem key={task.id} value={task.id}>
                         <div className="flex items-center gap-2">
                           <span>{task.name}</span>
-                          {project?.goalTag && (
+                          {goal && (
                             <span className="text-xs text-muted-foreground">
-                              ({project.goalTag})
+                              ({goal.name})
                             </span>
                           )}
                         </div>

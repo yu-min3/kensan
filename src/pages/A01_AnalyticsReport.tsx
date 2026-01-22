@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { TagBadge } from '@/components/common/TagBadge'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { formatDurationShort } from '@/lib/dateFormat'
 import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
 import {
@@ -25,15 +25,15 @@ import {
   CartesianGrid,
 } from 'recharts'
 
-const pieData = [
-  { name: 'GK', value: mockWeeklySummary.byGoalTag.GK, color: '#ecc94b' },
-  { name: 'OSS', value: mockWeeklySummary.byGoalTag.OSS, color: '#48bb78' },
-  { name: 'Output', value: mockWeeklySummary.byGoalTag.Output, color: '#4299e1' },
-].filter((d) => d.value > 0)
+const pieData = mockWeeklySummary.byGoal.map((goal) => ({
+  name: goal.name,
+  value: goal.minutes,
+  color: goal.color,
+})).filter((d) => d.value > 0)
 
-const projectData = Object.entries(mockWeeklySummary.byProject).map(([name, minutes]) => ({
-  name,
-  hours: Math.round((minutes / 60) * 10) / 10,
+const milestoneData = mockWeeklySummary.byMilestone.map((milestone) => ({
+  name: milestone.name,
+  hours: Math.round((milestone.minutes / 60) * 10) / 10,
 }))
 
 export function A01AnalyticsReport() {
@@ -189,14 +189,14 @@ export function A01AnalyticsReport() {
           </CardContent>
         </Card>
 
-        {/* プロジェクト別時間 */}
+        {/* マイルストーン別時間 */}
         <Card>
           <CardHeader>
-            <CardTitle>プロジェクト別時間</CardTitle>
+            <CardTitle>マイルストーン別時間</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={projectData} layout="vertical">
+              <BarChart data={milestoneData} layout="vertical">
                 <XAxis type="number" fontSize={12} unit="h" />
                 <YAxis type="category" dataKey="name" fontSize={12} width={100} />
                 <Tooltip formatter={(value) => [`${value}時間`, '']} />
@@ -212,53 +212,22 @@ export function A01AnalyticsReport() {
             <CardTitle>目標達成度</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="GK" />
-                  <span className="text-sm">週20h目標</span>
+            {mockWeeklySummary.byGoal.map((goal) => (
+              <div key={goal.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <GoalBadge name={goal.name} color={goal.color} size="sm" />
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {Math.floor(goal.minutes / 60)}h
+                  </span>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.GK / 60)}h / 20h
-                </span>
+                <Progress
+                  value={(goal.minutes / (20 * 60)) * 100}
+                  className="h-3"
+                />
               </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
-                className="h-3"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="OSS" />
-                  <span className="text-sm">週15h目標</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.OSS / 60)}h / 15h
-                </span>
-              </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
-                className="h-3"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <TagBadge tag="Output" />
-                  <span className="text-sm">週5h目標</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {Math.floor(mockWeeklySummary.byGoalTag.Output / 60)}h / 5h
-                </span>
-              </div>
-              <Progress
-                value={(mockWeeklySummary.byGoalTag.Output / (5 * 60)) * 100}
-                className="h-3"
-              />
-            </div>
+            ))}
           </CardContent>
         </Card>
       </div>

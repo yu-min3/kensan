@@ -1,5 +1,6 @@
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { TimeBlock, TimeEntry } from '@/types'
-import { TagBadge } from './TagBadge'
+import { GoalBadge } from './GoalBadge'
 import { cn } from '@/lib/utils'
 import { Edit, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,17 @@ interface TimeBlockTimelineProps {
   endHour?: number
   onBlockClick?: (block: TimeBlock) => void
   onBlockDelete?: (blockId: string) => void
+  onBlockResize?: (blockId: string, startTime: string, endTime: string) => void
+}
+
+type ResizeEdge = 'top' | 'bottom'
+
+interface ResizeState {
+  blockId: string
+  edge: ResizeEdge
+  initialY: number
+  initialStartTime: string
+  initialEndTime: string
 }
 
 function formatTime(time: string): string {
@@ -28,6 +40,16 @@ function getDurationMinutes(start: string, end: string): number {
   return getMinutesFromTime(end) - getMinutesFromTime(start)
 }
 
+function minutesToTimeString(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+}
+
+function snapToInterval(minutes: number, interval: number = 15): number {
+  return Math.round(minutes / interval) * interval
+}
+
 export function TimeBlockTimeline({
   timeBlocks = [],
   timeEntries = [],
@@ -36,7 +58,12 @@ export function TimeBlockTimeline({
   endHour: defaultEndHour = 20,
   onBlockClick,
   onBlockDelete,
+  onBlockResize,
 }: TimeBlockTimelineProps) {
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null)
+  const [previewTime, setPreviewTime] = useState<{ startTime: string; endTime: string } | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Calculate actual time range from data to ensure all items are visible
   const allTimes = [
     ...timeBlocks.flatMap((b) => [b.startTime, b.endTime]),
@@ -76,6 +103,105 @@ export function TimeBlockTimeline({
   const needsScroll = hours.length > (defaultEndHour - defaultStartHour)
   const maxHeight = needsScroll ? `${(defaultEndHour - defaultStartHour) * 48}px` : undefined
 
+  // Convert Y position to minutes
+  const yToMinutes = useCallback(
+    (clientY: number): number => {
+      if (!containerRef.current) return 0
+      const rect = containerRef.current.getBoundingClientRect()
+      const relativeY = clientY - rect.top
+      const percentage = relativeY / rect.height
+      const minutes = percentage * totalMinutes + startHour * 60
+      return snapToInterval(Math.max(startHour * 60, Math.min(endHour * 60, minutes)))
+    },
+    [totalMinutes, startHour, endHour]
+  )
+
+  // Handle resize start
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, block: TimeBlock, edge: ResizeEdge) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setResizeState({
+        blockId: block.id,
+        edge,
+        initialY: e.clientY,
+        initialStartTime: block.startTime,
+        initialEndTime: block.endTime,
+      })
+      setPreviewTime({
+        startTime: block.startTime,
+        endTime: block.endTime,
+      })
+    },
+    []
+  )
+
+  // Handle resize move
+  const handleResizeMove = useCallback(
+    (e: MouseEvent) => {
+      if (!resizeState) return
+
+      const newMinutes = yToMinutes(e.clientY)
+      const initialStartMinutes = getMinutesFromTime(resizeState.initialStartTime)
+      const initialEndMinutes = getMinutesFromTime(resizeState.initialEndTime)
+
+      let newStartMinutes = initialStartMinutes
+      let newEndMinutes = initialEndMinutes
+
+      if (resizeState.edge === 'top') {
+        // Dragging top edge changes start time
+        newStartMinutes = Math.min(newMinutes, initialEndMinutes - 15) // Minimum 15 min duration
+      } else {
+        // Dragging bottom edge changes end time
+        newEndMinutes = Math.max(newMinutes, initialStartMinutes + 15) // Minimum 15 min duration
+      }
+
+      setPreviewTime({
+        startTime: minutesToTimeString(newStartMinutes),
+        endTime: minutesToTimeString(newEndMinutes),
+      })
+    },
+    [resizeState, yToMinutes]
+  )
+
+  // Handle resize end
+  const handleResizeEnd = useCallback(() => {
+    if (resizeState && previewTime && onBlockResize) {
+      const hasChanged =
+        previewTime.startTime !== resizeState.initialStartTime ||
+        previewTime.endTime !== resizeState.initialEndTime
+      if (hasChanged) {
+        onBlockResize(resizeState.blockId, previewTime.startTime, previewTime.endTime)
+      }
+    }
+    setResizeState(null)
+    setPreviewTime(null)
+  }, [resizeState, previewTime, onBlockResize])
+
+  // Add global mouse event listeners when resizing
+  useEffect(() => {
+    if (resizeState) {
+      window.addEventListener('mousemove', handleResizeMove)
+      window.addEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = 'ns-resize'
+      document.body.style.userSelect = 'none'
+      return () => {
+        window.removeEventListener('mousemove', handleResizeMove)
+        window.removeEventListener('mouseup', handleResizeEnd)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [resizeState, handleResizeMove, handleResizeEnd])
+
+  // Get display times for a block (use preview if resizing)
+  const getDisplayTimes = (block: TimeBlock) => {
+    if (resizeState?.blockId === block.id && previewTime) {
+      return previewTime
+    }
+    return { startTime: block.startTime, endTime: block.endTime }
+  }
+
   return (
     <div className={cn("relative flex", needsScroll && "overflow-y-auto")} style={{ maxHeight }}>
       {/* 時間軸 */}
@@ -91,7 +217,11 @@ export function TimeBlockTimeline({
       </div>
 
       {/* タイムブロック表示エリア */}
-      <div className="flex-1 relative border-l" style={{ height: `${hours.length * 48}px` }}>
+      <div
+        ref={containerRef}
+        className="flex-1 relative border-l"
+        style={{ height: `${hours.length * 48}px` }}
+      >
         {/* 時間線 */}
         {hours.map((hour, index) => (
           <div
@@ -102,62 +232,90 @@ export function TimeBlockTimeline({
         ))}
 
         {/* タイムブロック（計画） */}
-        {timeBlocks.map((block) => (
-          <div
-            key={block.id}
-            className={cn(
-              'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group border',
-              showComparison ? 'left-1 right-[52%]' : 'right-1',
-              onBlockClick && 'cursor-pointer hover:ring-2 hover:ring-primary/50'
-            )}
-            style={{
-              backgroundColor: block.isRoutine ? 'var(--timeblock-routine-bg)' : 'var(--timeblock-plan-bg)',
-              borderColor: block.isRoutine ? 'var(--timeblock-routine-border)' : 'var(--timeblock-plan-border)',
-              top: `${getTopPosition(block.startTime)}%`,
-              height: `${getHeight(block.startTime, block.endTime)}%`,
-              minHeight: '24px',
-            }}
-            onClick={() => onBlockClick?.(block)}
-          >
-            <div className="flex items-center gap-1">
-              {block.goalTag && <TagBadge tag={block.goalTag} size="sm" />}
-              <span className="truncate font-medium flex-1">{block.taskName}</span>
-              {(onBlockClick || onBlockDelete) && (
-                <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-                  {onBlockClick && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onBlockClick(block)
-                      }}
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                  )}
-                  {onBlockDelete && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onBlockDelete(block.id)
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
+        {timeBlocks.map((block) => {
+          const displayTimes = getDisplayTimes(block)
+          const isResizing = resizeState?.blockId === block.id
+
+          return (
+            <div
+              key={block.id}
+              className={cn(
+                'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group border',
+                showComparison ? 'left-1 right-[52%]' : 'right-1',
+                onBlockClick && !isResizing && 'cursor-pointer hover:ring-2 hover:ring-primary/50',
+                isResizing && 'ring-2 ring-primary z-10'
+              )}
+              style={{
+                backgroundColor: block.isRoutine ? 'var(--timeblock-routine-bg)' : 'var(--timeblock-plan-bg)',
+                borderColor: block.isRoutine ? 'var(--timeblock-routine-border)' : 'var(--timeblock-plan-border)',
+                top: `${getTopPosition(displayTimes.startTime)}%`,
+                height: `${getHeight(displayTimes.startTime, displayTimes.endTime)}%`,
+                minHeight: '24px',
+              }}
+              onClick={() => !isResizing && onBlockClick?.(block)}
+            >
+              {/* Top resize handle */}
+              {onBlockResize && (
+                <div
+                  className="absolute left-0 right-0 top-0 h-2 cursor-ns-resize group/handle hover:bg-primary/20 rounded-t-md"
+                  onMouseDown={(e) => handleResizeStart(e, block, 'top')}
+                >
+                  <div className="absolute left-1/2 -translate-x-1/2 top-0.5 w-8 h-1 bg-muted-foreground/30 rounded-full opacity-0 group-hover/handle:opacity-100" />
+                </div>
+              )}
+
+              <div className="flex items-center gap-1">
+                {block.goalName && block.goalColor && (
+                  <GoalBadge name={block.goalName} color={block.goalColor} size="sm" />
+                )}
+                <span className="truncate font-medium flex-1">{block.taskName}</span>
+                {(onBlockClick || onBlockDelete) && !isResizing && (
+                  <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
+                    {onBlockClick && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onBlockClick(block)
+                        }}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {onBlockDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onBlockDelete(block.id)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="text-muted-foreground">
+                {formatTime(displayTimes.startTime)} - {formatTime(displayTimes.endTime)}
+              </div>
+
+              {/* Bottom resize handle */}
+              {onBlockResize && (
+                <div
+                  className="absolute left-0 right-0 bottom-0 h-2 cursor-ns-resize group/handle hover:bg-primary/20 rounded-b-md"
+                  onMouseDown={(e) => handleResizeStart(e, block, 'bottom')}
+                >
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-8 h-1 bg-muted-foreground/30 rounded-full opacity-0 group-hover/handle:opacity-100" />
                 </div>
               )}
             </div>
-            <div className="text-muted-foreground">
-              {formatTime(block.startTime)} - {formatTime(block.endTime)}
-            </div>
-          </div>
-        ))}
+          )
+        })}
 
         {/* 時間記録（実績） */}
         {showComparison &&
@@ -174,7 +332,9 @@ export function TimeBlockTimeline({
               }}
             >
               <div className="flex items-center gap-1 truncate">
-                {entry.goalTag && <TagBadge tag={entry.goalTag} size="sm" />}
+                {entry.goalName && entry.goalColor && (
+                  <GoalBadge name={entry.goalName} color={entry.goalColor} size="sm" />
+                )}
                 <span className="truncate font-medium">{entry.taskName}</span>
               </div>
               <div className="text-muted-foreground">

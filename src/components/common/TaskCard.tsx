@@ -1,12 +1,13 @@
 import { Checkbox } from '@/components/ui/checkbox'
-import { TagBadge } from './TagBadge'
-import type { Task, GoalTag } from '@/types'
+import { GoalBadge } from './GoalBadge'
+import type { Task } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface TaskCardProps {
   task: Task
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneName?: string
+  goalName?: string
+  goalColor?: string
   estimatedMinutes?: number
   onToggle?: (id: string) => void
   onClick?: () => void
@@ -16,8 +17,9 @@ interface TaskCardProps {
 
 export function TaskCard({
   task,
-  projectName,
-  goalTag,
+  milestoneName,
+  goalName,
+  goalColor,
   estimatedMinutes,
   onToggle,
   onClick,
@@ -50,11 +52,13 @@ export function TaskCard({
           >
             {task.name}
           </span>
-          {(task.goalTag || goalTag) && <TagBadge tag={task.goalTag || goalTag!} size="sm" />}
+          {goalName && goalColor && (
+            <GoalBadge name={goalName} color={goalColor} size="sm" />
+          )}
         </div>
-        {projectName && (
+        {milestoneName && (
           <p className="text-xs text-muted-foreground truncate">
-            {projectName}
+            {milestoneName}
           </p>
         )}
       </div>

@@ -1,16 +1,17 @@
 // Timer MSW handlers
 import { http, HttpResponse } from 'msw'
-import { generateId, projects } from '../data'
-import type { GoalTag } from '@/types'
+import { generateId, goals, milestones } from '../data'
 
 const BASE_URL = 'http://localhost:8084/api/v1'
 
 interface RunningTimer {
   id: string
   taskName: string
-  projectId?: string
-  projectName?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
   description?: string
   startedAt: string
 }
@@ -28,28 +29,44 @@ export const timerHandlers = [
   http.post(`${BASE_URL}/timer/start`, async ({ request }) => {
     const body = await request.json() as {
       taskName: string
-      projectId?: string
-      goalTag?: GoalTag
+      milestoneId?: string
+      goalId?: string
+      goalName?: string
+      goalColor?: string
       description?: string
     }
 
     // Stop any existing timer (implicitly)
     currentTimer = null
 
-    // Find project name if projectId is provided
-    let projectName: string | undefined
-    if (body.projectId) {
-      const project = projects.find(p => p.id === body.projectId)
-      projectName = project?.name
+    // Find milestone and goal info if milestoneId is provided
+    let milestoneName: string | undefined
+    let goalId = body.goalId
+    let goalName = body.goalName
+    let goalColor = body.goalColor
+
+    if (body.milestoneId) {
+      const milestone = milestones.find(m => m.id === body.milestoneId)
+      if (milestone) {
+        milestoneName = milestone.name
+        const goal = goals.find(g => g.id === milestone.goalId)
+        if (goal) {
+          goalId = goal.id
+          goalName = goal.name
+          goalColor = goal.color
+        }
+      }
     }
 
     // Create new timer
     currentTimer = {
       id: generateId('timer'),
       taskName: body.taskName,
-      projectId: body.projectId,
-      projectName,
-      goalTag: body.goalTag,
+      milestoneId: body.milestoneId,
+      milestoneName,
+      goalId,
+      goalName,
+      goalColor,
       description: body.description,
       startedAt: new Date().toISOString(),
     }

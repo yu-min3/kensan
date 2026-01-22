@@ -1,26 +1,172 @@
-// Tasks & Projects API Service
+// Goals, Milestones, Tags, Tasks API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { Project, Task, GoalTag } from '@/types'
+import type { Goal, Milestone, MilestoneStatus, Tag, Task } from '@/types'
 
-// API Response types
-interface ProjectResponse {
+// ============================================
+// Goal API
+// ============================================
+interface GoalResponse {
   id: string
   name: string
-  goalTag?: GoalTag
-  color?: string
+  description?: string
+  color: string
   isArchived: boolean
   createdAt: string
   updatedAt: string
 }
 
+const transformGoal = (g: GoalResponse): Goal => ({
+  id: g.id,
+  name: g.name,
+  description: g.description,
+  color: g.color,
+  isArchived: g.isArchived,
+  createdAt: new Date(g.createdAt),
+  updatedAt: new Date(g.updatedAt),
+})
+
+export interface CreateGoalInput {
+  name: string
+  description?: string
+  color: string
+}
+
+export interface UpdateGoalInput {
+  name?: string
+  description?: string
+  color?: string
+  isArchived?: boolean
+}
+
+export interface GoalFilter {
+  archived?: boolean
+}
+
+export const goalsApi = createApiService<
+  GoalResponse,
+  Goal,
+  CreateGoalInput,
+  UpdateGoalInput,
+  GoalFilter
+>({
+  baseUrl: API_CONFIG.baseUrls.task,
+  resourcePath: '/goals',
+  transform: transformGoal,
+})
+
+// ============================================
+// Milestone API
+// ============================================
+interface MilestoneResponse {
+  id: string
+  goalId: string
+  name: string
+  description?: string
+  targetDate?: string
+  status: MilestoneStatus
+  createdAt: string
+  updatedAt: string
+}
+
+const transformMilestone = (m: MilestoneResponse): Milestone => ({
+  id: m.id,
+  goalId: m.goalId,
+  name: m.name,
+  description: m.description,
+  targetDate: m.targetDate,
+  status: m.status,
+  createdAt: new Date(m.createdAt),
+  updatedAt: new Date(m.updatedAt),
+})
+
+export interface CreateMilestoneInput {
+  goalId: string
+  name: string
+  description?: string
+  targetDate?: string
+}
+
+export interface UpdateMilestoneInput {
+  name?: string
+  description?: string
+  targetDate?: string
+  status?: MilestoneStatus
+}
+
+export interface MilestoneFilter {
+  goalId?: string
+  status?: MilestoneStatus
+}
+
+export const milestonesApi = createApiService<
+  MilestoneResponse,
+  Milestone,
+  CreateMilestoneInput,
+  UpdateMilestoneInput,
+  MilestoneFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.task,
+    resourcePath: '/milestones',
+    transform: transformMilestone,
+  },
+  {
+    filterMappings: {
+      goalId: 'goal_id',
+    },
+  }
+)
+
+// ============================================
+// Tag API
+// ============================================
+interface TagResponse {
+  id: string
+  name: string
+  color: string
+  createdAt: string
+}
+
+const transformTag = (t: TagResponse): Tag => ({
+  id: t.id,
+  name: t.name,
+  color: t.color,
+  createdAt: new Date(t.createdAt),
+})
+
+export interface CreateTagInput {
+  name: string
+  color: string
+}
+
+export interface UpdateTagInput {
+  name?: string
+  color?: string
+}
+
+export const tagsApi = createApiService<
+  TagResponse,
+  Tag,
+  CreateTagInput,
+  UpdateTagInput,
+  Record<string, never>
+>({
+  baseUrl: API_CONFIG.baseUrls.task,
+  resourcePath: '/tags',
+  transform: transformTag,
+})
+
+// ============================================
+// Task API
+// ============================================
 interface TaskResponse {
   id: string
   name: string
-  projectId: string
+  milestoneId?: string
   parentTaskId?: string
-  goalTag?: GoalTag
+  tagIds?: string[]
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string
@@ -28,91 +174,44 @@ interface TaskResponse {
   updatedAt: string
 }
 
-// Transform functions
-const transformProject = (p: ProjectResponse): Project => ({
-  id: p.id,
-  name: p.name,
-  goalTag: p.goalTag,
-  color: p.color,
-  isArchived: p.isArchived,
-})
-
 const transformTask = (t: TaskResponse): Task => ({
   id: t.id,
   name: t.name,
-  projectId: t.projectId,
+  milestoneId: t.milestoneId,
   parentTaskId: t.parentTaskId,
-  goalTag: t.goalTag,
+  tagIds: t.tagIds,
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
+  createdAt: new Date(t.createdAt),
+  updatedAt: new Date(t.updatedAt),
 })
 
-// Project input types
-export interface CreateProjectInput {
-  name: string
-  goalTag?: GoalTag
-  color?: string
-}
-
-export interface UpdateProjectInput {
-  name?: string
-  goalTag?: GoalTag
-  color?: string
-  isArchived?: boolean
-}
-
-export interface ProjectFilter {
-  archived?: boolean
-  goalTag?: GoalTag
-}
-
-// Task input types
 export interface CreateTaskInput {
   name: string
-  projectId: string
+  milestoneId?: string
   parentTaskId?: string
-  goalTag?: GoalTag
+  tagIds?: string[]
   estimatedMinutes?: number
   dueDate?: string
 }
 
 export interface UpdateTaskInput {
   name?: string
-  projectId?: string
+  milestoneId?: string | null
   parentTaskId?: string | null
-  goalTag?: GoalTag | null
+  tagIds?: string[]
   estimatedMinutes?: number
   dueDate?: string | null
+  completed?: boolean
 }
 
 export interface TaskFilter {
-  projectId?: string
+  milestoneId?: string
   completed?: boolean
   parentId?: string
 }
 
-// Projects API
-export const projectsApi = createApiService<
-  ProjectResponse,
-  Project,
-  CreateProjectInput,
-  UpdateProjectInput,
-  ProjectFilter
->(
-  {
-    baseUrl: API_CONFIG.baseUrls.task,
-    resourcePath: '/projects',
-    transform: transformProject,
-  },
-  {
-    filterMappings: {
-      goalTag: 'goal_tag',
-    },
-  }
-)
-
-// Tasks API - base CRUD
 const baseTasksApi = createApiService<
   TaskResponse,
   Task,
@@ -127,13 +226,12 @@ const baseTasksApi = createApiService<
   },
   {
     filterMappings: {
-      projectId: 'project_id',
+      milestoneId: 'milestone_id',
       parentId: 'parent_id',
     },
   }
 )
 
-// Tasks API with toggle complete
 export const tasksApi = extendApiService(baseTasksApi, () => ({
   async toggleComplete(id: string): Promise<Task> {
     const response = await httpClient.patch<TaskResponse>(
@@ -143,3 +241,20 @@ export const tasksApi = extendApiService(baseTasksApi, () => ({
     return transformTask(response)
   },
 }))
+
+// ============================================
+// 後方互換性のための型エイリアス (移行期間中)
+// ============================================
+/** @deprecated Use goalsApi instead */
+export const projectsApi = {
+  list: goalsApi.list,
+  get: goalsApi.get,
+  create: async (input: { name: string; goalTag?: string; color?: string }) => {
+    return goalsApi.create({
+      name: input.name,
+      color: input.color || '#0EA5E9',
+    })
+  },
+  update: goalsApi.update,
+  delete: goalsApi.delete,
+}

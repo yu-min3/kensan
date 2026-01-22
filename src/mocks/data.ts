@@ -2,7 +2,9 @@
 // This data is mutable to allow CRUD operations in development
 
 import type {
-  Project,
+  Goal,
+  Milestone,
+  Tag,
   Task,
   TimeBlock,
   TimeEntry,
@@ -24,37 +26,221 @@ const today = getToday()
 const yesterday = getYesterday()
 const tomorrow = getTomorrow()
 
-// Projects
-export let projects: Project[] = [
-  { id: 'p1', name: 'Certification', goalTag: 'GK', color: '#ecc94b', isArchived: false },
-  { id: 'p2', name: 'Kensan', goalTag: 'OSS', color: '#48bb78', isArchived: false },
-  { id: 'p3', name: 'ブログ執筆', goalTag: 'Output', color: '#4299e1', isArchived: false },
-  { id: 'p4', name: '読書', goalTag: 'Other', color: '#a0aec0', isArchived: false },
+// ============================================
+// Goals (目標)
+// ============================================
+export let goals: Goal[] = [
+  {
+    id: 'goal-gk',
+    name: 'Golden Kubestronaut',
+    description: 'CNCF認定資格を全て取得する',
+    color: '#0EA5E9',
+    isArchived: false,
+    createdAt: subDays(new Date(), 90),
+    updatedAt: subDays(new Date(), 30),
+  },
+  {
+    id: 'goal-oss',
+    name: 'OSS活動',
+    description: 'オープンソースプロジェクトへの貢献',
+    color: '#10B981',
+    isArchived: false,
+    createdAt: subDays(new Date(), 60),
+    updatedAt: subDays(new Date(), 7),
+  },
+  {
+    id: 'goal-output',
+    name: 'アウトプット',
+    description: 'ブログ執筆やLT登壇',
+    color: '#F59E0B',
+    isArchived: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 14),
+  },
 ]
 
-// Tasks
+// ============================================
+// Milestones (マイルストーン) - 旧Project
+// ============================================
+export let milestones: Milestone[] = [
+  {
+    id: 'ms-ica',
+    goalId: 'goal-gk',
+    name: 'ICA合格',
+    description: 'Istio Certified Associate',
+    targetDate: '2026-03-31',
+    status: 'active',
+    createdAt: subDays(new Date(), 60),
+    updatedAt: subDays(new Date(), 7),
+  },
+  {
+    id: 'ms-pca',
+    goalId: 'goal-gk',
+    name: 'PCA合格',
+    description: 'Prometheus Certified Associate',
+    targetDate: '2026-05-31',
+    status: 'active',
+    createdAt: subDays(new Date(), 45),
+    updatedAt: subDays(new Date(), 14),
+  },
+  {
+    id: 'ms-cca',
+    goalId: 'goal-gk',
+    name: 'CCA合格',
+    description: 'Cilium Certified Associate',
+    targetDate: '2026-07-31',
+    status: 'active',
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 21),
+  },
+  {
+    id: 'ms-kensan',
+    goalId: 'goal-oss',
+    name: 'Kensan MVP',
+    description: 'Kensan v1.0リリース',
+    targetDate: '2026-06-30',
+    status: 'active',
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 'ms-blog',
+    goalId: 'goal-output',
+    name: '技術ブログ月4本',
+    description: '毎月4本のブログ記事を投稿',
+    status: 'active',
+    createdAt: subDays(new Date(), 14),
+    updatedAt: subDays(new Date(), 7),
+  },
+]
+
+// ============================================
+// Tags (タグ) - 集計用
+// ============================================
+export let tags: Tag[] = [
+  { id: 'tag-dev', name: '開発', color: '#8B5CF6', createdAt: subDays(new Date(), 90) },
+  { id: 'tag-input', name: 'Input', color: '#06B6D4', createdAt: subDays(new Date(), 90) },
+  { id: 'tag-exercise', name: '運動', color: '#EF4444', createdAt: subDays(new Date(), 90) },
+  { id: 'tag-reading', name: '読書', color: '#84CC16', createdAt: subDays(new Date(), 90) },
+  { id: 'tag-review', name: '振り返り', color: '#EC4899', createdAt: subDays(new Date(), 90) },
+]
+
+// ============================================
+// Tasks (タスク)
+// ============================================
 export let tasks: Task[] = [
-  // Certification
-  { id: 't1', name: 'ICA試験勉強', projectId: 'p1', completed: false },
-  { id: 't1-1', name: 'Traffic Management', projectId: 'p1', parentTaskId: 't1', completed: false },
-  { id: 't1-2', name: 'Security', projectId: 'p1', parentTaskId: 't1', completed: false },
-  { id: 't1-3', name: 'Observability', projectId: 'p1', parentTaskId: 't1', completed: false },
-  { id: 't2', name: 'PCA試験勉強', projectId: 'p1', completed: false },
-  { id: 't2-1', name: 'PromQL', projectId: 'p1', parentTaskId: 't2', completed: false },
-  { id: 't2-2', name: 'Alerting', projectId: 'p1', parentTaskId: 't2', completed: false },
-  { id: 't3', name: 'CCA試験勉強', projectId: 'p1', completed: false },
-  // Kensan
-  { id: 't4', name: 'フロントエンド開発', projectId: 'p2', completed: false },
-  { id: 't4-1', name: '画面設計', projectId: 'p2', parentTaskId: 't4', completed: true },
-  { id: 't4-2', name: 'コンポーネント実装', projectId: 'p2', parentTaskId: 't4', completed: false },
-  { id: 't4-3', name: 'Clockify連携', projectId: 'p2', parentTaskId: 't4', completed: false },
-  { id: 't5', name: 'バックエンド開発', projectId: 'p2', completed: false },
-  // Blog
-  { id: 't6', name: 'Istio記事執筆', projectId: 'p3', completed: false },
-  { id: 't7', name: 'Cilium記事執筆', projectId: 'p3', completed: false },
+  // ICA関連タスク
+  {
+    id: 't1',
+    name: 'ICA試験勉強',
+    milestoneId: 'ms-ica',
+    tagIds: ['tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 't1-1',
+    name: 'Traffic Management',
+    milestoneId: 'ms-ica',
+    parentTaskId: 't1',
+    tagIds: ['tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 't1-2',
+    name: 'Security',
+    milestoneId: 'ms-ica',
+    parentTaskId: 't1',
+    tagIds: ['tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 7),
+  },
+  {
+    id: 't1-3',
+    name: 'Observability',
+    milestoneId: 'ms-ica',
+    parentTaskId: 't1',
+    tagIds: ['tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 14),
+  },
+  // PCA関連
+  {
+    id: 't2',
+    name: 'PCA試験勉強',
+    milestoneId: 'ms-pca',
+    tagIds: ['tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 21),
+    updatedAt: subDays(new Date(), 7),
+  },
+  // Kensan開発
+  {
+    id: 't4',
+    name: 'フロントエンド開発',
+    milestoneId: 'ms-kensan',
+    tagIds: ['tag-dev'],
+    completed: false,
+    createdAt: subDays(new Date(), 14),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 't4-1',
+    name: '画面設計',
+    milestoneId: 'ms-kensan',
+    parentTaskId: 't4',
+    tagIds: ['tag-dev'],
+    completed: true,
+    createdAt: subDays(new Date(), 14),
+    updatedAt: subDays(new Date(), 7),
+  },
+  {
+    id: 't4-2',
+    name: 'コンポーネント実装',
+    milestoneId: 'ms-kensan',
+    parentTaskId: 't4',
+    tagIds: ['tag-dev'],
+    completed: false,
+    createdAt: subDays(new Date(), 7),
+    updatedAt: subDays(new Date(), 1),
+  },
+  // ブログ
+  {
+    id: 't6',
+    name: 'Istio記事執筆',
+    milestoneId: 'ms-blog',
+    tagIds: ['tag-dev'],
+    completed: false,
+    createdAt: subDays(new Date(), 7),
+    updatedAt: subDays(new Date(), 3),
+  },
+  // 目標なしタスク
+  {
+    id: 't-gym',
+    name: 'ジム',
+    tagIds: ['tag-exercise'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 't-reading',
+    name: '技術書読書',
+    tagIds: ['tag-reading', 'tag-input'],
+    completed: false,
+    createdAt: subDays(new Date(), 30),
+    updatedAt: subDays(new Date(), 3),
+  },
 ]
 
-// Time blocks (plans)
+// ============================================
+// Time blocks (計画)
+// ============================================
 export let timeBlocks: TimeBlock[] = [
   {
     id: 'tb1',
@@ -63,9 +249,12 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '11:00',
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
     isRoutine: false,
   },
   {
@@ -75,9 +264,12 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '14:30',
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
-    projectId: 'p2',
-    projectName: 'Kensan',
-    goalTag: 'OSS',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
     isRoutine: false,
   },
   {
@@ -87,9 +279,12 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '16:00',
     taskId: 't6',
     taskName: 'ブログ記事執筆',
-    projectId: 'p3',
-    projectName: 'ブログ執筆',
-    goalTag: 'Output',
+    milestoneId: 'ms-blog',
+    milestoneName: '技術ブログ月4本',
+    goalId: 'goal-output',
+    goalName: 'アウトプット',
+    goalColor: '#F59E0B',
+    tagIds: ['tag-dev'],
     isRoutine: false,
   },
   {
@@ -99,7 +294,7 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '16:45',
     taskId: 'r1',
     taskName: '技術ニュースチェック',
-    goalTag: 'Other',
+    tagIds: ['tag-input'],
     isRoutine: true,
     routineTaskId: 'r1',
   },
@@ -110,11 +305,11 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '17:30',
     taskId: 'r2',
     taskName: '英語学習',
-    goalTag: 'Other',
+    tagIds: ['tag-input'],
     isRoutine: true,
     routineTaskId: 'r2',
   },
-  // Tomorrow's blocks
+  // Tomorrow
   {
     id: 'tb-tm1',
     date: tomorrow,
@@ -122,16 +317,21 @@ export let timeBlocks: TimeBlock[] = [
     endTime: '11:00',
     taskId: 't1-2',
     taskName: 'ICA試験勉強 - Security',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
     isRoutine: false,
   },
 ]
 
-// Time entries (actuals from Clockify)
+// ============================================
+// Time entries (実績)
+// ============================================
 export let timeEntries: TimeEntry[] = [
-  // Yesterday's entries
+  // Yesterday
   {
     id: 'te1',
     date: yesterday,
@@ -139,9 +339,12 @@ export let timeEntries: TimeEntry[] = [
     endTime: '11:00',
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
   },
   {
     id: 'te2',
@@ -150,9 +353,12 @@ export let timeEntries: TimeEntry[] = [
     endTime: '14:30',
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
-    projectId: 'p2',
-    projectName: 'Kensan',
-    goalTag: 'OSS',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
   },
   {
     id: 'te3',
@@ -161,9 +367,12 @@ export let timeEntries: TimeEntry[] = [
     endTime: '16:00',
     taskId: 't6',
     taskName: 'ブログ記事執筆',
-    projectId: 'p3',
-    projectName: 'ブログ執筆',
-    goalTag: 'Output',
+    milestoneId: 'ms-blog',
+    milestoneName: '技術ブログ月4本',
+    goalId: 'goal-output',
+    goalName: 'アウトプット',
+    goalColor: '#F59E0B',
+    tagIds: ['tag-dev'],
   },
   {
     id: 'te4',
@@ -172,7 +381,7 @@ export let timeEntries: TimeEntry[] = [
     endTime: '17:00',
     taskId: 'r1',
     taskName: '技術ニュースチェック',
-    goalTag: 'Other',
+    tagIds: ['tag-input'],
   },
   {
     id: 'te5',
@@ -180,10 +389,9 @@ export let timeEntries: TimeEntry[] = [
     startTime: '17:30',
     endTime: '18:30',
     taskName: '予定外MTG',
-    goalTag: 'Other',
     description: '緊急の技術相談',
   },
-  // Today's partial entries
+  // Today
   {
     id: 'te-today-1',
     date: today,
@@ -191,9 +399,12 @@ export let timeEntries: TimeEntry[] = [
     endTime: '11:00',
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
   },
   {
     id: 'te-today-2',
@@ -202,19 +413,25 @@ export let timeEntries: TimeEntry[] = [
     endTime: '14:30',
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
-    projectId: 'p2',
-    projectName: 'Kensan',
-    goalTag: 'OSS',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
   },
 ]
 
-// Routine tasks
+// ============================================
+// Routine tasks (定期タスク)
+// ============================================
 export let routineTasks: RoutineTask[] = [
   {
     id: 'r1',
     name: '技術ニュースチェック',
     frequency: 'daily',
     estimatedMinutes: 15,
+    tagIds: ['tag-input'],
     enabled: true,
   },
   {
@@ -222,6 +439,7 @@ export let routineTasks: RoutineTask[] = [
     name: '英語学習',
     frequency: 'daily',
     estimatedMinutes: 30,
+    tagIds: ['tag-input'],
     enabled: true,
   },
   {
@@ -230,6 +448,7 @@ export let routineTasks: RoutineTask[] = [
     frequency: 'custom',
     daysOfWeek: [1, 3, 5],
     estimatedMinutes: 30,
+    tagIds: ['tag-exercise'],
     enabled: true,
   },
   {
@@ -238,11 +457,14 @@ export let routineTasks: RoutineTask[] = [
     frequency: 'weekly',
     daysOfWeek: [0],
     estimatedMinutes: 60,
+    tagIds: ['tag-review'],
     enabled: true,
   },
 ]
 
-// Learning records
+// ============================================
+// Learning records (学習記録)
+// ============================================
 export let learningRecords: LearningRecord[] = [
   {
     id: 'lr1',
@@ -286,9 +508,12 @@ DestinationRuleは、トラフィックが特定のサービスに到達した�
 - 外れ値検出設定
 `,
     format: 'markdown',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
     relatedTimeEntryIds: ['te1'],
     createdAt: new Date(yesterday),
     updatedAt: new Date(yesterday),
@@ -298,9 +523,12 @@ DestinationRuleは、トラフィックが特定のサービスに到達した�
     title: 'Kensan アーキテクチャ図',
     content: '[drawio content placeholder]',
     format: 'drawio',
-    projectId: 'p2',
-    projectName: 'Kensan',
-    goalTag: 'OSS',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
     createdAt: subDays(new Date(), 2),
     updatedAt: subDays(new Date(), 2),
   },
@@ -325,9 +553,12 @@ eBPF (extended Berkeley Packet Filter) は、Linuxカーネル内でサンドボ
 - L7ポリシーの適用が可能
 `,
     format: 'markdown',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-cca',
+    milestoneName: 'CCA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
     createdAt: subDays(new Date(), 3),
     updatedAt: subDays(new Date(), 3),
   },
@@ -356,15 +587,20 @@ http_requests_total{job="api-server"}[5m]
 - increase() - 増加量
 `,
     format: 'markdown',
-    projectId: 'p1',
-    projectName: 'Certification',
-    goalTag: 'GK',
+    milestoneId: 'ms-pca',
+    milestoneName: 'PCA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
     createdAt: subDays(new Date(), 5),
     updatedAt: subDays(new Date(), 5),
   },
 ]
 
-// Diary entries
+// ============================================
+// Diary entries (日記)
+// ============================================
 export let diaryEntries: DiaryEntry[] = [
   {
     id: 'd1',
@@ -401,7 +637,9 @@ make rebuild
   },
 ]
 
-// User settings
+// ============================================
+// User settings (ユーザー設定)
+// ============================================
 export let userSettings: UserSettings = {
   clockifyApiKey: 'mock-api-key-xxxxx',
   workspaceId: 'ws-12345',
@@ -412,7 +650,9 @@ export let userSettings: UserSettings = {
   userName: 'Yu',
 }
 
-// AI review reports
+// ============================================
+// AI review reports (AI振り返り)
+// ============================================
 export let aiReviewReports: AIReviewReport[] = [
   {
     id: 'ai1',
@@ -438,22 +678,28 @@ export let aiReviewReports: AIReviewReport[] = [
   },
 ]
 
-// Weekly summary
+// ============================================
+// Weekly summary (週次サマリー)
+// ============================================
 export const weeklySummary: WeeklySummary = {
   weekStart: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
   weekEnd: today,
   totalMinutes: 32 * 60,
-  byGoalTag: {
-    GK: 18 * 60,
-    OSS: 10 * 60,
-    Output: 4 * 60,
-    Other: 0,
-  },
-  byProject: {
-    Certification: 18 * 60,
-    Kensan: 10 * 60,
-    'ブログ執筆': 4 * 60,
-  },
+  byGoal: [
+    { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 18 * 60 },
+    { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 10 * 60 },
+    { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 4 * 60 },
+  ],
+  byTag: [
+    { id: 'tag-input', name: 'Input', color: '#06B6D4', minutes: 20 * 60 },
+    { id: 'tag-dev', name: '開発', color: '#8B5CF6', minutes: 12 * 60 },
+  ],
+  byMilestone: [
+    { id: 'ms-ica', name: 'ICA合格', goalId: 'goal-gk', minutes: 12 * 60 },
+    { id: 'ms-kensan', name: 'Kensan MVP', goalId: 'goal-oss', minutes: 10 * 60 },
+    { id: 'ms-pca', name: 'PCA合格', goalId: 'goal-gk', minutes: 6 * 60 },
+    { id: 'ms-blog', name: '技術ブログ月4本', goalId: 'goal-output', minutes: 4 * 60 },
+  ],
   completedTasks: 12,
   plannedVsActual: {
     planned: 35 * 60,
@@ -461,7 +707,9 @@ export const weeklySummary: WeeklySummary = {
   },
 }
 
-// Daily study hours (for charts)
+// ============================================
+// Daily study hours (チャート用)
+// ============================================
 export const dailyStudyHours = [
   { date: format(subDays(new Date(), 6), 'M/d'), hours: 4, day: '月' },
   { date: format(subDays(new Date(), 5), 'M/d'), hours: 5, day: '火' },
@@ -472,5 +720,13 @@ export const dailyStudyHours = [
   { date: format(new Date(), 'M/d'), hours: 2, day: '日' },
 ]
 
-// Helper to generate unique IDs
+// ============================================
+// Helper functions
+// ============================================
 export const generateId = (prefix: string) => `${prefix}${Date.now()}`
+
+// Goal/Milestone/Tag lookup helpers
+export const findGoalById = (id: string) => goals.find(g => g.id === id)
+export const findMilestoneById = (id: string) => milestones.find(m => m.id === id)
+export const findTagById = (id: string) => tags.find(t => t.id === id)
+export const findTagsByIds = (ids: string[]) => tags.filter(t => ids.includes(t.id))

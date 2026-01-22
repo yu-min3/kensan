@@ -17,16 +17,19 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { TimeRangeInput } from '@/components/ui/time-range-input'
 import { useTaskStore } from '@/stores/useTaskStore'
-import type { TimeEntry, GoalTag } from '@/types'
+import type { TimeEntry } from '@/types'
 
 interface TimeEntryFormInput {
   taskName: string
   date: string
   startTime: string
   endTime: string
-  projectId?: string
-  goalTag?: GoalTag
+  milestoneId?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
   description?: string
 }
 
@@ -38,13 +41,6 @@ interface TimeEntryFormProps {
   defaultDate?: string
 }
 
-const GOAL_TAGS: { value: GoalTag; label: string }[] = [
-  { value: 'GK', label: 'GK (Golden Kubestronaut)' },
-  { value: 'OSS', label: 'OSS' },
-  { value: 'Output', label: 'Output' },
-  { value: 'Other', label: 'Other' },
-]
-
 export function TimeEntryForm({
   open,
   onOpenChange,
@@ -52,17 +48,22 @@ export function TimeEntryForm({
   initialData,
   defaultDate,
 }: TimeEntryFormProps) {
-  const { projects } = useTaskStore()
+  const { goals, milestones } = useTaskStore()
   const isEditMode = !!initialData
 
   const [taskName, setTaskName] = useState('')
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('10:00')
-  const [projectId, setProjectId] = useState<string | undefined>(undefined)
-  const [goalTag, setGoalTag] = useState<GoalTag | ''>('')
+  const [milestoneId, setMilestoneId] = useState<string | undefined>(undefined)
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Get goal from selected milestone
+  const selectedMilestone = milestones.find(m => m.id === milestoneId)
+  const selectedGoal = selectedMilestone
+    ? goals.find(g => g.id === selectedMilestone.goalId)
+    : undefined
 
   // Reset form when dialog opens/closes or initialData changes
   useEffect(() => {
@@ -72,30 +73,18 @@ export function TimeEntryForm({
         setDate(initialData.date)
         setStartTime(initialData.startTime)
         setEndTime(initialData.endTime)
-        setProjectId(initialData.projectId)
-        setGoalTag(initialData.goalTag || '')
+        setMilestoneId(initialData.milestoneId)
         setDescription(initialData.description || '')
       } else {
         setTaskName('')
         setDate(defaultDate || new Date().toISOString().split('T')[0])
         setStartTime('09:00')
         setEndTime('10:00')
-        setProjectId(undefined)
-        setGoalTag('')
+        setMilestoneId(undefined)
         setDescription('')
       }
     }
   }, [open, initialData, defaultDate])
-
-  // Auto-fill goal tag when project is selected
-  useEffect(() => {
-    if (projectId) {
-      const project = projects.find((p) => p.id === projectId)
-      if (project?.goalTag) {
-        setGoalTag(project.goalTag)
-      }
-    }
-  }, [projectId, projects])
 
   const handleSubmit = async () => {
     if (!taskName || !date || !startTime || !endTime) return
@@ -107,8 +96,10 @@ export function TimeEntryForm({
         date,
         startTime,
         endTime,
-        projectId: projectId || undefined,
-        goalTag: goalTag || undefined,
+        milestoneId: milestoneId || undefined,
+        goalId: selectedGoal?.id,
+        goalName: selectedGoal?.name,
+        goalColor: selectedGoal?.color,
         description: description || undefined,
       })
       onOpenChange(false)
@@ -118,8 +109,6 @@ export function TimeEntryForm({
       setIsSubmitting(false)
     }
   }
-
-  const activeProjects = projects.filter((p) => !p.isArchived)
 
   // Calculate duration
   const calculateDuration = () => {
@@ -172,25 +161,14 @@ export function TimeEntryForm({
           </div>
 
           {/* Time Range */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="startTime">開始時刻 *</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="endTime">終了時刻 *</Label>
-              <Input
-                id="endTime"
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="mt-1"
+          <div>
+            <Label>時間 *</Label>
+            <div className="mt-1">
+              <TimeRangeInput
+                startTime={startTime}
+                endTime={endTime}
+                onStartTimeChange={setStartTime}
+                onEndTimeChange={setEndTime}
               />
             </div>
           </div>
@@ -202,46 +180,53 @@ export function TimeEntryForm({
             </p>
           )}
 
-          {/* Project Selector */}
+          {/* Milestone Selector */}
           <div>
-            <Label>プロジェクト</Label>
+            <Label>マイルストーン</Label>
             <Select
-              value={projectId || ''}
-              onValueChange={(v) => setProjectId(v || undefined)}
+              value={milestoneId || ''}
+              onValueChange={(v) => setMilestoneId(v || undefined)}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="プロジェクトを選択（任意）" />
+                <SelectValue placeholder="マイルストーンを選択（任意）" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">なし</SelectItem>
-                {activeProjects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name}
-                  </SelectItem>
-                ))}
+                {goals
+                  .filter(g => !g.isArchived)
+                  .map(goal => {
+                    const goalMilestones = milestones.filter(
+                      m => m.goalId === goal.id && m.status === 'active'
+                    )
+                    if (goalMilestones.length === 0) return null
+                    return (
+                      <div key={goal.id}>
+                        <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: goal.color }}
+                          />
+                          {goal.name}
+                        </div>
+                        {goalMilestones.map(milestone => (
+                          <SelectItem key={milestone.id} value={milestone.id}>
+                            {milestone.name}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    )
+                  })}
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Goal Tag Selector */}
-          <div>
-            <Label>目標タグ</Label>
-            <Select
-              value={goalTag}
-              onValueChange={(v) => setGoalTag(v as GoalTag | '')}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="タグを選択（任意）" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">なし</SelectItem>
-                {GOAL_TAGS.map((tag) => (
-                  <SelectItem key={tag.value} value={tag.value}>
-                    {tag.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {selectedGoal && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: selectedGoal.color }}
+                />
+                Goal: {selectedGoal.name}
+              </p>
+            )}
           </div>
 
           {/* Description */}

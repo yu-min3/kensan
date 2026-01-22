@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TagBadge } from '@/components/common/TagBadge'
+import { GoalBadge } from '@/components/common/GoalBadge'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { formatDateIso } from '@/lib/dateFormat'
@@ -12,10 +12,10 @@ import { BookOpen, Plus, Search, FileText, Shapes } from 'lucide-react'
 
 export function L01LearningRecordList() {
   const { items: records } = useLearningRecordStore()
-  const { projects } = useTaskStore()
+  const { goals, milestones } = useTaskStore()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [milestoneFilter, setMilestoneFilter] = useState<string>('all')
 
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
@@ -23,10 +23,10 @@ export function L01LearningRecordList() {
       record.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       record.content.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesProject =
-      projectFilter === 'all' || record.projectId === projectFilter
+    const matchesMilestone =
+      milestoneFilter === 'all' || record.milestoneId === milestoneFilter
 
-    return matchesSearch && matchesProject
+    return matchesSearch && matchesMilestone
   })
 
   return (
@@ -56,17 +56,36 @@ export function L01LearningRecordList() {
             className="pl-10"
           />
         </div>
-        <Select value={projectFilter} onValueChange={setProjectFilter}>
+        <Select value={milestoneFilter} onValueChange={setMilestoneFilter}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="プロジェクト" />
+            <SelectValue placeholder="マイルストーン" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">すべて</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
+            {goals
+              .filter(g => !g.isArchived)
+              .map(goal => {
+                const goalMilestones = milestones.filter(
+                  m => m.goalId === goal.id && m.status === 'active'
+                )
+                if (goalMilestones.length === 0) return null
+                return (
+                  <div key={goal.id}>
+                    <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: goal.color }}
+                      />
+                      {goal.name}
+                    </div>
+                    {goalMilestones.map(milestone => (
+                      <SelectItem key={milestone.id} value={milestone.id}>
+                        {milestone.name}
+                      </SelectItem>
+                    ))}
+                  </div>
+                )
+              })}
           </SelectContent>
         </Select>
       </div>
@@ -78,11 +97,11 @@ export function L01LearningRecordList() {
             <Card className="h-full hover:border-primary transition-colors cursor-pointer">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-muted">
+                  <div className="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/30">
                     {record.format === 'markdown' ? (
-                      <FileText className="h-5 w-5 text-muted-foreground" />
+                      <FileText className="h-5 w-5 text-sky-600 dark:text-sky-400" />
                     ) : (
-                      <Shapes className="h-5 w-5 text-muted-foreground" />
+                      <Shapes className="h-5 w-5 text-sky-600 dark:text-sky-400" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -91,12 +110,12 @@ export function L01LearningRecordList() {
                       {formatDateIso(record.createdAt)}
                     </p>
                     <div className="flex items-center gap-2 mt-2">
-                      {record.goalTag && (
-                        <TagBadge tag={record.goalTag} size="sm" />
+                      {record.goalName && record.goalColor && (
+                        <GoalBadge name={record.goalName} color={record.goalColor} size="sm" />
                       )}
-                      {record.projectName && (
+                      {record.milestoneName && (
                         <span className="text-xs text-muted-foreground">
-                          {record.projectName}
+                          {record.milestoneName}
                         </span>
                       )}
                     </div>
@@ -117,7 +136,7 @@ export function L01LearningRecordList() {
         <div className="text-center py-12">
           <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/50" />
           <p className="text-muted-foreground mt-4">
-            {searchQuery || projectFilter !== 'all'
+            {searchQuery || milestoneFilter !== 'all'
               ? '該当する記録が見つかりません'
               : '学習記録がまだありません'}
           </p>
