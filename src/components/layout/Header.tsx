@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { TimerWidget } from '@/components/common/TimerWidget'
+import { KensanLogo } from '@/components/common/KensanLogo'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 
@@ -34,8 +35,8 @@ export function Header() {
     <header className="h-14 border-b bg-background px-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <Link to="/" className="flex items-center gap-2">
+          <KensanLogo size={28} />
           <span className="text-xl font-bold text-primary">Kensan</span>
-          <span className="text-sm text-muted-foreground">研鑽</span>
         </Link>
       </div>
 

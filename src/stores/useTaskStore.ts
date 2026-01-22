@@ -9,8 +9,6 @@ interface TaskState {
   error: string | null
 
   // データ取得
-  fetchProjects: () => Promise<void>
-  fetchTasks: () => Promise<void>
   fetchAll: () => Promise<void>
 
   // プロジェクト操作
@@ -36,26 +34,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   isLoading: false,
   error: null,
-
-  fetchProjects: async () => {
-    set({ isLoading: true, error: null })
-    try {
-      const projects = await projectsApi.list()
-      set({ projects, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
-  },
-
-  fetchTasks: async () => {
-    set({ isLoading: true, error: null })
-    try {
-      const tasks = await tasksApi.list()
-      set({ tasks, isLoading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
-    }
-  },
 
   fetchAll: async () => {
     set({ isLoading: true, error: null })
