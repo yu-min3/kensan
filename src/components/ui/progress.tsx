@@ -22,7 +22,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         {...props}
       >
         <div
-          className={cn("h-full bg-primary transition-all", indicatorClassName)}
+          className={cn("h-full bg-brand transition-all", indicatorClassName)}
           style={{ width: `${percentage}%` }}
         />
       </div>

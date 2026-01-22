@@ -96,7 +96,7 @@ export function R01RoutineTaskManagement() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <RotateCcw className="h-8 w-8 text-purple-500" />
+          <RotateCcw className="h-8 w-8 text-slate-500" />
           <h1 className="text-2xl font-bold">定期タスク</h1>
         </div>
         <Button className="gap-2" onClick={openNewDialog}>

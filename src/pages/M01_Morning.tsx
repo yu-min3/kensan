@@ -181,7 +181,7 @@ export function M01Morning() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Sun className="h-8 w-8 text-yellow-500" />
+          <Sun className="h-8 w-8 text-slate-500" />
           <div>
             <h1 className="text-2xl font-bold">
               おはようございます、{userName}さん
@@ -346,7 +346,6 @@ export function M01Morning() {
                 <Progress
                   value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
                   className="h-2"
-                  indicatorClassName="bg-yellow-500"
                 />
               </div>
 
@@ -363,7 +362,6 @@ export function M01Morning() {
                 <Progress
                   value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
                   className="h-2"
-                  indicatorClassName="bg-green-500"
                 />
               </div>
             </CardContent>
@@ -372,11 +370,11 @@ export function M01Morning() {
           {/* アクションボタン */}
           {isTimerRunning ? (
             <div className="space-y-2">
-              <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+              <div className="p-3 rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-700">
+                <p className="text-sm font-medium text-sky-800 dark:text-sky-200">
                   作業中: {timerTaskName}
                 </p>
-                <p className="text-xs text-green-600 dark:text-green-400">
+                <p className="text-xs text-sky-600 dark:text-sky-400">
                   開始: {timerStartTime ? formatTime(timerStartTime) : ''}
                 </p>
               </div>

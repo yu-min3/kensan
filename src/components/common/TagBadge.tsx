@@ -8,10 +8,10 @@ interface TagBadgeProps {
 }
 
 const tagConfig: Record<GoalTag, { label: string; className: string }> = {
-  GK: { label: 'GK', className: 'bg-yellow-500 hover:bg-yellow-500/80' },
-  OSS: { label: 'OSS', className: 'bg-green-500 hover:bg-green-500/80' },
-  Output: { label: 'Output', className: 'bg-blue-500 hover:bg-blue-500/80' },
-  Other: { label: 'Other', className: 'bg-gray-500 hover:bg-gray-500/80' },
+  GK: { label: 'GK', className: 'bg-slate-700 hover:bg-slate-600' },
+  OSS: { label: 'OSS', className: 'bg-slate-600 hover:bg-slate-500' },
+  Output: { label: 'Output', className: 'bg-slate-500 hover:bg-slate-400' },
+  Other: { label: 'Other', className: 'bg-slate-400 hover:bg-slate-300' },
 }
 
 export function TagBadge({ tag, size = 'default' }: TagBadgeProps) {

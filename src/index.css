@@ -45,13 +45,13 @@
   --brand: 199 89% 48%;
   --brand-foreground: 0 0% 100%;
 
-  /* TimeBlock colors */
-  --timeblock-plan-bg: #fef9c3;
-  --timeblock-plan-border: #fde047;
-  --timeblock-actual-bg: #dcfce7;
-  --timeblock-actual-border: #86efac;
-  --timeblock-routine-bg: #f3e8ff;
-  --timeblock-routine-border: #d8b4fe;
+  /* TimeBlock colors - Grayscale design */
+  --timeblock-plan-bg: #f8fafc;
+  --timeblock-plan-border: #cbd5e1;
+  --timeblock-actual-bg: #f1f5f9;
+  --timeblock-actual-border: #94a3b8;
+  --timeblock-routine-bg: #f8fafc;
+  --timeblock-routine-border: #cbd5e1;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
   --popover: 0 0% 100%;

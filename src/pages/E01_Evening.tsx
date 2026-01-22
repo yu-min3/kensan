@@ -179,11 +179,11 @@ export function E01Evening() {
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">実績</p>
-                  <p className="text-xl font-semibold text-green-600">{formatDurationShort(actualMinutes)}</p>
+                  <p className="text-xl font-semibold text-brand">{formatDurationShort(actualMinutes)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">差分</p>
-                  <p className={`text-xl font-semibold ${difference >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                  <p className={`text-xl font-semibold ${difference >= 0 ? 'text-brand' : 'text-destructive'}`}>
                     {difference >= 0 ? '+' : ''}{formatDurationShort(difference)}
                   </p>
                 </div>
@@ -276,7 +276,7 @@ export function E01Evening() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Lightbulb className="h-4 w-4 text-yellow-500" />
+                <Lightbulb className="h-4 w-4 text-slate-500" />
                 今日のメモ
               </CardTitle>
               <Link to="/learning-records/new">

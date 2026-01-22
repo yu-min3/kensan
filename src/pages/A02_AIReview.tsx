@@ -74,8 +74,8 @@ export function A02AIReview() {
               {/* よかった点 */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-green-600">
-                    <ThumbsUp className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2">
+                    <ThumbsUp className="h-5 w-5 text-slate-500" />
                     よかった点
                   </CardTitle>
                 </CardHeader>
@@ -83,7 +83,7 @@ export function A02AIReview() {
                   <ul className="space-y-2">
                     {selectedReport.goodPoints.map((point, index) => (
                       <li key={index} className="flex items-start gap-2">
-                        <span className="text-green-500 mt-1">✓</span>
+                        <span className="text-slate-400 mt-1">✓</span>
                         <span>{point}</span>
                       </li>
                     ))}
@@ -94,8 +94,8 @@ export function A02AIReview() {
               {/* 改善点 */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-yellow-600">
-                    <AlertTriangle className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-slate-500" />
                     改善点
                   </CardTitle>
                 </CardHeader>
@@ -103,7 +103,7 @@ export function A02AIReview() {
                   <ul className="space-y-2">
                     {selectedReport.improvementPoints.map((point, index) => (
                       <li key={index} className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-1">!</span>
+                        <span className="text-slate-400 mt-1">!</span>
                         <span>{point}</span>
                       </li>
                     ))}
@@ -114,8 +114,8 @@ export function A02AIReview() {
               {/* アドバイス */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-600">
-                    <Lightbulb className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-slate-500" />
                     来週へのアドバイス
                   </CardTitle>
                 </CardHeader>
@@ -123,7 +123,7 @@ export function A02AIReview() {
                   <ul className="space-y-2">
                     {selectedReport.advice.map((item, index) => (
                       <li key={index} className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">💡</span>
+                        <span className="text-slate-400 mt-1">→</span>
                         <span>{item}</span>
                       </li>
                     ))}

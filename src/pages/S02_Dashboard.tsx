@@ -79,8 +79,8 @@ export function S02Dashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30">
+                <Clock className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">今日の予定</p>
@@ -93,8 +93,8 @@ export function S02Dashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <Play className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30">
+                <Play className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">今日の実績</p>
@@ -107,8 +107,8 @@ export function S02Dashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30">
+                <Target className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">今週の進捗</p>
@@ -123,8 +123,8 @@ export function S02Dashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30">
+                <BookOpen className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">学習記録</p>
@@ -201,7 +201,7 @@ export function S02Dashboard() {
                   formatter={(value) => [`${value}時間`, '学習時間']}
                   labelFormatter={(label) => `${label}曜日`}
                 />
-                <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -229,7 +229,6 @@ export function S02Dashboard() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
                 className="h-2"
-                indicatorClassName="bg-yellow-500"
               />
             </div>
 
@@ -246,7 +245,6 @@ export function S02Dashboard() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
                 className="h-2"
-                indicatorClassName="bg-green-500"
               />
             </div>
 
@@ -263,7 +261,6 @@ export function S02Dashboard() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.Output / (5 * 60)) * 100}
                 className="h-2"
-                indicatorClassName="bg-blue-500"
               />
             </div>
           </CardContent>

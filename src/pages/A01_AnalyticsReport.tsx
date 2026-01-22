@@ -47,7 +47,7 @@ export function A01AnalyticsReport() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <BarChart3 className="h-8 w-8 text-blue-500" />
+          <BarChart3 className="h-8 w-8 text-slate-500" />
           <h1 className="text-2xl font-bold">分析・レポート</h1>
         </div>
         <Tabs value={period} onValueChange={(v) => setPeriod(v as 'week' | 'month')}>
@@ -136,7 +136,7 @@ export function A01AnalyticsReport() {
                 <XAxis dataKey="day" fontSize={12} />
                 <YAxis fontSize={12} unit="h" />
                 <Tooltip formatter={(value) => [`${value}時間`, '学習時間']} />
-                <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -200,7 +200,7 @@ export function A01AnalyticsReport() {
                 <XAxis type="number" fontSize={12} unit="h" />
                 <YAxis type="category" dataKey="name" fontSize={12} width={100} />
                 <Tooltip formatter={(value) => [`${value}時間`, '']} />
-                <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -225,7 +225,6 @@ export function A01AnalyticsReport() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.GK / (20 * 60)) * 100}
                 className="h-3"
-                indicatorClassName="bg-yellow-500"
               />
             </div>
 
@@ -242,7 +241,6 @@ export function A01AnalyticsReport() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.OSS / (15 * 60)) * 100}
                 className="h-3"
-                indicatorClassName="bg-green-500"
               />
             </div>
 
@@ -259,7 +257,6 @@ export function A01AnalyticsReport() {
               <Progress
                 value={(mockWeeklySummary.byGoalTag.Output / (5 * 60)) * 100}
                 className="h-3"
-                indicatorClassName="bg-blue-500"
               />
             </div>
           </CardContent>

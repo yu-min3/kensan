@@ -23,10 +23,10 @@ export interface Task {
 export type GoalTag = 'GK' | 'OSS' | 'Output' | 'Other'
 
 export const goalTagColors: Record<GoalTag, string> = {
-  GK: 'bg-yellow-500',
-  OSS: 'bg-green-500',
-  Output: 'bg-blue-500',
-  Other: 'bg-gray-500',
+  GK: 'bg-slate-700',
+  OSS: 'bg-slate-600',
+  Output: 'bg-slate-500',
+  Other: 'bg-slate-400',
 }
 
 export const goalTagLabels: Record<GoalTag, string> = {

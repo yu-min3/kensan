@@ -118,7 +118,7 @@ export function TimerWidget() {
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger>
-        <Button variant="outline" size="sm" disabled={isLoading} asChild>
+        <Button size="sm" disabled={isLoading} asChild>
           <span>
             <Play className="h-4 w-4" />
             <span className="hidden sm:inline">Start Timer</span>

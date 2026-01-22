@@ -70,7 +70,7 @@ export function L02LearningRecordEdit() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <BookOpen className="h-8 w-8 text-green-500" />
+          <BookOpen className="h-8 w-8 text-slate-500" />
           <h1 className="text-2xl font-bold">
             {isNew ? '学習記録を作成' : '学習記録を編集'}
           </h1>

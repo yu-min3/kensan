@@ -42,9 +42,9 @@ export function Sidebar() {
             end={item.to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors relative',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-100 font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-1 before:bg-sky-500 before:rounded-full'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )
             }

@@ -65,7 +65,7 @@ export function FloatingMemoButton() {
         <div className="bg-background border rounded-lg shadow-lg p-4 w-80">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Lightbulb className="h-4 w-4 text-yellow-500" />
+              <Lightbulb className="h-4 w-4 text-slate-500" />
               クイックメモ
             </div>
             <Button
