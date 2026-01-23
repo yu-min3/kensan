@@ -11,6 +11,7 @@ import type {
   RoutineTask,
   LearningRecord,
   DiaryEntry,
+  Note,
   UserSettings,
   AIReviewReport,
   WeeklySummary,
@@ -136,6 +137,7 @@ export let tasks: Task[] = [
     milestoneId: 'ms-ica',
     tagIds: ['tag-input'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 1),
   },
@@ -146,6 +148,7 @@ export let tasks: Task[] = [
     parentTaskId: 't1',
     tagIds: ['tag-input'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 1),
   },
@@ -156,6 +159,7 @@ export let tasks: Task[] = [
     parentTaskId: 't1',
     tagIds: ['tag-input'],
     completed: false,
+    sortOrder: 1,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 7),
   },
@@ -166,6 +170,7 @@ export let tasks: Task[] = [
     parentTaskId: 't1',
     tagIds: ['tag-input'],
     completed: false,
+    sortOrder: 2,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 14),
   },
@@ -176,6 +181,7 @@ export let tasks: Task[] = [
     milestoneId: 'ms-pca',
     tagIds: ['tag-input'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 21),
     updatedAt: subDays(new Date(), 7),
   },
@@ -186,6 +192,7 @@ export let tasks: Task[] = [
     milestoneId: 'ms-kensan',
     tagIds: ['tag-dev'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 14),
     updatedAt: subDays(new Date(), 1),
   },
@@ -196,6 +203,7 @@ export let tasks: Task[] = [
     parentTaskId: 't4',
     tagIds: ['tag-dev'],
     completed: true,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 14),
     updatedAt: subDays(new Date(), 7),
   },
@@ -206,6 +214,7 @@ export let tasks: Task[] = [
     parentTaskId: 't4',
     tagIds: ['tag-dev'],
     completed: false,
+    sortOrder: 1,
     createdAt: subDays(new Date(), 7),
     updatedAt: subDays(new Date(), 1),
   },
@@ -216,6 +225,7 @@ export let tasks: Task[] = [
     milestoneId: 'ms-blog',
     tagIds: ['tag-dev'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 7),
     updatedAt: subDays(new Date(), 3),
   },
@@ -225,6 +235,7 @@ export let tasks: Task[] = [
     name: 'ジム',
     tagIds: ['tag-exercise'],
     completed: false,
+    sortOrder: 0,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 1),
   },
@@ -233,6 +244,7 @@ export let tasks: Task[] = [
     name: '技術書読書',
     tagIds: ['tag-reading', 'tag-input'],
     completed: false,
+    sortOrder: 1,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 3),
   },
@@ -638,12 +650,158 @@ make rebuild
 ]
 
 // ============================================
+// Notes (統合ノート - 日記・学習記録・メモ)
+// ============================================
+export let notes: Note[] = [
+  // Diary type notes
+  {
+    id: 'note-d1',
+    userId: 'user-1',
+    type: 'diary',
+    title: '今日の振り返り',
+    content: `# 今日の振り返り
+
+## 達成したこと
+- ICA勉強 Traffic Management 2時間
+- Kensanの画面実装
+
+## 明日やること
+- Security分野の学習開始
+`,
+    format: 'markdown',
+    date: today,
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-review'],
+    archived: false,
+    createdAt: new Date(today),
+    updatedAt: new Date(today),
+  },
+  {
+    id: 'note-d2',
+    userId: 'user-1',
+    type: 'diary',
+    title: '学習記録',
+    content: `# 昨日の記録
+
+Istioの学習を継続。VirtualServiceの設定が理解できた。
+`,
+    format: 'markdown',
+    date: yesterday,
+    archived: false,
+    createdAt: new Date(yesterday),
+    updatedAt: new Date(yesterday),
+  },
+  // Learning type notes
+  {
+    id: 'note-lr1',
+    userId: 'user-1',
+    type: 'learning',
+    title: 'Istio Traffic Management まとめ',
+    content: `# Istio Traffic Management
+
+## VirtualService
+
+VirtualServiceは、Istioにおけるトラフィックルーティングの中核となるリソースである。
+
+\`\`\`yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+\`\`\`
+
+## DestinationRule
+
+DestinationRuleは、トラフィックが特定のサービスに到達した後のポリシーを定義する。
+`,
+    format: 'markdown',
+    taskId: 't1-1',
+    milestoneId: 'ms-ica',
+    milestoneName: 'ICA合格',
+    goalId: 'goal-gk',
+    goalName: 'Golden Kubestronaut',
+    goalColor: '#0EA5E9',
+    tagIds: ['tag-input'],
+    relatedTimeEntryIds: ['te1'],
+    archived: false,
+    createdAt: new Date(yesterday),
+    updatedAt: new Date(yesterday),
+  },
+  {
+    id: 'note-lr2',
+    userId: 'user-1',
+    type: 'learning',
+    title: 'Kensan アーキテクチャ図',
+    content: '[drawio content placeholder]',
+    format: 'drawio',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
+    archived: false,
+    createdAt: subDays(new Date(), 2),
+    updatedAt: subDays(new Date(), 2),
+  },
+  // Memo type notes
+  {
+    id: 'note-m1',
+    userId: 'user-1',
+    type: 'memo',
+    content: `買い物リスト:
+- キーボード
+- モニターアーム
+- USBハブ`,
+    format: 'markdown',
+    archived: false,
+    createdAt: subDays(new Date(), 1),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 'note-m2',
+    userId: 'user-1',
+    type: 'memo',
+    title: 'アイデアメモ',
+    content: `Kensanの新機能アイデア:
+- AI要約機能
+- ポモドーロタイマー連携
+- GitHub連携`,
+    format: 'markdown',
+    milestoneId: 'ms-kensan',
+    milestoneName: 'Kensan MVP',
+    goalId: 'goal-oss',
+    goalName: 'OSS活動',
+    goalColor: '#10B981',
+    tagIds: ['tag-dev'],
+    archived: false,
+    createdAt: subDays(new Date(), 3),
+    updatedAt: subDays(new Date(), 2),
+  },
+]
+
+// ============================================
 // User settings (ユーザー設定)
 // ============================================
 export let userSettings: UserSettings = {
-  clockifyApiKey: 'mock-api-key-xxxxx',
-  workspaceId: 'ws-12345',
-  workspaceName: 'Personal Workspace',
   timezone: 'Asia/Tokyo',
   theme: 'system',
   isConfigured: true,
@@ -718,6 +876,53 @@ export const dailyStudyHours = [
   { date: format(subDays(new Date(), 2), 'M/d'), hours: 7, day: '金' },
   { date: format(subDays(new Date(), 1), 'M/d'), hours: 3, day: '土' },
   { date: format(new Date(), 'M/d'), hours: 2, day: '日' },
+]
+
+// ============================================
+// Memos (メモ)
+// ============================================
+export interface MockMemo {
+  id: string
+  userId: string
+  content: string
+  archived: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export let memos: MockMemo[] = [
+  {
+    id: 'memo-1',
+    userId: 'user-1',
+    content: 'ICA試験のTraffic Managementセクションを重点的に復習する',
+    archived: false,
+    createdAt: subDays(new Date(), 2),
+    updatedAt: subDays(new Date(), 2),
+  },
+  {
+    id: 'memo-2',
+    userId: 'user-1',
+    content: 'Kensanのタイムラインコンポーネントのリサイズ機能をテストする',
+    archived: false,
+    createdAt: subDays(new Date(), 1),
+    updatedAt: subDays(new Date(), 1),
+  },
+  {
+    id: 'memo-3',
+    userId: 'user-1',
+    content: '週末にブログ記事のドラフトを書く',
+    archived: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 'memo-4',
+    userId: 'user-1',
+    content: '古いメモ（アーカイブ済み）',
+    archived: true,
+    createdAt: subDays(new Date(), 10),
+    updatedAt: subDays(new Date(), 5),
+  },
 ]
 
 // ============================================

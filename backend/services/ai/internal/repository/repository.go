@@ -197,10 +197,9 @@ func (r *PostgresRepository) ListReports(ctx context.Context, userID string, fil
 // GetTimeEntriesForPeriod retrieves time entries for a specific period
 func (r *PostgresRepository) GetTimeEntriesForPeriod(ctx context.Context, userID, startDate, endDate string) ([]ai.TimeEntryData, error) {
 	query := `
-		SELECT te.description, COALESCE(p.name, 'Unknown Project') as project_name,
+		SELECT te.description, COALESCE(te.goal_name, 'Unknown') as project_name,
 		       te.duration, te.start_time, te.end_time
 		FROM time_entries te
-		LEFT JOIN projects p ON te.project_id = p.clockify_id AND p.user_id = te.user_id
 		WHERE te.user_id = $1
 		  AND te.start_time >= $2::date
 		  AND te.start_time < ($3::date + interval '1 day')
@@ -239,12 +238,19 @@ func (r *PostgresRepository) GetTimeEntriesForPeriod(ctx context.Context, userID
 // GetLearningRecordsForPeriod retrieves learning records for a specific period
 func (r *PostgresRepository) GetLearningRecordsForPeriod(ctx context.Context, userID, startDate, endDate string) ([]ai.LearningRecordData, error) {
 	query := `
-		SELECT title, content, COALESCE(goal_tag, '') as goal_tag
-		FROM learning_records
-		WHERE user_id = $1
-		  AND created_at >= $2::date
-		  AND created_at < ($3::date + interval '1 day')
-		ORDER BY created_at
+		SELECT lr.title, lr.content,
+		       COALESCE(lr.goal_id, '') as goal_id,
+		       COALESCE(g.name, '') as goal_name,
+		       COALESCE(g.color, '') as goal_color,
+		       COALESCE(lr.milestone_id, '') as milestone_id,
+		       COALESCE(m.name, '') as milestone_name
+		FROM learning_records lr
+		LEFT JOIN goals g ON lr.goal_id = g.id
+		LEFT JOIN milestones m ON lr.milestone_id = m.id
+		WHERE lr.user_id = $1
+		  AND lr.created_at >= $2::date
+		  AND lr.created_at < ($3::date + interval '1 day')
+		ORDER BY lr.created_at
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
@@ -259,7 +265,11 @@ func (r *PostgresRepository) GetLearningRecordsForPeriod(ctx context.Context, us
 		err := rows.Scan(
 			&record.Title,
 			&record.Content,
-			&record.GoalTag,
+			&record.GoalID,
+			&record.GoalName,
+			&record.GoalColor,
+			&record.MilestoneID,
+			&record.MilestoneName,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan learning record: %w", err)

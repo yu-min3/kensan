@@ -12,14 +12,13 @@ import (
 )
 
 var (
-	ErrTimeBlockNotFound   = errors.New("time block not found")
-	ErrTimeEntryNotFound   = errors.New("time entry not found")
+	ErrTimeBlockNotFound    = errors.New("time block not found")
+	ErrTimeEntryNotFound    = errors.New("time entry not found")
 	ErrRunningTimerNotFound = errors.New("no running timer found")
-	ErrTimerAlreadyRunning = errors.New("timer is already running")
-	ErrInvalidGoalTag      = errors.New("invalid goal tag")
-	ErrInvalidInput        = errors.New("invalid input")
-	ErrInvalidDate         = errors.New("invalid date format (expected YYYY-MM-DD)")
-	ErrInvalidTime         = errors.New("invalid time format (expected HH:mm)")
+	ErrTimerAlreadyRunning  = errors.New("timer is already running")
+	ErrInvalidInput         = errors.New("invalid input")
+	ErrInvalidDate          = errors.New("invalid date format (expected YYYY-MM-DD)")
+	ErrInvalidTime          = errors.New("invalid time format (expected HH:mm)")
 )
 
 // Service handles business logic for time blocks and time entries
@@ -151,10 +150,6 @@ func (s *Service) CreateTimeBlock(ctx context.Context, userID string, input time
 		return nil, ErrInvalidTime
 	}
 
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
-	}
-
 	return s.repo.CreateTimeBlock(ctx, userID, input)
 }
 
@@ -180,10 +175,6 @@ func (s *Service) UpdateTimeBlock(ctx context.Context, userID, timeBlockID strin
 
 	if input.EndTime != nil && !validateTime(*input.EndTime) {
 		return nil, ErrInvalidTime
-	}
-
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
 	}
 
 	tb, err := s.repo.UpdateTimeBlock(ctx, userID, timeBlockID, input)
@@ -248,10 +239,6 @@ func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter tim
 		return nil, ErrInvalidDate
 	}
 
-	if filter.GoalTag != nil && !filter.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
-	}
-
 	entries, err := s.repo.ListTimeEntries(ctx, userID, filter)
 	if err != nil {
 		return nil, err
@@ -314,10 +301,6 @@ func (s *Service) CreateTimeEntry(ctx context.Context, userID string, input time
 		return nil, ErrInvalidTime
 	}
 
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
-	}
-
 	return s.repo.CreateTimeEntry(ctx, userID, input)
 }
 
@@ -343,10 +326,6 @@ func (s *Service) UpdateTimeEntry(ctx context.Context, userID, timeEntryID strin
 
 	if input.EndTime != nil && !validateTime(*input.EndTime) {
 		return nil, ErrInvalidTime
-	}
-
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
 	}
 
 	te, err := s.repo.UpdateTimeEntry(ctx, userID, timeEntryID, input)
@@ -387,10 +366,6 @@ func (s *Service) StartTimer(ctx context.Context, userID string, input timeblock
 	// Validate required fields
 	if input.TaskName == "" {
 		return nil, ErrInvalidInput
-	}
-
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return nil, ErrInvalidGoalTag
 	}
 
 	// Check if a timer is already running

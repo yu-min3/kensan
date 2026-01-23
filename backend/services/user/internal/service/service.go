@@ -183,22 +183,13 @@ func (s *Service) GetSettings(ctx context.Context, userID string) (*user.Setting
 		return nil, err
 	}
 
-	// Create response with masked API key
 	response := &user.SettingsResponse{
-		UserID:            settings.UserID,
-		HasClockifyAPIKey: settings.ClockifyAPIKey != "",
-		WorkspaceID:       settings.WorkspaceID,
-		WorkspaceName:     settings.WorkspaceName,
-		Timezone:          settings.Timezone,
-		Theme:             settings.Theme,
-		IsConfigured:      settings.IsConfigured,
-		AIEnabled:         settings.AIEnabled,
-		AIConsentGiven:    settings.AIConsentGiven,
-	}
-
-	// Mask API key if present
-	if settings.ClockifyAPIKey != "" {
-		response.ClockifyAPIKey = maskAPIKey(settings.ClockifyAPIKey)
+		UserID:         settings.UserID,
+		Timezone:       settings.Timezone,
+		Theme:          settings.Theme,
+		IsConfigured:   settings.IsConfigured,
+		AIEnabled:      settings.AIEnabled,
+		AIConsentGiven: settings.AIConsentGiven,
 	}
 
 	return response, nil
@@ -216,15 +207,6 @@ func (s *Service) UpdateSettings(ctx context.Context, userID string, req *user.U
 	}
 
 	// Update fields
-	if req.ClockifyAPIKey != "" {
-		settings.ClockifyAPIKey = req.ClockifyAPIKey
-	}
-	if req.WorkspaceID != "" {
-		settings.WorkspaceID = req.WorkspaceID
-	}
-	if req.WorkspaceName != "" {
-		settings.WorkspaceName = req.WorkspaceName
-	}
 	if req.Timezone != "" {
 		settings.Timezone = req.Timezone
 	}
@@ -238,15 +220,14 @@ func (s *Service) UpdateSettings(ctx context.Context, userID string, req *user.U
 		settings.AIEnabled = *req.AIEnabled
 	}
 
-	// Check if user is now configured (has API key and workspace)
-	settings.IsConfigured = settings.ClockifyAPIKey != "" && settings.WorkspaceID != ""
+	// IsConfigured is true if timezone is set
+	settings.IsConfigured = settings.Timezone != ""
 
 	// Save changes
 	if err := s.repo.UpdateSettings(ctx, settings); err != nil {
 		return nil, err
 	}
 
-	// Return response with masked API key
 	return s.GetSettings(ctx, userID)
 }
 
@@ -296,10 +277,3 @@ func (s *Service) validateRegisterRequest(req *user.RegisterRequest) error {
 	return nil
 }
 
-// maskAPIKey masks an API key, showing only the first 4 and last 4 characters
-func maskAPIKey(key string) string {
-	if len(key) <= 8 {
-		return "****"
-	}
-	return key[:4] + "****" + key[len(key)-4:]
-}

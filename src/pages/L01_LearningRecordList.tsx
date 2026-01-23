@@ -79,7 +79,7 @@ export function L01LearningRecordList() {
                       {goal.name}
                     </div>
                     {goalMilestones.map(milestone => (
-                      <SelectItem key={milestone.id} value={milestone.id}>
+                      <SelectItem key={milestone.id} value={milestone.id} label={milestone.name}>
                         {milestone.name}
                       </SelectItem>
                     ))}

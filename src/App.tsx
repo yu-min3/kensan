@@ -9,6 +9,8 @@ import { L01LearningRecordList } from '@/pages/L01_LearningRecordList'
 import { L02LearningRecordEdit } from '@/pages/L02_LearningRecordEdit'
 import { D01DiaryList } from '@/pages/D01_DiaryList'
 import { D02DiaryEdit } from '@/pages/D02_DiaryEdit'
+import { N01NoteList } from '@/pages/N01_NoteList'
+import { N02NoteEdit } from '@/pages/N02_NoteEdit'
 import { T01TaskManagement } from '@/pages/T01_TaskManagement'
 import { R01RoutineTaskManagement } from '@/pages/R01_RoutineTaskManagement'
 import { A01AnalyticsReport } from '@/pages/A01_AnalyticsReport'
@@ -16,8 +18,11 @@ import { A02AIReview } from '@/pages/A02_AIReview'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useInitializeData } from '@/hooks/useInitializeData'
+import { useTheme } from '@/hooks/useTheme'
 
 function App() {
+  // テーマをDOMに適用（アプリ起動時に実行）
+  useTheme()
   const { isAuthenticated } = useAuthStore()
   const { isConfigured } = useSettingsStore()
   const { initialized, isLoading } = useInitializeData()
@@ -77,6 +82,9 @@ function App() {
           <Route path="diary" element={<D01DiaryList />} />
           <Route path="diary/new" element={<D02DiaryEdit />} />
           <Route path="diary/:id" element={<D02DiaryEdit />} />
+          <Route path="notes" element={<N01NoteList />} />
+          <Route path="notes/new" element={<N02NoteEdit />} />
+          <Route path="notes/:id" element={<N02NoteEdit />} />
           <Route path="tasks" element={<T01TaskManagement />} />
           <Route path="routines" element={<R01RoutineTaskManagement />} />
           <Route path="analytics" element={<A01AnalyticsReport />} />

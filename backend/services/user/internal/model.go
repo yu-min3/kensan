@@ -17,9 +17,6 @@ type User struct {
 // UserSettings represents user-specific settings
 type UserSettings struct {
 	UserID         string `json:"userId"`
-	ClockifyAPIKey string `json:"-"` // Encrypted, never expose in JSON
-	WorkspaceID    string `json:"workspaceId"`
-	WorkspaceName  string `json:"workspaceName"`
 	Timezone       string `json:"timezone"`
 	Theme          string `json:"theme"` // "light", "dark", "system"
 	IsConfigured   bool   `json:"isConfigured"`
@@ -54,26 +51,19 @@ type UpdateProfileRequest struct {
 
 // UpdateSettingsRequest represents the settings update request payload
 type UpdateSettingsRequest struct {
-	ClockifyAPIKey string `json:"clockifyApiKey,omitempty"`
-	WorkspaceID    string `json:"workspaceId,omitempty"`
-	WorkspaceName  string `json:"workspaceName,omitempty"`
-	Timezone       string `json:"timezone,omitempty"`
-	Theme          string `json:"theme,omitempty"`
-	AIEnabled      *bool  `json:"aiEnabled,omitempty"`
+	Timezone  string `json:"timezone,omitempty"`
+	Theme     string `json:"theme,omitempty"`
+	AIEnabled *bool  `json:"aiEnabled,omitempty"`
 }
 
-// SettingsResponse represents the settings response with masked API key
+// SettingsResponse represents the settings response
 type SettingsResponse struct {
-	UserID            string `json:"userId"`
-	ClockifyAPIKey    string `json:"clockifyApiKey"` // Masked version
-	HasClockifyAPIKey bool   `json:"hasClockifyApiKey"`
-	WorkspaceID       string `json:"workspaceId"`
-	WorkspaceName     string `json:"workspaceName"`
-	Timezone          string `json:"timezone"`
-	Theme             string `json:"theme"`
-	IsConfigured      bool   `json:"isConfigured"`
-	AIEnabled         bool   `json:"aiEnabled"`
-	AIConsentGiven    bool   `json:"aiConsentGiven"`
+	UserID         string `json:"userId"`
+	Timezone       string `json:"timezone"`
+	Theme          string `json:"theme"`
+	IsConfigured   bool   `json:"isConfigured"`
+	AIEnabled      bool   `json:"aiEnabled"`
+	AIConsentGiven bool   `json:"aiConsentGiven"`
 }
 
 // AIConsentRequest represents the AI consent request payload

@@ -3,20 +3,17 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { TimeRangeInput } from '@/components/ui/time-range-input'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
-import { TimeEntryList } from '@/components/common/TimeEntryList'
+import { TimeBlockDialog } from '@/components/common/TimeBlockDialog'
+import { TimeEntryForm } from '@/components/common/TimeEntryForm'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { useTaskStore } from '@/stores/useTaskStore'
 import { useMemoStore } from '@/stores/useMemoStore'
+import { useTimeBlockDialog } from '@/hooks/useTimeBlockDialog'
 import { addDays } from 'date-fns'
 import { formatDateJa, formatDateShortJa, formatDateIso, formatTime, formatDurationShort } from '@/lib/dateFormat'
+import type { TimeEntry } from '@/types'
 import {
   Moon,
   ArrowRight,
@@ -40,61 +37,68 @@ import {
 
 export function E01Evening() {
   const { userName } = useSettingsStore()
-  const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, addTimeBlock, updateTimeBlock } = useTimeBlockStore()
-  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
+  const { getTodayTimeBlocks, getTodayTimeEntries, getTimeBlocksByDate, updateTimeBlock, updateTimeEntry, deleteTimeEntry } = useTimeBlockStore()
   const { fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
+
+  const tomorrowDate = formatDateIso(addDays(new Date(), 1))
+  const todayDate = formatDateIso(new Date())
+
+  // TimeBlock Dialog Hook for tomorrow
+  const timeBlockDialog = useTimeBlockDialog({ defaultDate: tomorrowDate })
+
+  // TimeEntry edit state
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
+  const [isEntryFormOpen, setIsEntryFormOpen] = useState(false)
 
   // Fetch memos on mount
   useEffect(() => {
     fetchMemos()
   }, [fetchMemos])
 
+  // TimeEntry handlers
+  const handleEntryClick = (entry: TimeEntry) => {
+    setEditingEntry(entry)
+    setIsEntryFormOpen(true)
+  }
+
+  const handleEntryDelete = async (entryId: string) => {
+    if (window.confirm('この実績を削除しますか？')) {
+      await deleteTimeEntry(entryId)
+    }
+  }
+
+  const handleEntrySave = async (data: {
+    taskName: string
+    date: string
+    startTime: string
+    endTime: string
+    milestoneId?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+    description?: string
+  }) => {
+    if (editingEntry) {
+      await updateTimeEntry(editingEntry.id, {
+        taskName: data.taskName,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        milestoneId: data.milestoneId,
+        goalId: data.goalId,
+        goalName: data.goalName,
+        goalColor: data.goalColor,
+        description: data.description,
+      })
+    }
+    setEditingEntry(null)
+  }
+
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
-  const tomorrowDate = formatDateIso(addDays(new Date(), 1))
   const tomorrowBlocks = getTimeBlocksByDate(tomorrowDate)
   const today = formatDateJa(new Date())
   const tomorrow = formatDateShortJa(addDays(new Date(), 1))
-
-  // TimeBlock Dialog State for tomorrow
-  const [isTimeBlockDialogOpen, setIsTimeBlockDialogOpen] = useState(false)
-  const [blockTaskName, setBlockTaskName] = useState('')
-  const [blockStartTime, setBlockStartTime] = useState('09:00')
-  const [blockEndTime, setBlockEndTime] = useState('10:00')
-  const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
-  const [blockMilestoneId, setBlockMilestoneId] = useState<string | undefined>(undefined)
-
-  // Get goal from selected milestone
-  const selectedMilestone = blockMilestoneId ? getMilestoneById(blockMilestoneId) : undefined
-  const selectedGoal = selectedMilestone ? getGoalById(selectedMilestone.goalId) : undefined
-
-  const openNewTimeBlockDialog = () => {
-    setBlockTaskName('')
-    setBlockTaskId(undefined)
-    setBlockMilestoneId(undefined)
-    setBlockStartTime('09:00')
-    setBlockEndTime('10:00')
-    setIsTimeBlockDialogOpen(true)
-  }
-
-  const handleSaveTimeBlock = async () => {
-    if (!blockTaskName || !blockStartTime || !blockEndTime) return
-
-    await addTimeBlock({
-      date: tomorrowDate,
-      startTime: blockStartTime,
-      endTime: blockEndTime,
-      taskName: blockTaskName,
-      taskId: blockTaskId,
-      milestoneId: blockMilestoneId,
-      milestoneName: selectedMilestone?.name,
-      goalId: selectedGoal?.id,
-      goalName: selectedGoal?.name,
-      goalColor: selectedGoal?.color,
-      isRoutine: false,
-    })
-    setIsTimeBlockDialogOpen(false)
-  }
 
   // 計画時間と実績時間を計算
   const calculateMinutes = (items: { startTime: string; endTime: string }[]) => {
@@ -271,17 +275,11 @@ export function E01Evening() {
                 onBlockResize={(blockId, startTime, endTime) => {
                   updateTimeBlock(blockId, { startTime, endTime })
                 }}
+                onEntryClick={handleEntryClick}
+                onEntryDelete={handleEntryDelete}
               />
             </CardContent>
           </Card>
-
-          {/* 今日の実績（時間記録リスト） */}
-          <TimeEntryList
-            entries={todayEntries}
-            title="今日の実績"
-            showAddButton={true}
-            defaultDate={formatDateIso(new Date())}
-          />
 
           {/* 今日のメモ */}
           <Card>
@@ -381,7 +379,7 @@ export function E01Evening() {
                   variant="outline"
                   size="sm"
                   className="w-full gap-1"
-                  onClick={openNewTimeBlockDialog}
+                  onClick={() => timeBlockDialog.openDialog()}
                 >
                   <Plus className="h-4 w-4" />
                   タイムブロック追加
@@ -409,123 +407,39 @@ export function E01Evening() {
       </div>
 
       {/* 明日のタイムブロック追加ダイアログ */}
-      <Dialog open={isTimeBlockDialogOpen} onOpenChange={setIsTimeBlockDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>明日のタイムブロックを追加</DialogTitle>
-          </DialogHeader>
+      <TimeBlockDialog
+        open={timeBlockDialog.isOpen}
+        onOpenChange={(open) => !open && timeBlockDialog.closeDialog()}
+        title="明日のタイムブロックを追加"
+        taskName={timeBlockDialog.taskName}
+        startTime={timeBlockDialog.startTime}
+        endTime={timeBlockDialog.endTime}
+        taskId={timeBlockDialog.taskId}
+        milestoneId={timeBlockDialog.milestoneId}
+        taskInputMode={timeBlockDialog.taskInputMode}
+        selectedGoal={timeBlockDialog.selectedGoal}
+        onTaskNameChange={(v) => timeBlockDialog.setField('taskName', v)}
+        onStartTimeChange={(v) => timeBlockDialog.setField('startTime', v)}
+        onEndTimeChange={(v) => timeBlockDialog.setField('endTime', v)}
+        onTaskIdChange={(v) => timeBlockDialog.setField('taskId', v)}
+        onMilestoneIdChange={(v) => timeBlockDialog.setField('milestoneId', v)}
+        onTaskInputModeChange={(v) => timeBlockDialog.setField('taskInputMode', v)}
+        onSave={() => timeBlockDialog.save()}
+        showTaskInputModeToggle={false}
+        isEditMode={false}
+      />
 
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="blockTaskName">タスク名</Label>
-              <Input
-                id="blockTaskName"
-                value={blockTaskName}
-                onChange={(e) => setBlockTaskName(e.target.value)}
-                placeholder="例: ICA試験勉強"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label>時間</Label>
-              <div className="mt-1">
-                <TimeRangeInput
-                  startTime={blockStartTime}
-                  endTime={blockEndTime}
-                  onStartTimeChange={setBlockStartTime}
-                  onEndTimeChange={setBlockEndTime}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>マイルストーン（任意）</Label>
-              <Select
-                value={blockMilestoneId || ''}
-                onValueChange={(v) => setBlockMilestoneId(v || undefined)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="マイルストーンを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">なし</SelectItem>
-                  {goals
-                    .filter(g => !g.isArchived)
-                    .map(goal => {
-                      const goalMilestones = milestones.filter(
-                        m => m.goalId === goal.id && m.status === 'active'
-                      )
-                      if (goalMilestones.length === 0) return null
-                      return (
-                        <div key={goal.id}>
-                          <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: goal.color }}
-                            />
-                            {goal.name}
-                          </div>
-                          {goalMilestones.map(milestone => (
-                            <SelectItem key={milestone.id} value={milestone.id}>
-                              {milestone.name}
-                            </SelectItem>
-                          ))}
-                        </div>
-                      )
-                    })}
-                </SelectContent>
-              </Select>
-              {selectedGoal && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: selectedGoal.color }}
-                  />
-                  Goal: {selectedGoal.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label>または既存タスクから選択</Label>
-              <Select
-                value={blockTaskId || ''}
-                onValueChange={(v) => {
-                  const task = tasks.find((t) => t.id === v)
-                  if (task) {
-                    setBlockTaskId(v)
-                    setBlockTaskName(task.name)
-                    if (task.milestoneId) {
-                      setBlockMilestoneId(task.milestoneId)
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タスクを選択（任意）" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tasks.filter((t) => !t.completed && !t.parentTaskId).map((task) => (
-                    <SelectItem key={task.id} value={task.id}>
-                      {task.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTimeBlockDialogOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSaveTimeBlock} disabled={!blockTaskName}>
-              追加
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 実績編集ダイアログ */}
+      <TimeEntryForm
+        open={isEntryFormOpen}
+        onOpenChange={(open) => {
+          setIsEntryFormOpen(open)
+          if (!open) setEditingEntry(null)
+        }}
+        onSave={handleEntrySave}
+        initialData={editingEntry || undefined}
+        defaultDate={todayDate}
+      />
     </div>
   )
 }

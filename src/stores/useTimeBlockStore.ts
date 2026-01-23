@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { timeblocksApi, timeentriesApi } from '@/api/services/timeblocks'
+import { useSettingsStore } from './useSettingsStore'
 
 interface TimeBlockState {
   timeBlocks: TimeBlock[]
@@ -14,12 +15,12 @@ interface TimeBlockState {
   fetchTimeBlocksRange: (startDate: string, endDate: string) => Promise<void>
   fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
 
-  // タイムブロック操作
+  // タイムブロック操作 (timezone-aware: converts local time to UTC before sending)
   addTimeBlock: (block: Omit<TimeBlock, 'id'>) => Promise<void>
   updateTimeBlock: (id: string, updates: Partial<TimeBlock>) => Promise<void>
   deleteTimeBlock: (id: string) => Promise<void>
 
-  // 時間記録操作（API連携）
+  // 時間記録操作（API連携, timezone-aware）
   addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => Promise<void>
   updateTimeEntry: (id: string, updates: Partial<TimeEntry>) => Promise<void>
   deleteTimeEntry: (id: string) => Promise<void>
@@ -29,6 +30,14 @@ interface TimeBlockState {
   getTimeEntriesByDate: (date: string) => TimeEntry[]
   getTodayTimeBlocks: () => TimeBlock[]
   getTodayTimeEntries: () => TimeEntry[]
+
+  // ローカルにエントリを追加（API呼び出しなし、タイマー停止時に使用）
+  insertTimeEntryLocal: (entry: TimeEntry) => void
+}
+
+// Helper to get current timezone from settings store
+const getTimezone = (): string => {
+  return useSettingsStore.getState().timezone || 'Asia/Tokyo'
 }
 
 export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
@@ -70,7 +79,8 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
 
   addTimeBlock: async (block) => {
     try {
-      const newBlock = await timeblocksApi.create(block)
+      const timezone = getTimezone()
+      const newBlock = await timeblocksApi.createWithTimezone(block, timezone)
       set((state) => ({
         timeBlocks: [...state.timeBlocks, newBlock],
       }))
@@ -81,7 +91,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
 
   updateTimeBlock: async (id, updates) => {
     try {
-      const updatedBlock = await timeblocksApi.update(id, updates)
+      const timezone = getTimezone()
+      // Find current block to get its date for time-only updates
+      const currentBlock = get().timeBlocks.find((b) => b.id === id)
+      const currentDate = currentBlock?.date || updates.date || ''
+      const updatedBlock = await timeblocksApi.updateWithTimezone(id, updates, timezone, currentDate)
       set((state) => ({
         timeBlocks: state.timeBlocks.map((b) =>
           b.id === id ? updatedBlock : b
@@ -113,10 +127,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  // TimeEntry CRUD operations
+  // TimeEntry CRUD operations (timezone-aware)
   addTimeEntry: async (entry) => {
     try {
-      const newEntry = await timeentriesApi.create(entry)
+      const timezone = getTimezone()
+      const newEntry = await timeentriesApi.createWithTimezone(entry, timezone)
       set((state) => ({
         timeEntries: [...state.timeEntries, newEntry],
       }))
@@ -127,7 +142,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
 
   updateTimeEntry: async (id, updates) => {
     try {
-      const updatedEntry = await timeentriesApi.update(id, updates)
+      const timezone = getTimezone()
+      // Find current entry to get its date for time-only updates
+      const currentEntry = get().timeEntries.find((e) => e.id === id)
+      const currentDate = currentEntry?.date || updates.date || ''
+      const updatedEntry = await timeentriesApi.updateWithTimezone(id, updates, timezone, currentDate)
       set((state) => ({
         timeEntries: state.timeEntries.map((e) =>
           e.id === id ? updatedEntry : e
@@ -167,5 +186,12 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     // already contains only the data for the requested local date range.
     // Return all entries without additional filtering.
     return get().timeEntries
+  },
+
+  // Insert a time entry locally without API call (used when timer stops)
+  insertTimeEntryLocal: (entry) => {
+    set((state) => ({
+      timeEntries: [...state.timeEntries, entry],
+    }))
   },
 }))

@@ -62,18 +62,12 @@ export const authHandlers = [
 
   // GET /users/me/settings
   http.get(`${BASE_URL}/users/me/settings`, () => {
-    const hasKey = !!userSettings.clockifyApiKey
-    const isConfigured = hasKey && !!userSettings.workspaceId
     return HttpResponse.json({
       data: {
         userId: mockUser.id,
-        clockifyApiKey: hasKey ? '****' + userSettings.clockifyApiKey?.slice(-4) : '',
-        hasClockifyApiKey: hasKey,
-        workspaceId: userSettings.workspaceId || '',
-        workspaceName: userSettings.workspaceName || '',
         timezone: userSettings.timezone,
         theme: userSettings.theme,
-        isConfigured,
+        isConfigured: true,
         aiEnabled: false,
         aiConsentGiven: true,
       },
@@ -85,18 +79,12 @@ export const authHandlers = [
     const body = await request.json() as Partial<typeof userSettings>
     Object.assign(userSettings, body)
 
-    const hasKey = !!userSettings.clockifyApiKey
-    const isConfigured = hasKey && !!userSettings.workspaceId
     return HttpResponse.json({
       data: {
         userId: mockUser.id,
-        clockifyApiKey: hasKey ? '****' + userSettings.clockifyApiKey?.slice(-4) : '',
-        hasClockifyApiKey: hasKey,
-        workspaceId: userSettings.workspaceId || '',
-        workspaceName: userSettings.workspaceName || '',
         timezone: userSettings.timezone,
         theme: userSettings.theme,
-        isConfigured,
+        isConfigured: true,
         aiEnabled: false,
         aiConsentGiven: true,
       },

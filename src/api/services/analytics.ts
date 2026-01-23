@@ -59,6 +59,7 @@ interface GoalProgressResponse {
 export interface DailyStudyHour {
   date: string
   hours: number
+  day: string
   byGoal?: GoalSummary[]
 }
 
@@ -118,15 +119,16 @@ export const analyticsApi = {
     )
   },
 
-  // Helper to get daily study hours from trends
   async getDailyStudyHours(days: number = 7): Promise<DailyStudyHour[]> {
-    const trends = await this.getTrends('week', Math.ceil(days / 7))
-    // Transform trends data to daily format
-    // This is a simplified version - actual implementation would need more detailed API
-    return trends.data.map(d => ({
-      date: d.period,
-      hours: d.totalMinutes / 60,
-      byGoal: d.byGoal,
-    }))
+    const params = new URLSearchParams()
+    params.set('days', String(days))
+
+    const query = params.toString()
+    const endpoint = `/analytics/daily-study-hours?${query}`
+
+    return httpClient.get<DailyStudyHour[]>(
+      API_CONFIG.baseUrls.analytics,
+      endpoint
+    )
   },
 }

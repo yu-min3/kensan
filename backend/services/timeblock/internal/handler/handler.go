@@ -140,10 +140,6 @@ func (h *Handler) CreateTimeBlock(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
 			return
 		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
-			return
-		}
 		if errors.Is(err, service.ErrInvalidInput) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
@@ -177,10 +173,6 @@ func (h *Handler) UpdateTimeBlock(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrInvalidTime) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update time block")
@@ -268,17 +260,6 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 		filter.EndDate = &endDate
 	}
 
-	// Parse project_id filter
-	if projectID := r.URL.Query().Get("project_id"); projectID != "" {
-		filter.ProjectID = &projectID
-	}
-
-	// Parse goal_tag filter
-	if goalTag := r.URL.Query().Get("goal_tag"); goalTag != "" {
-		gt := timeblock.GoalTag(goalTag)
-		filter.GoalTag = &gt
-	}
-
 	// Parse timezone parameter for response conversion
 	timezone := r.URL.Query().Get("timezone")
 
@@ -286,10 +267,6 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidDate) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list time entries")
@@ -345,10 +322,6 @@ func (h *Handler) CreateTimeEntry(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
 			return
 		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
-			return
-		}
 		if errors.Is(err, service.ErrInvalidInput) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
@@ -382,10 +355,6 @@ func (h *Handler) UpdateTimeEntry(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrInvalidTime) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update time entry")
@@ -453,10 +422,6 @@ func (h *Handler) StartTimer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrTimerAlreadyRunning) {
 			middleware.Error(w, r, http.StatusConflict, "TIMER_ALREADY_RUNNING", "A timer is already running. Stop it first before starting a new one.")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal tag value")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidInput) {

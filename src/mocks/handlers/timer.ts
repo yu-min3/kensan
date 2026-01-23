@@ -6,14 +6,31 @@ const BASE_URL = 'http://localhost:8084/api/v1'
 
 interface RunningTimer {
   id: string
+  taskId?: string
   taskName: string
   milestoneId?: string
   milestoneName?: string
   goalId?: string
   goalName?: string
   goalColor?: string
-  description?: string
+  tagIds?: string[]
   startedAt: string
+}
+
+interface TimeEntry {
+  id: string
+  date: string
+  startTime: string
+  endTime: string
+  taskId?: string
+  taskName: string
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
+  description?: string
 }
 
 // In-memory timer state (only one timer can run at a time)
@@ -28,19 +45,21 @@ export const timerHandlers = [
   // POST /timer/start - Start a new timer
   http.post(`${BASE_URL}/timer/start`, async ({ request }) => {
     const body = await request.json() as {
+      taskId?: string
       taskName: string
       milestoneId?: string
+      milestoneName?: string
       goalId?: string
       goalName?: string
       goalColor?: string
-      description?: string
+      tagIds?: string[]
     }
 
     // Stop any existing timer (implicitly)
     currentTimer = null
 
     // Find milestone and goal info if milestoneId is provided
-    let milestoneName: string | undefined
+    let milestoneName = body.milestoneName
     let goalId = body.goalId
     let goalName = body.goalName
     let goalColor = body.goalColor
@@ -61,13 +80,14 @@ export const timerHandlers = [
     // Create new timer
     currentTimer = {
       id: generateId('timer'),
+      taskId: body.taskId,
       taskName: body.taskName,
       milestoneId: body.milestoneId,
       milestoneName,
       goalId,
       goalName,
       goalColor,
-      description: body.description,
+      tagIds: body.tagIds || [],
       startedAt: new Date().toISOString(),
     }
 
@@ -83,10 +103,34 @@ export const timerHandlers = [
       )
     }
 
-    // In a real implementation, this would create a time entry
-    // For now, we just stop the timer
+    const now = new Date()
+    const startedAt = new Date(currentTimer.startedAt)
+
+    // Create time entry from timer (stored in UTC)
+    const timeEntry: TimeEntry = {
+      id: generateId('entry'),
+      date: startedAt.toISOString().split('T')[0],
+      startTime: startedAt.toISOString().split('T')[1].slice(0, 5),
+      endTime: now.toISOString().split('T')[1].slice(0, 5),
+      taskId: currentTimer.taskId,
+      taskName: currentTimer.taskName,
+      milestoneId: currentTimer.milestoneId,
+      milestoneName: currentTimer.milestoneName,
+      goalId: currentTimer.goalId,
+      goalName: currentTimer.goalName,
+      goalColor: currentTimer.goalColor,
+      tagIds: currentTimer.tagIds,
+    }
+
+    // Calculate duration in seconds
+    const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+
+    // Clear the timer
     currentTimer = null
 
-    return new HttpResponse(null, { status: 204 })
+    return HttpResponse.json({
+      timeEntry,
+      duration,
+    })
   }),
 ]

@@ -2,107 +2,169 @@ package task
 
 import (
 	"time"
+
+	"github.com/kensan/backend/shared/types"
 )
 
-// GoalTag represents the type of goal for a project
-type GoalTag string
+// ============================================
+// Goal (目標)
+// ============================================
+
+// Goal represents a goal entity
+type Goal struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"userId"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	Color       string    `json:"color"`
+	IsArchived  bool      `json:"isArchived"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// CreateGoalInput represents the input for creating a goal
+type CreateGoalInput struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Color       string  `json:"color"`
+}
+
+// UpdateGoalInput represents the input for updating a goal
+type UpdateGoalInput struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Color       *string `json:"color,omitempty"`
+	IsArchived  *bool   `json:"isArchived,omitempty"`
+}
+
+// GoalFilter represents filters for listing goals
+type GoalFilter struct {
+	IsArchived *bool
+}
+
+// ============================================
+// Milestone (マイルストーン)
+// ============================================
+
+// MilestoneStatus represents the status of a milestone
+type MilestoneStatus string
 
 const (
-	GoalTagGK     GoalTag = "GK"
-	GoalTagOSS    GoalTag = "OSS"
-	GoalTagOutput GoalTag = "Output"
-	GoalTagOther  GoalTag = "Other"
+	MilestoneStatusActive    MilestoneStatus = "active"
+	MilestoneStatusCompleted MilestoneStatus = "completed"
+	MilestoneStatusArchived  MilestoneStatus = "archived"
 )
 
-// IsValid checks if the goal tag is valid
-func (g GoalTag) IsValid() bool {
-	switch g {
-	case GoalTagGK, GoalTagOSS, GoalTagOutput, GoalTagOther:
+// IsValid checks if the milestone status is valid
+func (s MilestoneStatus) IsValid() bool {
+	switch s {
+	case MilestoneStatusActive, MilestoneStatusCompleted, MilestoneStatusArchived:
 		return true
 	}
 	return false
 }
 
-// Project represents a project entity
-type Project struct {
-	ID         string    `json:"id"`
-	UserID     string    `json:"userId"`
-	ClockifyID *string   `json:"clockifyId,omitempty"`
-	Name       string    `json:"name"`
-	GoalTag    *GoalTag  `json:"goalTag,omitempty"`
-	Color      *string   `json:"color,omitempty"`
-	IsArchived bool      `json:"isArchived"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+// Milestone represents a milestone entity
+type Milestone struct {
+	ID          string          `json:"id"`
+	UserID      string          `json:"userId"`
+	GoalID      string          `json:"goalId"`
+	Name        string          `json:"name"`
+	Description *string         `json:"description,omitempty"`
+	TargetDate  types.DateOnly  `json:"targetDate,omitempty"`
+	Status      MilestoneStatus `json:"status"`
+	CreatedAt   time.Time       `json:"createdAt"`
+	UpdatedAt   time.Time       `json:"updatedAt"`
+}
+
+// CreateMilestoneInput represents the input for creating a milestone
+type CreateMilestoneInput struct {
+	GoalID      string         `json:"goalId"`
+	Name        string         `json:"name"`
+	Description *string        `json:"description,omitempty"`
+	TargetDate  types.DateOnly `json:"targetDate,omitempty"`
+}
+
+// UpdateMilestoneInput represents the input for updating a milestone
+type UpdateMilestoneInput struct {
+	GoalID      *string          `json:"goalId,omitempty"`
+	Name        *string          `json:"name,omitempty"`
+	Description *string          `json:"description,omitempty"`
+	TargetDate  *types.DateOnly  `json:"targetDate,omitempty"`
+	Status      *MilestoneStatus `json:"status,omitempty"`
+}
+
+// MilestoneFilter represents filters for listing milestones
+type MilestoneFilter struct {
+	GoalID *string
+	Status *MilestoneStatus
+}
+
+// ============================================
+// Tag (タグ)
+// ============================================
+
+// Tag represents a tag entity
+type Tag struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"userId"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// CreateTagInput represents the input for creating a tag
+type CreateTagInput struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// UpdateTagInput represents the input for updating a tag
+type UpdateTagInput struct {
+	Name  *string `json:"name,omitempty"`
+	Color *string `json:"color,omitempty"`
 }
 
 // Task represents a task entity
 type Task struct {
-	ID               string    `json:"id"`
-	UserID           string    `json:"userId"`
-	ProjectID        string    `json:"projectId"`
-	ClockifyID       *string   `json:"clockifyId,omitempty"`
-	ParentTaskID     *string   `json:"parentTaskId,omitempty"`
-	Name             string    `json:"name"`
-	GoalTag          *GoalTag  `json:"goalTag,omitempty"`
-	EstimatedMinutes *int      `json:"estimatedMinutes,omitempty"`
-	Completed        bool      `json:"completed"`
-	DueDate          *string   `json:"dueDate,omitempty"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
-}
-
-// CreateProjectInput represents the input for creating a project
-type CreateProjectInput struct {
-	Name       string   `json:"name"`
-	ClockifyID *string  `json:"clockifyId,omitempty"`
-	GoalTag    *GoalTag `json:"goalTag,omitempty"`
-	Color      *string  `json:"color,omitempty"`
-	IsArchived bool     `json:"isArchived"`
-}
-
-// UpdateProjectInput represents the input for updating a project
-type UpdateProjectInput struct {
-	Name       *string  `json:"name,omitempty"`
-	ClockifyID *string  `json:"clockifyId,omitempty"`
-	GoalTag    *GoalTag `json:"goalTag,omitempty"`
-	Color      *string  `json:"color,omitempty"`
-	IsArchived *bool    `json:"isArchived,omitempty"`
+	ID               string         `json:"id"`
+	UserID           string         `json:"userId"`
+	MilestoneID      *string        `json:"milestoneId,omitempty"`
+	ParentTaskID     *string        `json:"parentTaskId,omitempty"`
+	Name             string         `json:"name"`
+	TagIDs           []string       `json:"tagIds,omitempty"`
+	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
+	Completed        bool           `json:"completed"`
+	DueDate          types.DateOnly `json:"dueDate,omitempty"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 // CreateTaskInput represents the input for creating a task
 type CreateTaskInput struct {
-	ProjectID        string   `json:"projectId"`
-	ClockifyID       *string  `json:"clockifyId,omitempty"`
-	ParentTaskID     *string  `json:"parentTaskId,omitempty"`
-	Name             string   `json:"name"`
-	GoalTag          *GoalTag `json:"goalTag,omitempty"`
-	EstimatedMinutes *int     `json:"estimatedMinutes,omitempty"`
-	Completed        bool     `json:"completed"`
-	DueDate          *string  `json:"dueDate,omitempty"`
+	MilestoneID      *string        `json:"milestoneId,omitempty"`
+	ParentTaskID     *string        `json:"parentTaskId,omitempty"`
+	Name             string         `json:"name"`
+	TagIDs           []string       `json:"tagIds,omitempty"`
+	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
+	Completed        bool           `json:"completed"`
+	DueDate          types.DateOnly `json:"dueDate,omitempty"`
 }
 
 // UpdateTaskInput represents the input for updating a task
 type UpdateTaskInput struct {
-	ProjectID        *string  `json:"projectId,omitempty"`
-	ClockifyID       *string  `json:"clockifyId,omitempty"`
-	ParentTaskID     *string  `json:"parentTaskId,omitempty"`
-	Name             *string  `json:"name,omitempty"`
-	GoalTag          *GoalTag `json:"goalTag,omitempty"`
-	EstimatedMinutes *int     `json:"estimatedMinutes,omitempty"`
-	Completed        *bool    `json:"completed,omitempty"`
-	DueDate          *string  `json:"dueDate,omitempty"`
-}
-
-// ProjectFilter represents filters for listing projects
-type ProjectFilter struct {
-	IsArchived *bool
-	GoalTag    *GoalTag
+	MilestoneID      *string         `json:"milestoneId,omitempty"`
+	ParentTaskID     *string         `json:"parentTaskId,omitempty"`
+	Name             *string         `json:"name,omitempty"`
+	TagIDs           []string        `json:"tagIds,omitempty"`
+	EstimatedMinutes *int            `json:"estimatedMinutes,omitempty"`
+	Completed        *bool           `json:"completed,omitempty"`
+	DueDate          *types.DateOnly `json:"dueDate,omitempty"`
 }
 
 // TaskFilter represents filters for listing tasks
 type TaskFilter struct {
-	ProjectID    *string
+	MilestoneID  *string
 	Completed    *bool
 	ParentTaskID *string
 	HasParent    *bool // true = only subtasks, false = only root tasks, nil = all

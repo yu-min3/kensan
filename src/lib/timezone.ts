@@ -141,3 +141,41 @@ export function utcToLocalDateTime(
     time: `${localHours}:${localMinutes}`,
   }
 }
+
+/**
+ * Convert local date and time to UTC date and time
+ *
+ * @param localDate - Date string in YYYY-MM-DD format (user's local timezone)
+ * @param localTime - Time string in HH:mm format (user's local timezone)
+ * @param timezone - User's timezone (e.g., 'Asia/Tokyo')
+ * @returns Object with UTC date (YYYY-MM-DD) and time (HH:mm)
+ */
+export function localToUtcDateTime(
+  localDate: string,
+  localTime: string,
+  timezone: string
+): { date: string; time: string } {
+  const offset = getTimezoneOffset(timezone)
+
+  // Parse local date and time
+  const [year, month, day] = localDate.split('-').map(Number)
+  const timeParts = localTime.split(':').map(Number)
+  const hours = timeParts[0]
+  const minutes = timeParts[1]
+
+  // Create timestamp at local time, then subtract offset to get UTC
+  const localMs = Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
+  const utcMs = localMs - offset * 60 * 60 * 1000
+  const utcDate = new Date(utcMs)
+
+  const utcYear = utcDate.getUTCFullYear()
+  const utcMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
+  const utcDay = String(utcDate.getUTCDate()).padStart(2, '0')
+  const utcHours = String(utcDate.getUTCHours()).padStart(2, '0')
+  const utcMinutes = String(utcDate.getUTCMinutes()).padStart(2, '0')
+
+  return {
+    date: `${utcYear}-${utcMonth}-${utcDay}`,
+    time: `${utcHours}:${utcMinutes}`,
+  }
+}

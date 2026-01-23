@@ -14,6 +14,8 @@ interface TimeBlockTimelineProps {
   onBlockClick?: (block: TimeBlock) => void
   onBlockDelete?: (blockId: string) => void
   onBlockResize?: (blockId: string, startTime: string, endTime: string) => void
+  onEntryClick?: (entry: TimeEntry) => void
+  onEntryDelete?: (entryId: string) => void
 }
 
 type ResizeEdge = 'top' | 'bottom'
@@ -24,6 +26,14 @@ interface ResizeState {
   initialY: number
   initialStartTime: string
   initialEndTime: string
+}
+
+interface DragState {
+  blockId: string
+  initialY: number
+  initialStartTime: string
+  initialEndTime: string
+  duration: number // in minutes
 }
 
 function formatTime(time: string): string {
@@ -59,8 +69,11 @@ export function TimeBlockTimeline({
   onBlockClick,
   onBlockDelete,
   onBlockResize,
+  onEntryClick,
+  onEntryDelete,
 }: TimeBlockTimelineProps) {
   const [resizeState, setResizeState] = useState<ResizeState | null>(null)
+  const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewTime, setPreviewTime] = useState<{ startTime: string; endTime: string } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -136,6 +149,27 @@ export function TimeBlockTimeline({
     []
   )
 
+  // Handle drag start (for moving the entire block)
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent, block: TimeBlock) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const duration = getDurationMinutes(block.startTime, block.endTime)
+      setDragState({
+        blockId: block.id,
+        initialY: e.clientY,
+        initialStartTime: block.startTime,
+        initialEndTime: block.endTime,
+        duration,
+      })
+      setPreviewTime({
+        startTime: block.startTime,
+        endTime: block.endTime,
+      })
+    },
+    []
+  )
+
   // Handle resize move
   const handleResizeMove = useCallback(
     (e: MouseEvent) => {
@@ -164,6 +198,45 @@ export function TimeBlockTimeline({
     [resizeState, yToMinutes]
   )
 
+  // Handle drag move (for moving the entire block)
+  const handleDragMove = useCallback(
+    (e: MouseEvent) => {
+      if (!dragState) return
+
+      const newMinutes = yToMinutes(e.clientY)
+      const initialStartMinutes = getMinutesFromTime(dragState.initialStartTime)
+
+      // Calculate the offset from where we initially clicked
+      // We need to figure out where in the block we clicked and maintain that offset
+      const initialClickMinutes = yToMinutes(dragState.initialY)
+      const offsetFromStart = initialClickMinutes - initialStartMinutes
+
+      // New start time is the new mouse position minus the offset
+      let newStartMinutes = newMinutes - offsetFromStart
+      let newEndMinutes = newStartMinutes + dragState.duration
+
+      // Clamp to valid range
+      if (newStartMinutes < startHour * 60) {
+        newStartMinutes = startHour * 60
+        newEndMinutes = newStartMinutes + dragState.duration
+      }
+      if (newEndMinutes > endHour * 60) {
+        newEndMinutes = endHour * 60
+        newStartMinutes = newEndMinutes - dragState.duration
+      }
+
+      // Snap to 15-minute intervals
+      newStartMinutes = snapToInterval(newStartMinutes)
+      newEndMinutes = newStartMinutes + dragState.duration
+
+      setPreviewTime({
+        startTime: minutesToTimeString(newStartMinutes),
+        endTime: minutesToTimeString(newEndMinutes),
+      })
+    },
+    [dragState, yToMinutes, startHour, endHour]
+  )
+
   // Handle resize end
   const handleResizeEnd = useCallback(() => {
     if (resizeState && previewTime && onBlockResize) {
@@ -177,6 +250,20 @@ export function TimeBlockTimeline({
     setResizeState(null)
     setPreviewTime(null)
   }, [resizeState, previewTime, onBlockResize])
+
+  // Handle drag end
+  const handleDragEnd = useCallback(() => {
+    if (dragState && previewTime && onBlockResize) {
+      const hasChanged =
+        previewTime.startTime !== dragState.initialStartTime ||
+        previewTime.endTime !== dragState.initialEndTime
+      if (hasChanged) {
+        onBlockResize(dragState.blockId, previewTime.startTime, previewTime.endTime)
+      }
+    }
+    setDragState(null)
+    setPreviewTime(null)
+  }, [dragState, previewTime, onBlockResize])
 
   // Add global mouse event listeners when resizing
   useEffect(() => {
@@ -194,9 +281,25 @@ export function TimeBlockTimeline({
     }
   }, [resizeState, handleResizeMove, handleResizeEnd])
 
-  // Get display times for a block (use preview if resizing)
+  // Add global mouse event listeners when dragging
+  useEffect(() => {
+    if (dragState) {
+      window.addEventListener('mousemove', handleDragMove)
+      window.addEventListener('mouseup', handleDragEnd)
+      document.body.style.cursor = 'grab'
+      document.body.style.userSelect = 'none'
+      return () => {
+        window.removeEventListener('mousemove', handleDragMove)
+        window.removeEventListener('mouseup', handleDragEnd)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [dragState, handleDragMove, handleDragEnd])
+
+  // Get display times for a block (use preview if resizing or dragging)
   const getDisplayTimes = (block: TimeBlock) => {
-    if (resizeState?.blockId === block.id && previewTime) {
+    if ((resizeState?.blockId === block.id || dragState?.blockId === block.id) && previewTime) {
       return previewTime
     }
     return { startTime: block.startTime, endTime: block.endTime }
@@ -235,6 +338,8 @@ export function TimeBlockTimeline({
         {timeBlocks.map((block) => {
           const displayTimes = getDisplayTimes(block)
           const isResizing = resizeState?.blockId === block.id
+          const isDragging = dragState?.blockId === block.id
+          const isActive = isResizing || isDragging
 
           return (
             <div
@@ -242,8 +347,9 @@ export function TimeBlockTimeline({
               className={cn(
                 'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group border',
                 showComparison ? 'left-1 right-[52%]' : 'right-1',
-                onBlockClick && !isResizing && 'cursor-pointer hover:ring-2 hover:ring-primary/50',
-                isResizing && 'ring-2 ring-primary z-10'
+                onBlockResize && !isActive && 'cursor-grab',
+                isActive && 'ring-2 ring-primary z-10',
+                isDragging && 'cursor-grabbing'
               )}
               style={{
                 backgroundColor: block.isRoutine ? 'var(--timeblock-routine-bg)' : 'var(--timeblock-plan-bg)',
@@ -252,7 +358,12 @@ export function TimeBlockTimeline({
                 height: `${getHeight(displayTimes.startTime, displayTimes.endTime)}%`,
                 minHeight: '24px',
               }}
-              onClick={() => !isResizing && onBlockClick?.(block)}
+              onMouseDown={(e) => {
+                // Only start drag if clicking on the block itself (not on buttons or resize handles)
+                if (onBlockResize && e.target === e.currentTarget) {
+                  handleDragStart(e, block)
+                }
+              }}
             >
               {/* Top resize handle */}
               {onBlockResize && (
@@ -264,44 +375,59 @@ export function TimeBlockTimeline({
                 </div>
               )}
 
-              <div className="flex items-center gap-1">
-                {block.goalName && block.goalColor && (
-                  <GoalBadge name={block.goalName} color={block.goalColor} size="sm" />
+              {/* Draggable content area */}
+              <div
+                className={cn(
+                  'relative',
+                  onBlockResize && !isActive && 'cursor-grab active:cursor-grabbing'
                 )}
-                <span className="truncate font-medium flex-1">{block.taskName}</span>
-                {(onBlockClick || onBlockDelete) && !isResizing && (
-                  <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-                    {onBlockClick && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onBlockClick(block)
-                        }}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                    )}
-                    {onBlockDelete && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onBlockDelete(block.id)
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="text-muted-foreground">
-                {formatTime(displayTimes.startTime)} - {formatTime(displayTimes.endTime)}
+                onMouseDown={(e) => {
+                  if (onBlockResize) {
+                    handleDragStart(e, block)
+                  }
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  {block.goalName && block.goalColor && (
+                    <GoalBadge name={block.goalName} color={block.goalColor} size="sm" />
+                  )}
+                  <span className="truncate font-medium flex-1">{block.taskName}</span>
+                  {(onBlockClick || onBlockDelete) && !isActive && (
+                    <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
+                      {onBlockClick && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onBlockClick(block)
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {onBlockDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onBlockDelete(block.id)
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="text-muted-foreground">
+                  {formatTime(displayTimes.startTime)} - {formatTime(displayTimes.endTime)}
+                </div>
               </div>
 
               {/* Bottom resize handle */}
@@ -322,7 +448,7 @@ export function TimeBlockTimeline({
           timeEntries.map((entry) => (
             <div
               key={entry.id}
-              className="absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs border"
+              className="absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs border group"
               style={{
                 backgroundColor: 'var(--timeblock-actual-bg)',
                 borderColor: 'var(--timeblock-actual-border)',
@@ -331,11 +457,41 @@ export function TimeBlockTimeline({
                 minHeight: '24px',
               }}
             >
-              <div className="flex items-center gap-1 truncate">
+              <div className="flex items-center gap-1">
                 {entry.goalName && entry.goalColor && (
                   <GoalBadge name={entry.goalName} color={entry.goalColor} size="sm" />
                 )}
-                <span className="truncate font-medium">{entry.taskName}</span>
+                <span className="truncate font-medium flex-1">{entry.taskName}</span>
+                {(onEntryClick || onEntryDelete) && (
+                  <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
+                    {onEntryClick && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEntryClick(entry)
+                        }}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {onEntryDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEntryDelete(entry.id)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="text-muted-foreground">
                 {formatTime(entry.startTime)} - {formatTime(entry.endTime)}

@@ -1,25 +1,34 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import type { TimeEntry } from '@/types'
 
 export interface RunningTimer {
   id: string
+  taskId?: string
   taskName: string
   milestoneId?: string
   milestoneName?: string
   goalId?: string
   goalName?: string
   goalColor?: string
-  description?: string
+  tagIds?: string[]
   startedAt: string // ISO timestamp
 }
 
 export interface StartTimerInput {
+  taskId?: string
   taskName: string
   milestoneId?: string
+  milestoneName?: string
   goalId?: string
   goalName?: string
   goalColor?: string
-  description?: string
+  tagIds?: string[]
+}
+
+export interface StopTimerResult {
+  timeEntry: TimeEntry
+  duration: number // seconds
 }
 
 export const timerApi = {
@@ -38,8 +47,8 @@ export const timerApi = {
     )
   },
 
-  async stop(): Promise<void> {
-    return httpClient.post<void>(
+  async stop(): Promise<StopTimerResult> {
+    return httpClient.post<StopTimerResult>(
       API_CONFIG.baseUrls.timeblock,
       '/timer/stop'
     )

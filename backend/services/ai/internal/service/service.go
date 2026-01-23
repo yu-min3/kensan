@@ -223,16 +223,19 @@ func (s *Service) buildReviewPrompt(timeEntries []ai.TimeEntryData, learningReco
 	if len(learningRecords) > 0 {
 		sb.WriteString("## 学習記録\n")
 		for _, record := range learningRecords {
-			goalTagStr := ""
-			if record.GoalTag != "" {
-				goalTagStr = fmt.Sprintf(" [%s]", record.GoalTag)
+			tagStr := ""
+			if record.GoalName != "" {
+				tagStr = fmt.Sprintf(" [目標: %s]", record.GoalName)
+			}
+			if record.MilestoneName != "" {
+				tagStr += fmt.Sprintf(" [マイルストーン: %s]", record.MilestoneName)
 			}
 			// Truncate content if too long
 			content := record.Content
 			if len(content) > 500 {
 				content = content[:500] + "..."
 			}
-			sb.WriteString(fmt.Sprintf("### %s%s\n%s\n\n", record.Title, goalTagStr, content))
+			sb.WriteString(fmt.Sprintf("### %s%s\n%s\n\n", record.Title, tagStr, content))
 		}
 	}
 

@@ -10,14 +10,13 @@ import (
 )
 
 var (
-	ErrRecordNotFound    = errors.New("record not found")
-	ErrTitleRequired     = errors.New("title is required")
-	ErrContentRequired   = errors.New("content is required")
-	ErrFormatRequired    = errors.New("format is required")
-	ErrInvalidFormat     = errors.New("format must be markdown or drawio")
-	ErrInvalidGoalTag    = errors.New("goal tag must be GK, OSS, Output, or Other")
-	ErrQueryRequired     = errors.New("query is required for semantic search")
-	ErrUnauthorized      = errors.New("not authorized to access this record")
+	ErrRecordNotFound  = errors.New("record not found")
+	ErrTitleRequired   = errors.New("title is required")
+	ErrContentRequired = errors.New("content is required")
+	ErrFormatRequired  = errors.New("format is required")
+	ErrInvalidFormat   = errors.New("format must be markdown or drawio")
+	ErrQueryRequired   = errors.New("query is required for semantic search")
+	ErrUnauthorized    = errors.New("not authorized to access this record")
 )
 
 // Service handles learning record business logic
@@ -62,9 +61,12 @@ func (s *Service) Create(ctx context.Context, userID string, input *record.Creat
 		Title:               strings.TrimSpace(input.Title),
 		Content:             input.Content,
 		Format:              input.Format,
-		ProjectID:           input.ProjectID,
-		ProjectName:         input.ProjectName,
-		GoalTag:             input.GoalTag,
+		MilestoneID:         input.MilestoneID,
+		MilestoneName:       input.MilestoneName,
+		GoalID:              input.GoalID,
+		GoalName:            input.GoalName,
+		GoalColor:           input.GoalColor,
+		TagIDs:              input.TagIDs,
 		RelatedTimeEntryIDs: input.RelatedTimeEntryIDs,
 		FileURL:             input.FileURL,
 	}
@@ -104,17 +106,23 @@ func (s *Service) Update(ctx context.Context, userID, recordID string, input *re
 		}
 		rec.Format = *input.Format
 	}
-	if input.ProjectID != nil {
-		rec.ProjectID = input.ProjectID
+	if input.MilestoneID != nil {
+		rec.MilestoneID = input.MilestoneID
 	}
-	if input.ProjectName != nil {
-		rec.ProjectName = input.ProjectName
+	if input.MilestoneName != nil {
+		rec.MilestoneName = input.MilestoneName
 	}
-	if input.GoalTag != nil {
-		if !input.GoalTag.IsValid() {
-			return nil, ErrInvalidGoalTag
-		}
-		rec.GoalTag = input.GoalTag
+	if input.GoalID != nil {
+		rec.GoalID = input.GoalID
+	}
+	if input.GoalName != nil {
+		rec.GoalName = input.GoalName
+	}
+	if input.GoalColor != nil {
+		rec.GoalColor = input.GoalColor
+	}
+	if input.TagIDs != nil {
+		rec.TagIDs = input.TagIDs
 	}
 	if input.RelatedTimeEntryIDs != nil {
 		rec.RelatedTimeEntryIDs = input.RelatedTimeEntryIDs
@@ -175,9 +183,6 @@ func (s *Service) validateCreateInput(input *record.CreateRecordInput) error {
 	}
 	if !input.Format.IsValid() {
 		return ErrInvalidFormat
-	}
-	if input.GoalTag != nil && !input.GoalTag.IsValid() {
-		return ErrInvalidGoalTag
 	}
 	return nil
 }

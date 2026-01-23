@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MarkdownEditorPlaceholder } from '@/components/editor/MarkdownEditorPlaceholder'
-import { DrawioEditorPlaceholder } from '@/components/editor/DrawioEditorPlaceholder'
+import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
+import { DrawioEditor } from '@/components/editor/DrawioEditor'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import type { RecordFormat } from '@/types'
@@ -134,13 +134,16 @@ export function L02LearningRecordEdit() {
 
           {/* エディタ本体 */}
           {format === 'markdown' ? (
-            <MarkdownEditorPlaceholder
+            <MarkdownEditor
               value={content}
               onChange={setContent}
               placeholder="学習内容をMarkdownで記述..."
             />
           ) : (
-            <DrawioEditorPlaceholder />
+            <DrawioEditor
+              value={content}
+              onChange={setContent}
+            />
           )}
         </div>
 
@@ -179,7 +182,7 @@ export function L02LearningRecordEdit() {
                               {goal.name}
                             </div>
                             {goalMilestones.map(milestone => (
-                              <SelectItem key={milestone.id} value={milestone.id}>
+                              <SelectItem key={milestone.id} value={milestone.id} label={milestone.name}>
                                 {milestone.name}
                               </SelectItem>
                             ))}

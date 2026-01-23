@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { aiReviewReports as mockAIReviewReports, weeklySummary as mockWeeklySummary } from '@/mocks/data'
+import { aiApi } from '@/api/services/ai'
+import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import { formatDateRange } from '@/lib/dateFormat'
+import type { AIReviewReport } from '@/types'
 import {
   Bot,
   Sparkles,
@@ -16,13 +18,48 @@ import {
 
 export function A02AIReview() {
   const [isGenerating, setIsGenerating] = useState(false)
-  const [selectedReport, setSelectedReport] = useState(mockAIReviewReports[0])
+  const [aiReviewReports, setAiReviewReports] = useState<AIReviewReport[]>([])
+  const [selectedReport, setSelectedReport] = useState<AIReviewReport | null>(null)
+  const [isLoadingReports, setIsLoadingReports] = useState(true)
+  const { weeklySummary, fetchWeeklySummary } = useAnalyticsStore()
+
+  useEffect(() => {
+    fetchWeeklySummary()
+    loadReports()
+  }, [fetchWeeklySummary])
+
+  const loadReports = async () => {
+    setIsLoadingReports(true)
+    try {
+      const reports = await aiApi.listReviews()
+      setAiReviewReports(reports)
+      if (reports.length > 0) {
+        setSelectedReport(reports[0])
+      }
+    } catch (error) {
+      console.error('Failed to load AI review reports:', error)
+    } finally {
+      setIsLoadingReports(false)
+    }
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
-    // モック: 3秒後に完了
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    setIsGenerating(false)
+    try {
+      const today = new Date()
+      const weekStart = new Date(today)
+      weekStart.setDate(today.getDate() - 6)
+      const newReport = await aiApi.generateReview({
+        weekStart: weekStart.toISOString().split('T')[0],
+        weekEnd: today.toISOString().split('T')[0],
+      })
+      setAiReviewReports((prev) => [newReport, ...prev])
+      setSelectedReport(newReport)
+    } catch (error) {
+      console.error('Failed to generate AI review:', error)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const formatWeek = (start: string, end: string) => formatDateRange(start, end)
@@ -156,22 +193,32 @@ export function A02AIReview() {
               <CardTitle className="text-base">過去のレポート</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {mockAIReviewReports.map((report) => (
-                  <button
-                    key={report.id}
-                    onClick={() => setSelectedReport(report)}
-                    className={`w-full flex items-center justify-between p-2 rounded text-left text-sm transition-colors ${
-                      selectedReport?.id === report.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    <span>{formatWeek(report.weekStart, report.weekEnd)}</span>
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                ))}
-              </div>
+              {isLoadingReports ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : aiReviewReports.length === 0 ? (
+                <p className="text-center text-muted-foreground text-sm py-4">
+                  レポートがありません
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {aiReviewReports.map((report) => (
+                    <button
+                      key={report.id}
+                      onClick={() => setSelectedReport(report)}
+                      className={`w-full flex items-center justify-between p-2 rounded text-left text-sm transition-colors ${
+                        selectedReport?.id === report.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      <span>{formatWeek(report.weekStart, report.weekEnd)}</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -181,27 +228,35 @@ export function A02AIReview() {
               <CardTitle className="text-base">今週のサマリー</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">総学習時間</span>
-                <span className="font-medium">
-                  {Math.floor(mockWeeklySummary.totalMinutes / 60)}時間
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">完了タスク</span>
-                <span className="font-medium">{mockWeeklySummary.completedTasks}件</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">計画達成率</span>
-                <span className="font-medium">
-                  {Math.round(
-                    (mockWeeklySummary.plannedVsActual.actual /
-                      mockWeeklySummary.plannedVsActual.planned) *
-                      100
-                  )}
-                  %
-                </span>
-              </div>
+              {weeklySummary ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">総学習時間</span>
+                    <span className="font-medium">
+                      {Math.floor(weeklySummary.totalMinutes / 60)}時間
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">完了タスク</span>
+                    <span className="font-medium">{weeklySummary.completedTasks}件</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">計画達成率</span>
+                    <span className="font-medium">
+                      {Math.round(
+                        (weeklySummary.plannedVsActual.actual /
+                          weeklySummary.plannedVsActual.planned) *
+                          100
+                      )}
+                      %
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-center text-muted-foreground text-sm">
+                  読み込み中...
+                </p>
+              )}
             </CardContent>
           </Card>
 

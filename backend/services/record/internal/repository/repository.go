@@ -33,15 +33,15 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // GetByID retrieves a learning record by ID (with content)
 func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*record.LearningRecord, error) {
 	query := `
-		SELECT id, user_id, title, content, format, project_id, project_name,
-		       goal_tag, related_time_entry_ids, file_url, created_at, updated_at
+		SELECT id, user_id, title, content, format, milestone_id, milestone_name,
+		       goal_id, goal_name, goal_color, tag_ids, related_time_entry_ids, file_url, created_at, updated_at
 		FROM learning_records
 		WHERE id = $1
 	`
 
 	var rec record.LearningRecord
-	var projectID, projectName, goalTag, fileURL *string
-	var relatedTimeEntryIDs []string
+	var milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+	var tagIDs, relatedTimeEntryIDs []string
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&rec.ID,
@@ -49,9 +49,12 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*record.Le
 		&rec.Title,
 		&rec.Content,
 		&rec.Format,
-		&projectID,
-		&projectName,
-		&goalTag,
+		&milestoneID,
+		&milestoneName,
+		&goalID,
+		&goalName,
+		&goalColor,
+		&tagIDs,
 		&relatedTimeEntryIDs,
 		&fileURL,
 		&rec.CreatedAt,
@@ -64,12 +67,12 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*record.Le
 		return nil, err
 	}
 
-	rec.ProjectID = projectID
-	rec.ProjectName = projectName
-	if goalTag != nil {
-		g := record.GoalTag(*goalTag)
-		rec.GoalTag = &g
-	}
+	rec.MilestoneID = milestoneID
+	rec.MilestoneName = milestoneName
+	rec.GoalID = goalID
+	rec.GoalName = goalName
+	rec.GoalColor = goalColor
+	rec.TagIDs = tagIDs
 	rec.RelatedTimeEntryIDs = relatedTimeEntryIDs
 	rec.FileURL = fileURL
 
@@ -79,15 +82,15 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*record.Le
 // GetByIDAndUserID retrieves a learning record by ID and user ID (with content)
 func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*record.LearningRecord, error) {
 	query := `
-		SELECT id, user_id, title, content, format, project_id, project_name,
-		       goal_tag, related_time_entry_ids, file_url, created_at, updated_at
+		SELECT id, user_id, title, content, format, milestone_id, milestone_name,
+		       goal_id, goal_name, goal_color, tag_ids, related_time_entry_ids, file_url, created_at, updated_at
 		FROM learning_records
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var rec record.LearningRecord
-	var projectID, projectName, goalTag, fileURL *string
-	var relatedTimeEntryIDs []string
+	var milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+	var tagIDs, relatedTimeEntryIDs []string
 
 	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
 		&rec.ID,
@@ -95,9 +98,12 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 		&rec.Title,
 		&rec.Content,
 		&rec.Format,
-		&projectID,
-		&projectName,
-		&goalTag,
+		&milestoneID,
+		&milestoneName,
+		&goalID,
+		&goalName,
+		&goalColor,
+		&tagIDs,
 		&relatedTimeEntryIDs,
 		&fileURL,
 		&rec.CreatedAt,
@@ -110,12 +116,12 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 		return nil, err
 	}
 
-	rec.ProjectID = projectID
-	rec.ProjectName = projectName
-	if goalTag != nil {
-		g := record.GoalTag(*goalTag)
-		rec.GoalTag = &g
-	}
+	rec.MilestoneID = milestoneID
+	rec.MilestoneName = milestoneName
+	rec.GoalID = goalID
+	rec.GoalName = goalName
+	rec.GoalColor = goalColor
+	rec.TagIDs = tagIDs
 	rec.RelatedTimeEntryIDs = relatedTimeEntryIDs
 	rec.FileURL = fileURL
 
@@ -125,8 +131,8 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 // List retrieves learning records for a user with optional filters (without content)
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter *record.RecordFilter) ([]*record.LearningRecordListItem, error) {
 	query := `
-		SELECT id, user_id, title, format, project_id, project_name,
-		       goal_tag, related_time_entry_ids, file_url, created_at, updated_at
+		SELECT id, user_id, title, format, milestone_id, milestone_name,
+		       goal_id, goal_name, goal_color, tag_ids, related_time_entry_ids, file_url, created_at, updated_at
 		FROM learning_records
 		WHERE user_id = $1
 	`
@@ -135,14 +141,14 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 	argIndex := 2
 
 	if filter != nil {
-		if filter.ProjectID != nil {
-			query += fmt.Sprintf(` AND project_id = $%d`, argIndex)
-			args = append(args, *filter.ProjectID)
+		if filter.GoalID != nil {
+			query += fmt.Sprintf(` AND goal_id = $%d`, argIndex)
+			args = append(args, *filter.GoalID)
 			argIndex++
 		}
-		if filter.GoalTag != nil {
-			query += fmt.Sprintf(` AND goal_tag = $%d`, argIndex)
-			args = append(args, string(*filter.GoalTag))
+		if filter.MilestoneID != nil {
+			query += fmt.Sprintf(` AND milestone_id = $%d`, argIndex)
+			args = append(args, *filter.MilestoneID)
 			argIndex++
 		}
 		if filter.Format != nil {
@@ -170,17 +176,20 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 	var records []*record.LearningRecordListItem
 	for rows.Next() {
 		var rec record.LearningRecordListItem
-		var projectID, projectName, goalTag, fileURL *string
-		var relatedTimeEntryIDs []string
+		var milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+		var tagIDs, relatedTimeEntryIDs []string
 
 		err := rows.Scan(
 			&rec.ID,
 			&rec.UserID,
 			&rec.Title,
 			&rec.Format,
-			&projectID,
-			&projectName,
-			&goalTag,
+			&milestoneID,
+			&milestoneName,
+			&goalID,
+			&goalName,
+			&goalColor,
+			&tagIDs,
 			&relatedTimeEntryIDs,
 			&fileURL,
 			&rec.CreatedAt,
@@ -190,12 +199,12 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 			return nil, err
 		}
 
-		rec.ProjectID = projectID
-		rec.ProjectName = projectName
-		if goalTag != nil {
-			g := record.GoalTag(*goalTag)
-			rec.GoalTag = &g
-		}
+		rec.MilestoneID = milestoneID
+		rec.MilestoneName = milestoneName
+		rec.GoalID = goalID
+		rec.GoalName = goalName
+		rec.GoalColor = goalColor
+		rec.TagIDs = tagIDs
 		rec.RelatedTimeEntryIDs = relatedTimeEntryIDs
 		rec.FileURL = fileURL
 
@@ -222,17 +231,11 @@ func (r *PostgresRepository) Create(ctx context.Context, rec *record.LearningRec
 
 	query := `
 		INSERT INTO learning_records (
-			id, user_id, title, content, format, project_id, project_name,
-			goal_tag, related_time_entry_ids, file_url, created_at, updated_at
+			id, user_id, title, content, format, milestone_id, milestone_name,
+			goal_id, goal_name, goal_color, tag_ids, related_time_entry_ids, file_url, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
-
-	var goalTag *string
-	if rec.GoalTag != nil {
-		g := string(*rec.GoalTag)
-		goalTag = &g
-	}
 
 	_, err := r.pool.Exec(ctx, query,
 		rec.ID,
@@ -240,9 +243,12 @@ func (r *PostgresRepository) Create(ctx context.Context, rec *record.LearningRec
 		rec.Title,
 		rec.Content,
 		string(rec.Format),
-		rec.ProjectID,
-		rec.ProjectName,
-		goalTag,
+		rec.MilestoneID,
+		rec.MilestoneName,
+		rec.GoalID,
+		rec.GoalName,
+		rec.GoalColor,
+		rec.TagIDs,
 		rec.RelatedTimeEntryIDs,
 		rec.FileURL,
 		rec.CreatedAt,
@@ -257,25 +263,22 @@ func (r *PostgresRepository) Update(ctx context.Context, rec *record.LearningRec
 
 	query := `
 		UPDATE learning_records
-		SET title = $2, content = $3, format = $4, project_id = $5, project_name = $6,
-		    goal_tag = $7, related_time_entry_ids = $8, file_url = $9, updated_at = $10
+		SET title = $2, content = $3, format = $4, milestone_id = $5, milestone_name = $6,
+		    goal_id = $7, goal_name = $8, goal_color = $9, tag_ids = $10, related_time_entry_ids = $11, file_url = $12, updated_at = $13
 		WHERE id = $1
 	`
-
-	var goalTag *string
-	if rec.GoalTag != nil {
-		g := string(*rec.GoalTag)
-		goalTag = &g
-	}
 
 	result, err := r.pool.Exec(ctx, query,
 		rec.ID,
 		rec.Title,
 		rec.Content,
 		string(rec.Format),
-		rec.ProjectID,
-		rec.ProjectName,
-		goalTag,
+		rec.MilestoneID,
+		rec.MilestoneName,
+		rec.GoalID,
+		rec.GoalName,
+		rec.GoalColor,
+		rec.TagIDs,
 		rec.RelatedTimeEntryIDs,
 		rec.FileURL,
 		rec.UpdatedAt,
@@ -333,8 +336,8 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 	searchPattern := "%" + strings.ToLower(query) + "%"
 
 	sqlQuery := `
-		SELECT id, user_id, title, format, project_id, project_name,
-		       goal_tag, related_time_entry_ids, file_url, created_at, updated_at,
+		SELECT id, user_id, title, format, milestone_id, milestone_name,
+		       goal_id, goal_name, goal_color, tag_ids, related_time_entry_ids, file_url, created_at, updated_at,
 		       CASE
 		           WHEN LOWER(title) LIKE $2 THEN 1.0
 		           WHEN LOWER(content) LIKE $2 THEN 0.5
@@ -355,8 +358,8 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 	var results []*record.SemanticSearchResult
 	for rows.Next() {
 		var rec record.LearningRecordListItem
-		var projectID, projectName, goalTag, fileURL *string
-		var relatedTimeEntryIDs []string
+		var milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+		var tagIDs, relatedTimeEntryIDs []string
 		var score float64
 
 		err := rows.Scan(
@@ -364,9 +367,12 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 			&rec.UserID,
 			&rec.Title,
 			&rec.Format,
-			&projectID,
-			&projectName,
-			&goalTag,
+			&milestoneID,
+			&milestoneName,
+			&goalID,
+			&goalName,
+			&goalColor,
+			&tagIDs,
 			&relatedTimeEntryIDs,
 			&fileURL,
 			&rec.CreatedAt,
@@ -377,12 +383,12 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 			return nil, err
 		}
 
-		rec.ProjectID = projectID
-		rec.ProjectName = projectName
-		if goalTag != nil {
-			g := record.GoalTag(*goalTag)
-			rec.GoalTag = &g
-		}
+		rec.MilestoneID = milestoneID
+		rec.MilestoneName = milestoneName
+		rec.GoalID = goalID
+		rec.GoalName = goalName
+		rec.GoalColor = goalColor
+		rec.TagIDs = tagIDs
 		rec.RelatedTimeEntryIDs = relatedTimeEntryIDs
 		rec.FileURL = fileURL
 

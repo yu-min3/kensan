@@ -3,14 +3,11 @@ package repository
 import (
 	"context"
 
-	"github.com/kensan/backend/services/analytics/internal"
+	analytics "github.com/kensan/backend/services/analytics/internal"
 )
 
 // Repository defines the interface for analytics data access
 type Repository interface {
-	// GetTimeEntriesAggregated returns aggregated time entries for a date range
-	GetTimeEntriesAggregated(ctx context.Context, userID, startDate, endDate string) ([]TimeEntryAggregate, error)
-
 	// GetTimeBlocksAggregated returns aggregated time blocks (planned time) for a date range
 	GetTimeBlocksAggregated(ctx context.Context, userID, startDate, endDate string) (int, error)
 
@@ -20,18 +17,21 @@ type Repository interface {
 	// GetTotalMinutesByDateRange returns total minutes for a date range
 	GetTotalMinutesByDateRange(ctx context.Context, userID, startDate, endDate string) (int, error)
 
-	// GetMinutesByGoalTag returns minutes aggregated by goal tag for a date range
-	GetMinutesByGoalTag(ctx context.Context, userID, startDate, endDate string) (map[string]int, error)
-
-	// GetMinutesByGoalTagForCurrentWeek returns minutes for a specific goal tag in the current week
-	GetMinutesByGoalTagForCurrentWeek(ctx context.Context, userID string, goalTag analytics.GoalTag) (int, error)
-
-	// GetMinutesByProject returns minutes aggregated by project for a date range
-	GetMinutesByProject(ctx context.Context, userID, startDate, endDate string) (map[string]int, error)
-
 	// GetDailyBreakdown returns daily minutes for a date range
 	GetDailyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error)
 
 	// GetWeeklyBreakdown returns weekly minutes for a date range (for monthly summary)
 	GetWeeklyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error)
+
+	// GetMinutesByGoal returns minutes aggregated by goal for a date range
+	GetMinutesByGoal(ctx context.Context, userID, startDate, endDate string) ([]GoalWithMinutes, error)
+
+	// GetMinutesByMilestone returns minutes aggregated by milestone for a date range
+	GetMinutesByMilestone(ctx context.Context, userID, startDate, endDate string) ([]MilestoneWithMinutes, error)
+
+	// GetMinutesByTag returns minutes aggregated by tag for a date range
+	GetMinutesByTag(ctx context.Context, userID, startDate, endDate string) ([]TagWithMinutes, error)
+
+	// GetGoals returns all goals for a user
+	GetGoals(ctx context.Context, userID string) ([]analytics.GoalSummary, error)
 }

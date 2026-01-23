@@ -74,7 +74,7 @@ export function MilestoneDialog({ dialog, goals, onSave }: MilestoneDialogProps)
                 {goals
                   .filter(g => !g.isArchived)
                   .map((goal) => (
-                    <SelectItem key={goal.id} value={goal.id}>
+                    <SelectItem key={goal.id} value={goal.id} label={goal.name}>
                       <div className="flex items-center gap-2">
                         <span
                           className="w-2 h-2 rounded-full"

@@ -1,21 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { TimeRangeInput } from '@/components/ui/time-range-input'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
+import { TimeEntryList } from '@/components/common/TimeEntryList'
+import { TimeBlockDialog } from '@/components/common/TimeBlockDialog'
+import { StartTimerDialog } from '@/components/common/StartTimerDialog'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { useTaskStore } from '@/stores/useTaskStore'
 import { useRoutineStore } from '@/stores/useRoutineStore'
-import { weeklySummary as mockWeeklySummary } from '@/mocks/data'
-import { formatDateJa, formatDateIso, formatMinutes, formatTime } from '@/lib/dateFormat'
+import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
+import { useTimerStore } from '@/stores/useTimerStore'
+import { useTimeBlockDialog } from '@/hooks/useTimeBlockDialog'
+import { formatDateJa, formatDateIso, formatMinutes } from '@/lib/dateFormat'
 import {
   Sun,
   Plus,
@@ -29,161 +28,39 @@ import {
 
 export function M01Morning() {
   const { userName } = useSettingsStore()
-  const { getTodayTimeBlocks, getTodayTimeEntries, addTimeBlock, updateTimeBlock, deleteTimeBlock, addTimeEntry } = useTimeBlockStore()
-  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
+  const { getTodayTimeBlocks, getTodayTimeEntries, updateTimeBlock } = useTimeBlockStore()
   const { getTodayRoutines } = useRoutineStore()
+  const { weeklySummary, fetchWeeklySummary } = useAnalyticsStore()
+  const { currentTimer, elapsedSeconds, stopTimer, isLoading: isTimerLoading } = useTimerStore()
+
+  const todayDate = formatDateIso(new Date())
+
+  // TimeBlock Dialog Hook
+  const timeBlockDialog = useTimeBlockDialog({ defaultDate: todayDate })
+
+  // Timer Dialog State
+  const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false)
+
+  useEffect(() => {
+    fetchWeeklySummary()
+  }, [fetchWeeklySummary])
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
   const todayRoutines = getTodayRoutines()
   const today = formatDateJa(new Date())
-  const todayDate = formatDateIso(new Date())
 
-  // TimeBlock Dialog State
-  const [isTimeBlockDialogOpen, setIsTimeBlockDialogOpen] = useState(false)
-  const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
-  const [blockTaskName, setBlockTaskName] = useState('')
-  const [blockStartTime, setBlockStartTime] = useState('09:00')
-  const [blockEndTime, setBlockEndTime] = useState('10:00')
-  const [blockTaskId, setBlockTaskId] = useState<string | undefined>(undefined)
-  const [blockMilestoneId, setBlockMilestoneId] = useState<string | undefined>(undefined)
-
-  // Timer State
-  const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined)
-  const [timerTaskName, setTimerTaskName] = useState('')
-  const [timerMilestoneId, setTimerMilestoneId] = useState<string | undefined>(undefined)
-  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null)
-
-  // Get goal from selected milestone
-  const selectedMilestone = blockMilestoneId ? getMilestoneById(blockMilestoneId) : undefined
-  const selectedGoal = selectedMilestone ? getGoalById(selectedMilestone.goalId) : undefined
-
-  // Timer Dialog State
-  const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false)
-  const [selectedTimerTaskId, setSelectedTimerTaskId] = useState<string>('')
-
-  // TimeBlock Dialog Handlers
-  const openNewTimeBlockDialog = (taskId?: string, taskName?: string, milestoneId?: string) => {
-    setEditingBlockId(null)
-    setBlockTaskName(taskName || '')
-    setBlockTaskId(taskId)
-    setBlockMilestoneId(milestoneId)
-    // 現在時刻を開始時刻として設定
-    const now = new Date()
-    const startH = now.getHours().toString().padStart(2, '0')
-    const startM = Math.floor(now.getMinutes() / 15) * 15 // 15分単位に丸める
-    setBlockStartTime(`${startH}:${startM.toString().padStart(2, '0')}`)
-    // 1時間後を終了時刻として設定
-    const endH = (now.getHours() + 1).toString().padStart(2, '0')
-    setBlockEndTime(`${endH}:${startM.toString().padStart(2, '0')}`)
-    setIsTimeBlockDialogOpen(true)
+  // Timer handlers
+  const handleStopTimer = async () => {
+    await stopTimer()
   }
 
-  const openEditTimeBlockDialog = (block: typeof todayBlocks[0]) => {
-    setEditingBlockId(block.id)
-    setBlockTaskName(block.taskName)
-    setBlockTaskId(block.taskId)
-    setBlockMilestoneId(block.milestoneId)
-    // バックエンドは HH:mm:ss 形式で返すが、<input type="time"> と API は HH:mm を期待
-    setBlockStartTime(block.startTime.slice(0, 5))
-    setBlockEndTime(block.endTime.slice(0, 5))
-    setIsTimeBlockDialogOpen(true)
-  }
-
-  const handleSaveTimeBlock = async () => {
-    if (!blockTaskName || !blockStartTime || !blockEndTime) return
-
-    if (editingBlockId) {
-      await updateTimeBlock(editingBlockId, {
-        startTime: blockStartTime,
-        endTime: blockEndTime,
-        taskName: blockTaskName,
-        taskId: blockTaskId,
-        milestoneId: blockMilestoneId,
-        milestoneName: selectedMilestone?.name,
-        goalId: selectedGoal?.id,
-        goalName: selectedGoal?.name,
-        goalColor: selectedGoal?.color,
-      })
-    } else {
-      await addTimeBlock({
-        date: todayDate,
-        startTime: blockStartTime,
-        endTime: blockEndTime,
-        taskName: blockTaskName,
-        taskId: blockTaskId,
-        milestoneId: blockMilestoneId,
-        milestoneName: selectedMilestone?.name,
-        goalId: selectedGoal?.id,
-        goalName: selectedGoal?.name,
-        goalColor: selectedGoal?.color,
-        isRoutine: false,
-      })
-    }
-    setIsTimeBlockDialogOpen(false)
-  }
-
-  const handleDeleteTimeBlock = async (id: string) => {
-    if (window.confirm('このタイムブロックを削除しますか？')) {
-      await deleteTimeBlock(id)
-    }
-  }
-
-  // Timer Dialog Handlers
-  const openTimerDialog = () => {
-    setSelectedTimerTaskId('')
-    setIsTimerDialogOpen(true)
-  }
-
-  const handleConfirmStartTimer = () => {
-    if (!selectedTimerTaskId) return
-    const task = tasks.find((t) => t.id === selectedTimerTaskId)
-    if (task) {
-      handleStartTimer(task.id, task.name, task.milestoneId)
-    }
-    setIsTimerDialogOpen(false)
-  }
-
-  // Timer Handlers
-  const handleStartTimer = (taskId?: string, taskName?: string, milestoneId?: string) => {
-    setIsTimerRunning(true)
-    setTimerTaskId(taskId)
-    setTimerTaskName(taskName || '')
-    setTimerMilestoneId(milestoneId)
-    setTimerStartTime(new Date())
-  }
-
-  const handleStopTimer = () => {
-    if (timerStartTime) {
-      // TimeEntry（実績）として記録
-      const endTime = new Date()
-      const startH = timerStartTime.getHours().toString().padStart(2, '0')
-      const startM = timerStartTime.getMinutes().toString().padStart(2, '0')
-      const endH = endTime.getHours().toString().padStart(2, '0')
-      const endM = endTime.getMinutes().toString().padStart(2, '0')
-
-      const timerMilestone = timerMilestoneId ? getMilestoneById(timerMilestoneId) : undefined
-      const timerGoal = timerMilestone ? getGoalById(timerMilestone.goalId) : undefined
-
-      addTimeEntry({
-        date: todayDate,
-        startTime: `${startH}:${startM}`,
-        endTime: `${endH}:${endM}`,
-        taskId: timerTaskId,
-        taskName: timerTaskName,
-        milestoneId: timerMilestoneId,
-        milestoneName: timerMilestone?.name,
-        goalId: timerGoal?.id,
-        goalName: timerGoal?.name,
-        goalColor: timerGoal?.color,
-      })
-    }
-    setIsTimerRunning(false)
-    setTimerTaskId(undefined)
-    setTimerTaskName('')
-    setTimerMilestoneId(undefined)
-    setTimerStartTime(null)
+  // Format elapsed time for display
+  const formatElapsedTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    return [hours, minutes, secs].map(v => v.toString().padStart(2, '0')).join(':')
   }
 
   // 未スケジュールのタスク - 一時的に非表示（将来復活予定）
@@ -224,7 +101,7 @@ export function M01Morning() {
                 <Clock className="h-5 w-5" />
                 今日のタイムブロック
               </CardTitle>
-              <Button size="sm" className="gap-1" onClick={() => openNewTimeBlockDialog()}>
+              <Button size="sm" className="gap-1" onClick={() => timeBlockDialog.openDialog()}>
                 <Plus className="h-4 w-4" />
                 追加
               </Button>
@@ -246,14 +123,22 @@ export function M01Morning() {
                 showComparison={true}
                 startHour={8}
                 endHour={19}
-                onBlockClick={openEditTimeBlockDialog}
-                onBlockDelete={handleDeleteTimeBlock}
+                onBlockClick={timeBlockDialog.openEditDialog}
+                onBlockDelete={timeBlockDialog.deleteBlock}
                 onBlockResize={(blockId, startTime, endTime) => {
                   updateTimeBlock(blockId, { startTime, endTime })
                 }}
               />
             </CardContent>
           </Card>
+
+          {/* 今日の実績 */}
+          <TimeEntryList
+            entries={todayEntries}
+            title="今日の実績"
+            showAddButton={true}
+            defaultDate={todayDate}
+          />
 
           {/* 未スケジュールのタスク - 一時的に非表示（将来復活予定） */}
           {/* <Card>
@@ -354,7 +239,7 @@ export function M01Morning() {
               <CardTitle className="text-base">今週の進捗</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockWeeklySummary.byGoal.slice(0, 3).map((goal) => (
+              {weeklySummary?.byGoal.slice(0, 3).map((goal) => (
                 <div key={goal.id}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -370,18 +255,32 @@ export function M01Morning() {
                   />
                 </div>
               ))}
+              {!weeklySummary && (
+                <p className="text-center text-muted-foreground text-sm py-4">
+                  読み込み中...
+                </p>
+              )}
             </CardContent>
           </Card>
 
           {/* アクションボタン */}
-          {isTimerRunning ? (
+          {currentTimer ? (
             <div className="space-y-2">
-              <div className="p-3 rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-700">
-                <p className="text-sm font-medium text-sky-800 dark:text-sky-200">
-                  作業中: {timerTaskName}
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                {currentTimer.goalName && currentTimer.goalColor && (
+                  <div className="mb-2">
+                    <GoalBadge
+                      name={currentTimer.goalName}
+                      color={currentTimer.goalColor}
+                      size="sm"
+                    />
+                  </div>
+                )}
+                <p className="text-sm font-medium">
+                  作業中: {currentTimer.taskName}
                 </p>
-                <p className="text-xs text-sky-600 dark:text-sky-400">
-                  開始: {timerStartTime ? formatTime(timerStartTime) : ''}
+                <p className="text-lg font-mono font-semibold text-primary mt-1">
+                  {formatElapsedTime(elapsedSeconds)}
                 </p>
               </div>
               <Button
@@ -389,192 +288,54 @@ export function M01Morning() {
                 className="w-full gap-2"
                 size="lg"
                 onClick={handleStopTimer}
+                disabled={isTimerLoading}
               >
                 <Square className="h-5 w-5" />
                 タイマー停止
               </Button>
             </div>
           ) : (
-            <Button
-              className="w-full gap-2"
-              size="lg"
-              onClick={openTimerDialog}
-            >
-              <Play className="h-5 w-5" />
-              タイマー開始
-            </Button>
+            <>
+              <Button
+                className="w-full gap-2"
+                size="lg"
+                onClick={() => setIsTimerDialogOpen(true)}
+                disabled={isTimerLoading}
+              >
+                <Play className="h-5 w-5" />
+                タイマー開始
+              </Button>
+              <StartTimerDialog
+                open={isTimerDialogOpen}
+                onOpenChange={setIsTimerDialogOpen}
+              />
+            </>
           )}
         </div>
       </div>
 
       {/* タイムブロック追加/編集ダイアログ */}
-      <Dialog open={isTimeBlockDialogOpen} onOpenChange={setIsTimeBlockDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingBlockId ? 'タイムブロックを編集' : 'タイムブロックを追加'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="blockTaskName">タスク名</Label>
-              <Input
-                id="blockTaskName"
-                value={blockTaskName}
-                onChange={(e) => setBlockTaskName(e.target.value)}
-                placeholder="例: ICA試験勉強"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label>時間</Label>
-              <div className="mt-1">
-                <TimeRangeInput
-                  startTime={blockStartTime}
-                  endTime={blockEndTime}
-                  onStartTimeChange={setBlockStartTime}
-                  onEndTimeChange={setBlockEndTime}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>マイルストーン（任意）</Label>
-              <Select
-                value={blockMilestoneId || ''}
-                onValueChange={(v) => setBlockMilestoneId(v || undefined)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="マイルストーンを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">なし</SelectItem>
-                  {goals
-                    .filter(g => !g.isArchived)
-                    .map(goal => {
-                      const goalMilestones = milestones.filter(
-                        m => m.goalId === goal.id && m.status === 'active'
-                      )
-                      if (goalMilestones.length === 0) return null
-                      return (
-                        <div key={goal.id}>
-                          <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: goal.color }}
-                            />
-                            {goal.name}
-                          </div>
-                          {goalMilestones.map(milestone => (
-                            <SelectItem key={milestone.id} value={milestone.id}>
-                              {milestone.name}
-                            </SelectItem>
-                          ))}
-                        </div>
-                      )
-                    })}
-                </SelectContent>
-              </Select>
-              {selectedGoal && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: selectedGoal.color }}
-                  />
-                  Goal: {selectedGoal.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label>または既存タスクから選択</Label>
-              <Select
-                value={blockTaskId || ''}
-                onValueChange={(v) => {
-                  const task = tasks.find((t) => t.id === v)
-                  if (task) {
-                    setBlockTaskId(v)
-                    setBlockTaskName(task.name)
-                    if (task.milestoneId) {
-                      setBlockMilestoneId(task.milestoneId)
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タスクを選択（任意）" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tasks.filter((t) => !t.completed && !t.parentTaskId).map((task) => (
-                    <SelectItem key={task.id} value={task.id}>
-                      {task.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTimeBlockDialogOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSaveTimeBlock} disabled={!blockTaskName}>
-              {editingBlockId ? '保存' : '追加'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* タイマー開始ダイアログ */}
-      <Dialog open={isTimerDialogOpen} onOpenChange={setIsTimerDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>タイマーを開始</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>作業するタスクを選択</Label>
-              <Select value={selectedTimerTaskId} onValueChange={setSelectedTimerTaskId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="タスクを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tasks.filter((t) => !t.completed && !t.parentTaskId).map((task) => {
-                    const milestone = task.milestoneId ? getMilestoneById(task.milestoneId) : undefined
-                    const goal = milestone ? getGoalById(milestone.goalId) : undefined
-                    return (
-                      <SelectItem key={task.id} value={task.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{task.name}</span>
-                          {goal && (
-                            <span className="text-xs text-muted-foreground">
-                              ({goal.name})
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTimerDialogOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleConfirmStartTimer} disabled={!selectedTimerTaskId}>
-              <Play className="h-4 w-4 mr-2" />
-              開始
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TimeBlockDialog
+        open={timeBlockDialog.isOpen}
+        onOpenChange={(open) => !open && timeBlockDialog.closeDialog()}
+        title={timeBlockDialog.editingBlockId ? 'タイムブロックを編集' : 'タイムブロックを追加'}
+        taskName={timeBlockDialog.taskName}
+        startTime={timeBlockDialog.startTime}
+        endTime={timeBlockDialog.endTime}
+        taskId={timeBlockDialog.taskId}
+        milestoneId={timeBlockDialog.milestoneId}
+        taskInputMode={timeBlockDialog.taskInputMode}
+        selectedGoal={timeBlockDialog.selectedGoal}
+        onTaskNameChange={(v) => timeBlockDialog.setField('taskName', v)}
+        onStartTimeChange={(v) => timeBlockDialog.setField('startTime', v)}
+        onEndTimeChange={(v) => timeBlockDialog.setField('endTime', v)}
+        onTaskIdChange={(v) => timeBlockDialog.setField('taskId', v)}
+        onMilestoneIdChange={(v) => timeBlockDialog.setField('milestoneId', v)}
+        onTaskInputModeChange={(v) => timeBlockDialog.setField('taskInputMode', v)}
+        onSave={() => timeBlockDialog.save()}
+        showTaskInputModeToggle={true}
+        isEditMode={!!timeBlockDialog.editingBlockId}
+      />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { GoalBadge } from '@/components/common/GoalBadge'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
-import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
+import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import { formatDateJa, formatDurationShort, formatMonthDay } from '@/lib/dateFormat'
 import {
   Sun,
@@ -31,6 +32,11 @@ export function S02Dashboard() {
   const { userName } = useSettingsStore()
   const { getTodayTimeBlocks, getTodayTimeEntries } = useTimeBlockStore()
   const { items: records } = useLearningRecordStore()
+  const { weeklySummary, dailyStudyHours, fetchDashboardData } = useAnalyticsStore()
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
 
   const todayBlocks = getTodayTimeBlocks()
   const todayEntries = getTodayTimeEntries()
@@ -113,7 +119,7 @@ export function S02Dashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">今週の進捗</p>
                 <p className="text-2xl font-bold">
-                  {Math.round((mockWeeklySummary.totalMinutes / (40 * 60)) * 100)}%
+                  {weeklySummary ? Math.round((weeklySummary.totalMinutes / (40 * 60)) * 100) : 0}%
                 </p>
               </div>
             </div>
@@ -196,7 +202,7 @@ export function S02Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={mockDailyStudyHours}>
+              <BarChart data={dailyStudyHours}>
                 <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis fontSize={12} tickLine={false} axisLine={false} unit="h" />
                 <Tooltip
@@ -218,7 +224,7 @@ export function S02Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {mockWeeklySummary.byGoal.map((goal) => (
+            {weeklySummary?.byGoal.map((goal) => (
               <div key={goal.id}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">

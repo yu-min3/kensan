@@ -12,19 +12,15 @@ import { TimerWidget } from '@/components/common/TimerWidget'
 import { KensanLogo } from '@/components/common/KensanLogo'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
+import { useTheme } from '@/hooks/useTheme'
 
 export function Header() {
   const navigate = useNavigate()
   const { logout, user } = useAuthStore()
-  const { userName, theme, setTheme } = useSettingsStore()
+  const { userName } = useSettingsStore()
+  const { theme, resolvedTheme, toggleTheme } = useTheme()
 
   const displayName = user?.name || userName
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    document.documentElement.classList.toggle('dark', newTheme === 'dark')
-  }
 
   const handleLogout = () => {
     logout()
@@ -45,8 +41,8 @@ export function Header() {
 
         <div className="h-6 w-px bg-border mx-1" />
 
-        <Button variant="ghost" size="icon" onClick={toggleTheme}>
-          {theme === 'dark' ? (
+        <Button variant="ghost" size="icon" onClick={toggleTheme} title={`テーマ: ${theme}`}>
+          {resolvedTheme === 'dark' ? (
             <Sun className="h-5 w-5" />
           ) : (
             <Moon className="h-5 w-5" />

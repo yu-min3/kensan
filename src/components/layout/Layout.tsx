@@ -2,8 +2,12 @@ import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { FloatingMemoButton } from '@/components/common/FloatingMemoButton'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function Layout() {
+  // Update document title based on timer state
+  useDocumentTitle()
+
   return (
     <div className="h-screen flex flex-col">
       <Header />

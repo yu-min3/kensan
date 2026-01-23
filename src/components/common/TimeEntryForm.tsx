@@ -71,8 +71,9 @@ export function TimeEntryForm({
       if (initialData) {
         setTaskName(initialData.taskName)
         setDate(initialData.date)
-        setStartTime(initialData.startTime)
-        setEndTime(initialData.endTime)
+        // Normalize time to HH:mm format (backend may return HH:mm:ss)
+        setStartTime(initialData.startTime.slice(0, 5))
+        setEndTime(initialData.endTime.slice(0, 5))
         setMilestoneId(initialData.milestoneId)
         setDescription(initialData.description || '')
       } else {
@@ -209,7 +210,7 @@ export function TimeEntryForm({
                           {goal.name}
                         </div>
                         {goalMilestones.map(milestone => (
-                          <SelectItem key={milestone.id} value={milestone.id}>
+                          <SelectItem key={milestone.id} value={milestone.id} label={milestone.name}>
                             {milestone.name}
                           </SelectItem>
                         ))}

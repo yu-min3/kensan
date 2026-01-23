@@ -21,25 +21,6 @@ func (f RecordFormat) IsValid() bool {
 	return false
 }
 
-// GoalTag represents the type of goal for a learning record
-type GoalTag string
-
-const (
-	GoalTagGK     GoalTag = "GK"
-	GoalTagOSS    GoalTag = "OSS"
-	GoalTagOutput GoalTag = "Output"
-	GoalTagOther  GoalTag = "Other"
-)
-
-// IsValid checks if the goal tag is valid
-func (g GoalTag) IsValid() bool {
-	switch g {
-	case GoalTagGK, GoalTagOSS, GoalTagOutput, GoalTagOther:
-		return true
-	}
-	return false
-}
-
 // LearningRecord represents a learning record entity
 type LearningRecord struct {
 	ID                  string       `json:"id"`
@@ -47,9 +28,12 @@ type LearningRecord struct {
 	Title               string       `json:"title"`
 	Content             string       `json:"content,omitempty"` // Markdown or drawio XML
 	Format              RecordFormat `json:"format"`
-	ProjectID           *string      `json:"projectId,omitempty"`
-	ProjectName         *string      `json:"projectName,omitempty"`
-	GoalTag             *GoalTag     `json:"goalTag,omitempty"`
+	MilestoneID         *string      `json:"milestoneId,omitempty"`
+	MilestoneName       *string      `json:"milestoneName,omitempty"`
+	GoalID              *string      `json:"goalId,omitempty"`
+	GoalName            *string      `json:"goalName,omitempty"`
+	GoalColor           *string      `json:"goalColor,omitempty"`
+	TagIDs              []string     `json:"tagIds,omitempty"`
 	RelatedTimeEntryIDs []string     `json:"relatedTimeEntryIds,omitempty"`
 	FileURL             *string      `json:"fileUrl,omitempty"` // MinIO file URL (future use)
 	CreatedAt           time.Time    `json:"createdAt"`
@@ -62,9 +46,12 @@ type LearningRecordListItem struct {
 	UserID              string       `json:"userId"`
 	Title               string       `json:"title"`
 	Format              RecordFormat `json:"format"`
-	ProjectID           *string      `json:"projectId,omitempty"`
-	ProjectName         *string      `json:"projectName,omitempty"`
-	GoalTag             *GoalTag     `json:"goalTag,omitempty"`
+	MilestoneID         *string      `json:"milestoneId,omitempty"`
+	MilestoneName       *string      `json:"milestoneName,omitempty"`
+	GoalID              *string      `json:"goalId,omitempty"`
+	GoalName            *string      `json:"goalName,omitempty"`
+	GoalColor           *string      `json:"goalColor,omitempty"`
+	TagIDs              []string     `json:"tagIds,omitempty"`
 	RelatedTimeEntryIDs []string     `json:"relatedTimeEntryIds,omitempty"`
 	FileURL             *string      `json:"fileUrl,omitempty"`
 	CreatedAt           time.Time    `json:"createdAt"`
@@ -78,9 +65,12 @@ func (r *LearningRecord) ToListItem() *LearningRecordListItem {
 		UserID:              r.UserID,
 		Title:               r.Title,
 		Format:              r.Format,
-		ProjectID:           r.ProjectID,
-		ProjectName:         r.ProjectName,
-		GoalTag:             r.GoalTag,
+		MilestoneID:         r.MilestoneID,
+		MilestoneName:       r.MilestoneName,
+		GoalID:              r.GoalID,
+		GoalName:            r.GoalName,
+		GoalColor:           r.GoalColor,
+		TagIDs:              r.TagIDs,
 		RelatedTimeEntryIDs: r.RelatedTimeEntryIDs,
 		FileURL:             r.FileURL,
 		CreatedAt:           r.CreatedAt,
@@ -93,9 +83,12 @@ type CreateRecordInput struct {
 	Title               string       `json:"title"`
 	Content             string       `json:"content"`
 	Format              RecordFormat `json:"format"`
-	ProjectID           *string      `json:"projectId,omitempty"`
-	ProjectName         *string      `json:"projectName,omitempty"`
-	GoalTag             *GoalTag     `json:"goalTag,omitempty"`
+	MilestoneID         *string      `json:"milestoneId,omitempty"`
+	MilestoneName       *string      `json:"milestoneName,omitempty"`
+	GoalID              *string      `json:"goalId,omitempty"`
+	GoalName            *string      `json:"goalName,omitempty"`
+	GoalColor           *string      `json:"goalColor,omitempty"`
+	TagIDs              []string     `json:"tagIds,omitempty"`
 	RelatedTimeEntryIDs []string     `json:"relatedTimeEntryIds,omitempty"`
 	FileURL             *string      `json:"fileUrl,omitempty"`
 }
@@ -105,19 +98,22 @@ type UpdateRecordInput struct {
 	Title               *string       `json:"title,omitempty"`
 	Content             *string       `json:"content,omitempty"`
 	Format              *RecordFormat `json:"format,omitempty"`
-	ProjectID           *string       `json:"projectId,omitempty"`
-	ProjectName         *string       `json:"projectName,omitempty"`
-	GoalTag             *GoalTag      `json:"goalTag,omitempty"`
+	MilestoneID         *string       `json:"milestoneId,omitempty"`
+	MilestoneName       *string       `json:"milestoneName,omitempty"`
+	GoalID              *string       `json:"goalId,omitempty"`
+	GoalName            *string       `json:"goalName,omitempty"`
+	GoalColor           *string       `json:"goalColor,omitempty"`
+	TagIDs              []string      `json:"tagIds,omitempty"`
 	RelatedTimeEntryIDs []string      `json:"relatedTimeEntryIds,omitempty"`
 	FileURL             *string       `json:"fileUrl,omitempty"`
 }
 
 // RecordFilter represents filters for listing learning records
 type RecordFilter struct {
-	ProjectID *string
-	GoalTag   *GoalTag
-	Format    *RecordFormat
-	Query     *string // For full-text search on title and content
+	GoalID      *string       // Filter by goal
+	MilestoneID *string       // Filter by milestone
+	Format      *RecordFormat // Filter by format
+	Query       *string       // For full-text search on title and content
 }
 
 // SemanticSearchInput represents the input for semantic search

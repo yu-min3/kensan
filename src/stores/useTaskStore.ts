@@ -33,6 +33,9 @@ interface TaskState {
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   toggleTaskComplete: (id: string) => Promise<void>
+  reorderTasks: (taskIds: string[]) => Promise<void>
+  bulkDeleteTasks: (taskIds: string[]) => Promise<void>
+  bulkCompleteTasks: (taskIds: string[], completed: boolean) => Promise<void>
 
   // 取得（同期）
   getGoalById: (id: string) => Goal | undefined
@@ -211,6 +214,46 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const updatedTask = await tasksApi.toggleComplete(id)
       set((state) => ({
         tasks: state.tasks.map((t) => (t.id === id ? updatedTask : t)),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  reorderTasks: async (taskIds) => {
+    try {
+      const updatedTasks = await tasksApi.reorder(taskIds)
+      set((state) => ({
+        tasks: state.tasks.map((t) => {
+          const updated = updatedTasks.find((u) => u.id === t.id)
+          return updated || t
+        }),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  bulkDeleteTasks: async (taskIds) => {
+    try {
+      await tasksApi.bulkDelete(taskIds)
+      const idsToDelete = new Set(taskIds)
+      set((state) => ({
+        tasks: state.tasks.filter((t) => !idsToDelete.has(t.id) && !idsToDelete.has(t.parentTaskId || '')),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  bulkCompleteTasks: async (taskIds, completed) => {
+    try {
+      const updatedTasks = await tasksApi.bulkComplete(taskIds, completed)
+      set((state) => ({
+        tasks: state.tasks.map((t) => {
+          const updated = updatedTasks.find((u) => u.id === t.id)
+          return updated || t
+        }),
       }))
     } catch (error) {
       set({ error: (error as Error).message })

@@ -3,6 +3,10 @@ node_modules/
 
 # Build outputs
 dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
 
 # Environment files
 .env
@@ -12,9 +16,12 @@ dist/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Claude
 .claude/
@@ -22,6 +29,17 @@ CLAUDE.md
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cache
+.cache/
+.npm/
+.eslintcache
+
+# Test
+coverage/
 
 # Backend binaries (keep Dockerfiles)
 backend/bin/
@@ -29,5 +47,19 @@ backend/*.exe
 backend/*-service
 !backend/cmd/
 
+# Go
+backend/tmp/
+backend/vendor/
+
 # mydocs
 mydocs/*
+
+# kensan-ai Python
+kensan-ai/.venv/
+kensan-ai/__pycache__/
+kensan-ai/**/__pycache__/
+kensan-ai/*.pyc
+kensan-ai/.pytest_cache/
+kensan-ai/.ruff_cache/
+kensan-ai/.mypy_cache/
+kensan-ai/*.egg-info/

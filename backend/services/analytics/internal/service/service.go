@@ -10,12 +10,11 @@ import (
 )
 
 var (
-	ErrInvalidWeekStart  = errors.New("invalid week start date")
-	ErrInvalidMonth      = errors.New("invalid month")
-	ErrInvalidYear       = errors.New("invalid year")
-	ErrInvalidPeriod     = errors.New("invalid trend period")
-	ErrInvalidCount      = errors.New("invalid count")
-	ErrInvalidGoalTag    = errors.New("invalid goal tag")
+	ErrInvalidWeekStart = errors.New("invalid week start date")
+	ErrInvalidMonth     = errors.New("invalid month")
+	ErrInvalidYear      = errors.New("invalid year")
+	ErrInvalidPeriod    = errors.New("invalid trend period")
+	ErrInvalidCount     = errors.New("invalid count")
 )
 
 // Service handles business logic for analytics
@@ -62,14 +61,20 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 		return nil, err
 	}
 
-	// Get minutes by goal tag
-	byGoalTag, err := s.repo.GetMinutesByGoalTag(ctx, userID, startDate, endDate)
+	// Get minutes by goal (new data model)
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get minutes by project
-	byProject, err := s.repo.GetMinutesByProject(ctx, userID, startDate, endDate)
+	// Get minutes by tag
+	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by milestone
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -86,36 +91,78 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 		return nil, err
 	}
 
-	// Get daily breakdown
-	dailyBreakdown, err := s.repo.GetDailyBreakdown(ctx, userID, startDate, endDate)
-	if err != nil {
-		return nil, err
-	}
-
-	// Fill in missing days with 0 minutes
-	dailyBreakdown = s.fillDailyBreakdown(weekStart, weekEnd, dailyBreakdown)
-
-	// Ensure maps are not nil
-	if byGoalTag == nil {
-		byGoalTag = make(map[string]int)
-	}
-	if byProject == nil {
-		byProject = make(map[string]int)
-	}
-
 	return &analytics.WeeklySummary{
-		WeekStart:      startDate,
-		WeekEnd:        endDate,
-		TotalMinutes:   totalMinutes,
-		ByGoalTag:      byGoalTag,
-		ByProject:      byProject,
-		CompletedTasks: completedTasks,
+		WeekStart:       startDate,
+		WeekEnd:         endDate,
+		TotalMinutes:    totalMinutes,
+		ByGoal:          byGoal,
+		ByTag:           byTag,
+		ByMilestone:     byMilestone,
+		CompletedTasks:  completedTasks,
 		PlannedVsActual: analytics.PlannedVsActual{
 			Planned: plannedMinutes,
 			Actual:  totalMinutes,
 		},
-		DailyBreakdown: dailyBreakdown,
 	}, nil
+}
+
+// getGoalSummaries returns goal summaries for a date range
+func (s *Service) getGoalSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.GoalSummary, error) {
+	goalMinutes, err := s.repo.GetMinutesByGoal(ctx, userID, startDate, endDate)
+	if err != nil {
+		return []analytics.GoalSummary{}, nil
+	}
+
+	result := make([]analytics.GoalSummary, 0, len(goalMinutes))
+	for _, g := range goalMinutes {
+		result = append(result, analytics.GoalSummary{
+			ID:      g.ID,
+			Name:    g.Name,
+			Color:   g.Color,
+			Minutes: g.Minutes,
+		})
+	}
+	return result, nil
+}
+
+// getTagSummaries returns tag summaries for a date range
+func (s *Service) getTagSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.TagSummary, error) {
+	tagMinutes, err := s.repo.GetMinutesByTag(ctx, userID, startDate, endDate)
+	if err != nil {
+		// Return empty slice on error (tags are optional)
+		return []analytics.TagSummary{}, nil
+	}
+
+	result := make([]analytics.TagSummary, 0, len(tagMinutes))
+	for _, t := range tagMinutes {
+		result = append(result, analytics.TagSummary{
+			ID:      t.ID,
+			Name:    t.Name,
+			Color:   t.Color,
+			Minutes: t.Minutes,
+		})
+	}
+	return result, nil
+}
+
+// getMilestoneSummaries returns milestone summaries for a date range
+func (s *Service) getMilestoneSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.MilestoneSummary, error) {
+	milestoneMinutes, err := s.repo.GetMinutesByMilestone(ctx, userID, startDate, endDate)
+	if err != nil {
+		// Return empty slice on error (milestones are optional)
+		return []analytics.MilestoneSummary{}, nil
+	}
+
+	result := make([]analytics.MilestoneSummary, 0, len(milestoneMinutes))
+	for _, m := range milestoneMinutes {
+		result = append(result, analytics.MilestoneSummary{
+			ID:      m.ID,
+			Name:    m.Name,
+			GoalID:  m.GoalID,
+			Minutes: m.Minutes,
+		})
+	}
+	return result, nil
 }
 
 // GetMonthlySummary returns a monthly summary for a given month
@@ -152,14 +199,20 @@ func (s *Service) GetMonthlySummary(ctx context.Context, userID string, filter a
 		return nil, err
 	}
 
-	// Get minutes by goal tag
-	byGoalTag, err := s.repo.GetMinutesByGoalTag(ctx, userID, startDate, endDate)
+	// Get minutes by goal (new data model)
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get minutes by project
-	byProject, err := s.repo.GetMinutesByProject(ctx, userID, startDate, endDate)
+	// Get minutes by tag
+	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by milestone
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -182,24 +235,18 @@ func (s *Service) GetMonthlySummary(ctx context.Context, userID string, filter a
 		return nil, err
 	}
 
-	// Ensure maps are not nil
-	if byGoalTag == nil {
-		byGoalTag = make(map[string]int)
-	}
-	if byProject == nil {
-		byProject = make(map[string]int)
-	}
 	if weeklyBreakdown == nil {
 		weeklyBreakdown = []analytics.DailyBreakdown{}
 	}
 
 	return &analytics.MonthlySummary{
-		Year:           year,
-		Month:          month,
-		TotalMinutes:   totalMinutes,
-		ByGoalTag:      byGoalTag,
-		ByProject:      byProject,
-		CompletedTasks: completedTasks,
+		Year:            year,
+		Month:           month,
+		TotalMinutes:    totalMinutes,
+		ByGoal:          byGoal,
+		ByTag:           byTag,
+		ByMilestone:     byMilestone,
+		CompletedTasks:  completedTasks,
 		PlannedVsActual: analytics.PlannedVsActual{
 			Planned: plannedMinutes,
 			Actual:  totalMinutes,
@@ -275,47 +322,52 @@ func (s *Service) GetTrends(ctx context.Context, userID string, filter analytics
 	return dataPoints, nil
 }
 
-// GetGoalProgress returns progress for goals
-func (s *Service) GetGoalProgress(ctx context.Context, userID string, filter analytics.GoalProgressFilter) ([]analytics.GoalProgress, error) {
-	var goalTags []analytics.GoalTag
-
-	if filter.GoalTag != nil {
-		if !filter.GoalTag.IsValid() {
-			return nil, ErrInvalidGoalTag
-		}
-		goalTags = []analytics.GoalTag{*filter.GoalTag}
-	} else {
-		goalTags = analytics.AllGoalTags()
+// GetDailyStudyHours returns daily study hours for chart display
+func (s *Service) GetDailyStudyHours(ctx context.Context, userID string, filter analytics.DailyStudyHoursFilter) ([]analytics.DailyStudyHour, error) {
+	days := filter.Days
+	if days <= 0 {
+		days = 7
+	}
+	if days > 30 {
+		days = 30
 	}
 
-	var progressList []analytics.GoalProgress
+	// Calculate date range (past N days including today)
+	now := time.Now()
+	endDate := now
+	startDate := now.AddDate(0, 0, -(days - 1))
 
-	for _, gt := range goalTags {
-		currentWeekMinutes, err := s.repo.GetMinutesByGoalTagForCurrentWeek(ctx, userID, gt)
-		if err != nil {
-			return nil, err
-		}
+	startDateStr := startDate.Format("2006-01-02")
+	endDateStr := endDate.Format("2006-01-02")
 
-		weeklyTarget := gt.WeeklyTargetMinutes()
-		var progress float64
-		if weeklyTarget > 0 {
-			progress = float64(currentWeekMinutes) / float64(weeklyTarget) * 100
-		}
+	// Get daily breakdown from repository
+	dailyBreakdown, err := s.repo.GetDailyBreakdown(ctx, userID, startDateStr, endDateStr)
+	if err != nil {
+		return nil, err
+	}
 
-		// On track if progress >= expected based on day of week
-		// For simplicity, we check if they're at least 80% of target
-		onTrack := progress >= 80 || currentWeekMinutes >= weeklyTarget
+	// Create a map of existing data
+	existing := make(map[string]int)
+	for _, db := range dailyBreakdown {
+		existing[db.Date] = db.Minutes
+	}
 
-		progressList = append(progressList, analytics.GoalProgress{
-			GoalTag:             string(gt),
-			WeeklyTargetMinutes: weeklyTarget,
-			CurrentWeekMinutes:  currentWeekMinutes,
-			Progress:            progress,
-			OnTrack:             onTrack,
+	// Japanese weekday names
+	weekdayNames := []string{"日", "月", "火", "水", "木", "金", "土"}
+
+	// Build result with all days filled in
+	var result []analytics.DailyStudyHour
+	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+		dateStr := d.Format("2006-01-02")
+		minutes := existing[dateStr]
+		result = append(result, analytics.DailyStudyHour{
+			Date:  d.Format("1/2"), // M/D format for display
+			Hours: float64(minutes) / 60.0,
+			Day:   weekdayNames[d.Weekday()],
 		})
 	}
 
-	return progressList, nil
+	return result, nil
 }
 
 // fillDailyBreakdown fills in missing days with 0 minutes

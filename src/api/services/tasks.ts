@@ -170,6 +170,7 @@ interface TaskResponse {
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }
@@ -183,6 +184,7 @@ const transformTask = (t: TaskResponse): Task => ({
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
+  sortOrder: t.sortOrder,
   createdAt: new Date(t.createdAt),
   updatedAt: new Date(t.updatedAt),
 })
@@ -239,6 +241,32 @@ export const tasksApi = extendApiService(baseTasksApi, () => ({
       `/tasks/${id}/complete`
     )
     return transformTask(response)
+  },
+
+  async reorder(taskIds: string[]): Promise<Task[]> {
+    const response = await httpClient.post<TaskResponse[]>(
+      API_CONFIG.baseUrls.task,
+      '/tasks/reorder',
+      { taskIds }
+    )
+    return response.map(transformTask)
+  },
+
+  async bulkDelete(taskIds: string[]): Promise<void> {
+    await httpClient.post(
+      API_CONFIG.baseUrls.task,
+      '/tasks/bulk-delete',
+      { taskIds }
+    )
+  },
+
+  async bulkComplete(taskIds: string[], completed: boolean): Promise<Task[]> {
+    const response = await httpClient.post<TaskResponse[]>(
+      API_CONFIG.baseUrls.task,
+      '/tasks/bulk-complete',
+      { taskIds, completed }
+    )
+    return response.map(transformTask)
   },
 }))
 

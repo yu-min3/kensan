@@ -11,8 +11,6 @@ interface SettingsState extends UserSettings {
   fetchSettings: () => Promise<void>
 
   // 操作
-  setClockifyApiKey: (key: string) => void
-  setWorkspace: (id: string, name: string) => void
   setTimezone: (tz: string) => void
   setTheme: (theme: Theme) => void
   setUserName: (name: string) => void
@@ -22,9 +20,6 @@ interface SettingsState extends UserSettings {
 }
 
 const initialSettings: UserSettings = {
-  clockifyApiKey: undefined,
-  workspaceId: undefined,
-  workspaceName: undefined,
   timezone: 'Asia/Tokyo',
   theme: 'system',
   isConfigured: false,
@@ -49,12 +44,6 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
 
-      setClockifyApiKey: (key) =>
-        set({ clockifyApiKey: key }),
-
-      setWorkspace: (id, name) =>
-        set({ workspaceId: id, workspaceName: name }),
-
       setTimezone: (tz) =>
         set({ timezone: tz }),
 
@@ -71,9 +60,6 @@ export const useSettingsStore = create<SettingsState>()(
         const state = get()
         try {
           await userApi.updateSettings({
-            clockifyApiKey: state.clockifyApiKey,
-            workspaceId: state.workspaceId,
-            workspaceName: state.workspaceName,
             timezone: state.timezone,
             theme: state.theme,
           })
@@ -88,9 +74,6 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'kensan-settings',
       partialize: (state) => ({
-        clockifyApiKey: state.clockifyApiKey,
-        workspaceId: state.workspaceId,
-        workspaceName: state.workspaceName,
         timezone: state.timezone,
         theme: state.theme,
         isConfigured: state.isConfigured,

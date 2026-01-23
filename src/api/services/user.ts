@@ -6,10 +6,6 @@ import type { UserSettings, Theme } from '@/types'
 // API Response types (matches backend SettingsResponse)
 interface UserSettingsResponse {
   userId: string
-  clockifyApiKey?: string
-  hasClockifyApiKey: boolean
-  workspaceId?: string
-  workspaceName?: string
   timezone: string
   theme: Theme
   isConfigured: boolean
@@ -27,9 +23,6 @@ interface UserProfileResponse {
 
 // Transform API response to frontend type
 const transformUserSettings = (s: UserSettingsResponse, profile?: UserProfileResponse): UserSettings => ({
-  clockifyApiKey: s.hasClockifyApiKey ? (s.clockifyApiKey || '********') : undefined,
-  workspaceId: s.workspaceId,
-  workspaceName: s.workspaceName,
   timezone: s.timezone,
   theme: s.theme,
   isConfigured: s.isConfigured,
@@ -37,9 +30,6 @@ const transformUserSettings = (s: UserSettingsResponse, profile?: UserProfileRes
 })
 
 export interface UpdateSettingsInput {
-  clockifyApiKey?: string
-  workspaceId?: string
-  workspaceName?: string
   timezone?: string
   theme?: Theme
 }

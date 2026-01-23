@@ -1,4 +1,5 @@
 // Goals, Milestones, Tags, Tasks MSW handlers
+import { http, HttpResponse } from 'msw'
 import { goals, milestones, tags, tasks } from '../data'
 import { createMockCrudHandlers, createToggleHandler } from '../createMockCrudHandlers'
 
@@ -33,7 +34,7 @@ const toTagResponse = (t: (typeof tags)[0]) => ({
   createdAt: t.createdAt.toISOString(),
 })
 
-const toTaskResponse = (t: (typeof tasks)[0]) => ({
+const toTaskResponse = (t: (typeof tasks)[0], index?: number) => ({
   id: t.id,
   name: t.name,
   milestoneId: t.milestoneId,
@@ -42,6 +43,7 @@ const toTaskResponse = (t: (typeof tasks)[0]) => ({
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
+  sortOrder: t.sortOrder ?? index ?? 0,
   createdAt: t.createdAt.toISOString(),
   updatedAt: t.updatedAt.toISOString(),
 })
@@ -133,10 +135,70 @@ const taskToggleHandler = createToggleHandler({
   toggleEndpoint: 'complete',
 })
 
+// Task reorder handler
+const taskReorderHandler = http.post(`${BASE_URL}/tasks/reorder`, async ({ request }) => {
+  const { taskIds } = (await request.json()) as { taskIds: string[] }
+
+  // Update sortOrder for each task in the provided order
+  const updatedTasks: ReturnType<typeof toTaskResponse>[] = []
+  taskIds.forEach((taskId, index) => {
+    const taskIndex = tasks.findIndex((t) => t.id === taskId)
+    if (taskIndex !== -1) {
+      tasks[taskIndex].sortOrder = index
+      tasks[taskIndex].updatedAt = new Date()
+      updatedTasks.push(toTaskResponse(tasks[taskIndex]))
+    }
+  })
+
+  return HttpResponse.json(updatedTasks)
+})
+
+// Task bulk delete handler
+const taskBulkDeleteHandler = http.post(`${BASE_URL}/tasks/bulk-delete`, async ({ request }) => {
+  const { taskIds } = (await request.json()) as { taskIds: string[] }
+
+  // Remove tasks and their children
+  const idsToDelete = new Set(taskIds)
+
+  // Also find child tasks
+  tasks.forEach((t) => {
+    if (t.parentTaskId && idsToDelete.has(t.parentTaskId)) {
+      idsToDelete.add(t.id)
+    }
+  })
+
+  // Filter out deleted tasks
+  const remainingTasks = tasks.filter((t) => !idsToDelete.has(t.id))
+  tasks.length = 0
+  tasks.push(...remainingTasks)
+
+  return HttpResponse.json({ deleted: Array.from(idsToDelete) })
+})
+
+// Task bulk complete handler
+const taskBulkCompleteHandler = http.post(`${BASE_URL}/tasks/bulk-complete`, async ({ request }) => {
+  const { taskIds, completed } = (await request.json()) as { taskIds: string[]; completed: boolean }
+
+  const updatedTasks: ReturnType<typeof toTaskResponse>[] = []
+  taskIds.forEach((taskId) => {
+    const taskIndex = tasks.findIndex((t) => t.id === taskId)
+    if (taskIndex !== -1) {
+      tasks[taskIndex].completed = completed
+      tasks[taskIndex].updatedAt = new Date()
+      updatedTasks.push(toTaskResponse(tasks[taskIndex]))
+    }
+  })
+
+  return HttpResponse.json(updatedTasks)
+})
+
 export const taskHandlers = [
   ...goalHandlers,
   ...milestoneHandlers,
   ...tagHandlers,
   ...taskCrudHandlers,
   taskToggleHandler,
+  taskReorderHandler,
+  taskBulkDeleteHandler,
+  taskBulkCompleteHandler,
 ]

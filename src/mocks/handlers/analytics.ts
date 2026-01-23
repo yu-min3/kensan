@@ -10,6 +10,15 @@ export const analyticsHandlers = [
     return HttpResponse.json(weeklySummary)
   }),
 
+  // GET /analytics/daily-study-hours
+  http.get(`${BASE_URL}/analytics/daily-study-hours`, ({ request }) => {
+    const url = new URL(request.url)
+    const days = parseInt(url.searchParams.get('days') || '7', 10)
+    // dailyStudyHoursは7日分のデータなので、daysに応じてスライス
+    const data = dailyStudyHours.slice(-days)
+    return HttpResponse.json(data)
+  }),
+
   // GET /analytics/summary/monthly
   http.get(`${BASE_URL}/analytics/summary/monthly`, ({ request }) => {
     const url = new URL(request.url)

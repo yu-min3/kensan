@@ -19,43 +19,121 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) ListProjects(ctx context.Context, userID string, filter task.ProjectFilter) ([]task.Project, error) {
+// Goal Operations
+func (m *MockRepository) ListGoals(ctx context.Context, userID string, filter task.GoalFilter) ([]task.Goal, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]task.Project), args.Error(1)
+	return args.Get(0).([]task.Goal), args.Error(1)
 }
 
-func (m *MockRepository) GetProjectByID(ctx context.Context, userID, projectID string) (*task.Project, error) {
-	args := m.Called(ctx, userID, projectID)
+func (m *MockRepository) GetGoalByID(ctx context.Context, userID, goalID string) (*task.Goal, error) {
+	args := m.Called(ctx, userID, goalID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockRepository) CreateProject(ctx context.Context, userID string, input task.CreateProjectInput) (*task.Project, error) {
+func (m *MockRepository) CreateGoal(ctx context.Context, userID string, input task.CreateGoalInput) (*task.Goal, error) {
 	args := m.Called(ctx, userID, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockRepository) UpdateProject(ctx context.Context, userID, projectID string, input task.UpdateProjectInput) (*task.Project, error) {
-	args := m.Called(ctx, userID, projectID, input)
+func (m *MockRepository) UpdateGoal(ctx context.Context, userID, goalID string, input task.UpdateGoalInput) (*task.Goal, error) {
+	args := m.Called(ctx, userID, goalID, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockRepository) DeleteProject(ctx context.Context, userID, projectID string) error {
-	args := m.Called(ctx, userID, projectID)
+func (m *MockRepository) DeleteGoal(ctx context.Context, userID, goalID string) error {
+	args := m.Called(ctx, userID, goalID)
 	return args.Error(0)
 }
 
+// Milestone Operations
+func (m *MockRepository) ListMilestones(ctx context.Context, userID string, filter task.MilestoneFilter) ([]task.Milestone, error) {
+	args := m.Called(ctx, userID, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Milestone), args.Error(1)
+}
+
+func (m *MockRepository) GetMilestoneByID(ctx context.Context, userID, milestoneID string) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, milestoneID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockRepository) CreateMilestone(ctx context.Context, userID string, input task.CreateMilestoneInput) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockRepository) UpdateMilestone(ctx context.Context, userID, milestoneID string, input task.UpdateMilestoneInput) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, milestoneID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockRepository) DeleteMilestone(ctx context.Context, userID, milestoneID string) error {
+	args := m.Called(ctx, userID, milestoneID)
+	return args.Error(0)
+}
+
+// Tag Operations
+func (m *MockRepository) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Tag), args.Error(1)
+}
+
+func (m *MockRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
+	args := m.Called(ctx, userID, tagID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockRepository) CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockRepository) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
+	args := m.Called(ctx, userID, tagID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockRepository) DeleteTag(ctx context.Context, userID, tagID string) error {
+	args := m.Called(ctx, userID, tagID)
+	return args.Error(0)
+}
+
+// Task Operations
 func (m *MockRepository) ListTasks(ctx context.Context, userID string, filter task.TaskFilter) ([]task.Task, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
@@ -109,317 +187,18 @@ func (m *MockRepository) GetChildTasks(ctx context.Context, userID, parentTaskID
 	return args.Get(0).([]task.Task), args.Error(1)
 }
 
-// ========== Project Tests ==========
-
-func TestListProjects_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	filter := task.ProjectFilter{}
-
-	expectedProjects := []task.Project{
-		{ID: "project-1", Name: "Project 1", UserID: userID},
-		{ID: "project-2", Name: "Project 2", UserID: userID},
+// Task-Tag Operations
+func (m *MockRepository) GetTaskTags(ctx context.Context, taskID string) ([]string, error) {
+	args := m.Called(ctx, taskID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-
-	mockRepo.On("ListProjects", ctx, userID, filter).Return(expectedProjects, nil)
-
-	projects, err := svc.ListProjects(ctx, userID, filter)
-
-	assert.NoError(t, err)
-	assert.Len(t, projects, 2)
-	assert.Equal(t, "Project 1", projects[0].Name)
-	mockRepo.AssertExpectations(t)
+	return args.Get(0).([]string), args.Error(1)
 }
 
-func TestListProjects_EmptyResult(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	filter := task.ProjectFilter{}
-
-	mockRepo.On("ListProjects", ctx, userID, filter).Return([]task.Project{}, nil)
-
-	projects, err := svc.ListProjects(ctx, userID, filter)
-
-	assert.NoError(t, err)
-	assert.Empty(t, projects)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestListProjects_InvalidGoalTag(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	invalidTag := task.GoalTag("Invalid")
-	filter := task.ProjectFilter{GoalTag: &invalidTag}
-
-	projects, err := svc.ListProjects(ctx, userID, filter)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidGoalTag, err)
-	assert.Nil(t, projects)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestListProjects_RepositoryError(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	filter := task.ProjectFilter{}
-
-	mockRepo.On("ListProjects", ctx, userID, filter).Return(nil, errors.New("database error"))
-
-	projects, err := svc.ListProjects(ctx, userID, filter)
-
-	assert.Error(t, err)
-	assert.Nil(t, projects)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetProject_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "project-123"
-
-	expectedProject := &task.Project{
-		ID:     projectID,
-		UserID: userID,
-		Name:   "Test Project",
-	}
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(expectedProject, nil)
-
-	project, err := svc.GetProject(ctx, userID, projectID)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, project)
-	assert.Equal(t, "Test Project", project.Name)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetProject_NotFound(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "nonexistent"
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, nil)
-
-	project, err := svc.GetProject(ctx, userID, projectID)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetProject_RepositoryError(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "project-123"
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, errors.New("database error"))
-
-	project, err := svc.GetProject(ctx, userID, projectID)
-
-	assert.Error(t, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCreateProject_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	goalTag := task.GoalTagGK
-	input := task.CreateProjectInput{
-		Name:    "New Project",
-		GoalTag: &goalTag,
-	}
-
-	expectedProject := &task.Project{
-		ID:      "project-new",
-		UserID:  userID,
-		Name:    "New Project",
-		GoalTag: &goalTag,
-	}
-
-	mockRepo.On("CreateProject", ctx, userID, input).Return(expectedProject, nil)
-
-	project, err := svc.CreateProject(ctx, userID, input)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, project)
-	assert.Equal(t, "New Project", project.Name)
-	assert.Equal(t, &goalTag, project.GoalTag)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCreateProject_EmptyName(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	input := task.CreateProjectInput{
-		Name: "",
-	}
-
-	project, err := svc.CreateProject(ctx, userID, input)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidInput, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCreateProject_InvalidGoalTag(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	invalidTag := task.GoalTag("Invalid")
-	input := task.CreateProjectInput{
-		Name:    "New Project",
-		GoalTag: &invalidTag,
-	}
-
-	project, err := svc.CreateProject(ctx, userID, input)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidGoalTag, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateProject_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "project-123"
-	newName := "Updated Project"
-	input := task.UpdateProjectInput{
-		Name: &newName,
-	}
-
-	existingProject := &task.Project{ID: projectID, UserID: userID, Name: "Old Name"}
-	expectedProject := &task.Project{
-		ID:     projectID,
-		UserID: userID,
-		Name:   newName,
-	}
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(existingProject, nil)
-	mockRepo.On("UpdateProject", ctx, userID, projectID, input).Return(expectedProject, nil)
-
-	project, err := svc.UpdateProject(ctx, userID, projectID, input)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, project)
-	assert.Equal(t, "Updated Project", project.Name)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateProject_NotFound(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "nonexistent"
-	newName := "Updated Project"
-	input := task.UpdateProjectInput{
-		Name: &newName,
-	}
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, nil)
-
-	project, err := svc.UpdateProject(ctx, userID, projectID, input)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateProject_InvalidGoalTag(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "project-123"
-	invalidTag := task.GoalTag("Invalid")
-	input := task.UpdateProjectInput{
-		GoalTag: &invalidTag,
-	}
-
-	existingProject := &task.Project{ID: projectID, UserID: userID, Name: "Project"}
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(existingProject, nil)
-
-	project, err := svc.UpdateProject(ctx, userID, projectID, input)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidGoalTag, err)
-	assert.Nil(t, project)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestDeleteProject_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "project-123"
-
-	existingProject := &task.Project{ID: projectID, UserID: userID}
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(existingProject, nil)
-	mockRepo.On("DeleteProject", ctx, userID, projectID).Return(nil)
-
-	err := svc.DeleteProject(ctx, userID, projectID)
-
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestDeleteProject_NotFound(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-
-	ctx := context.Background()
-	userID := "user-123"
-	projectID := "nonexistent"
-
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, nil)
-
-	err := svc.DeleteProject(ctx, userID, projectID)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
-	mockRepo.AssertExpectations(t)
+func (m *MockRepository) SetTaskTags(ctx context.Context, taskID string, tagIDs []string) error {
+	args := m.Called(ctx, taskID, tagIDs)
+	return args.Error(0)
 }
 
 // ========== Task Tests ==========
@@ -433,8 +212,8 @@ func TestListTasks_Success(t *testing.T) {
 	filter := task.TaskFilter{}
 
 	expectedTasks := []task.Task{
-		{ID: "task-1", Name: "Task 1", UserID: userID, ProjectID: "project-1"},
-		{ID: "task-2", Name: "Task 2", UserID: userID, ProjectID: "project-1"},
+		{ID: "task-1", Name: "Task 1", UserID: userID},
+		{ID: "task-2", Name: "Task 2", UserID: userID},
 	}
 
 	mockRepo.On("ListTasks", ctx, userID, filter).Return(expectedTasks, nil)
@@ -447,50 +226,50 @@ func TestListTasks_Success(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestListTasks_WithProjectFilter(t *testing.T) {
+func TestListTasks_WithMilestoneFilter(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "project-123"
+	milestoneID := "milestone-123"
 	filter := task.TaskFilter{
-		ProjectID: &projectID,
+		MilestoneID: &milestoneID,
 	}
 
-	expectedProject := &task.Project{ID: projectID, UserID: userID, Name: "Test Project"}
+	expectedMilestone := &task.Milestone{ID: milestoneID, UserID: userID, Name: "Test Milestone"}
 	expectedTasks := []task.Task{
-		{ID: "task-1", Name: "Task 1", UserID: userID, ProjectID: projectID},
+		{ID: "task-1", Name: "Task 1", UserID: userID, MilestoneID: &milestoneID},
 	}
 
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(expectedProject, nil)
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(expectedMilestone, nil)
 	mockRepo.On("ListTasks", ctx, userID, filter).Return(expectedTasks, nil)
 
 	tasks, err := svc.ListTasks(ctx, userID, filter)
 
 	assert.NoError(t, err)
 	assert.Len(t, tasks, 1)
-	assert.Equal(t, projectID, tasks[0].ProjectID)
+	assert.Equal(t, &milestoneID, tasks[0].MilestoneID)
 	mockRepo.AssertExpectations(t)
 }
 
-func TestListTasks_WithProjectFilter_ProjectNotFound(t *testing.T) {
+func TestListTasks_WithMilestoneFilter_MilestoneNotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "nonexistent"
+	milestoneID := "nonexistent"
 	filter := task.TaskFilter{
-		ProjectID: &projectID,
+		MilestoneID: &milestoneID,
 	}
 
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, nil)
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(nil, nil)
 
 	tasks, err := svc.ListTasks(ctx, userID, filter)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
+	assert.Equal(t, ErrMilestoneNotFound, err)
 	assert.Nil(t, tasks)
 	mockRepo.AssertExpectations(t)
 }
@@ -553,7 +332,6 @@ func TestGetTask_Success(t *testing.T) {
 	expectedTask := &task.Task{
 		ID:        taskID,
 		UserID:    userID,
-		ProjectID: "project-1",
 		Name:      "Test Task",
 		Completed: false,
 	}
@@ -593,22 +371,17 @@ func TestCreateTask_Success(t *testing.T) {
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "project-123"
 	input := task.CreateTaskInput{
-		Name:      "New Task",
-		ProjectID: projectID,
+		Name: "New Task",
 	}
 
-	expectedProject := &task.Project{ID: projectID, UserID: userID, Name: "Test Project"}
 	expectedTask := &task.Task{
 		ID:        "task-new",
 		UserID:    userID,
-		ProjectID: projectID,
 		Name:      "New Task",
 		Completed: false,
 	}
 
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(expectedProject, nil)
 	mockRepo.On("CreateTask", ctx, userID, input).Return(expectedTask, nil)
 
 	resultTask, err := svc.CreateTask(ctx, userID, input)
@@ -616,7 +389,6 @@ func TestCreateTask_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resultTask)
 	assert.Equal(t, "New Task", resultTask.Name)
-	assert.Equal(t, projectID, resultTask.ProjectID)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -627,8 +399,7 @@ func TestCreateTask_EmptyName(t *testing.T) {
 	ctx := context.Background()
 	userID := "user-123"
 	input := task.CreateTaskInput{
-		Name:      "",
-		ProjectID: "project-123",
+		Name: "",
 	}
 
 	resultTask, err := svc.CreateTask(ctx, userID, input)
@@ -639,43 +410,56 @@ func TestCreateTask_EmptyName(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestCreateTask_EmptyProjectID(t *testing.T) {
+func TestCreateTask_WithMilestone_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 
 	ctx := context.Background()
 	userID := "user-123"
+	milestoneID := "milestone-123"
 	input := task.CreateTaskInput{
-		Name:      "New Task",
-		ProjectID: "",
+		Name:        "New Task",
+		MilestoneID: &milestoneID,
 	}
+
+	expectedMilestone := &task.Milestone{ID: milestoneID, UserID: userID, Name: "Test Milestone"}
+	expectedTask := &task.Task{
+		ID:          "task-new",
+		UserID:      userID,
+		MilestoneID: &milestoneID,
+		Name:        "New Task",
+		Completed:   false,
+	}
+
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(expectedMilestone, nil)
+	mockRepo.On("CreateTask", ctx, userID, input).Return(expectedTask, nil)
 
 	resultTask, err := svc.CreateTask(ctx, userID, input)
 
-	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidInput, err)
-	assert.Nil(t, resultTask)
+	assert.NoError(t, err)
+	assert.NotNil(t, resultTask)
+	assert.Equal(t, &milestoneID, resultTask.MilestoneID)
 	mockRepo.AssertExpectations(t)
 }
 
-func TestCreateTask_ProjectNotFound(t *testing.T) {
+func TestCreateTask_WithMilestone_MilestoneNotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "nonexistent"
+	milestoneID := "nonexistent"
 	input := task.CreateTaskInput{
-		Name:      "New Task",
-		ProjectID: projectID,
+		Name:        "New Task",
+		MilestoneID: &milestoneID,
 	}
 
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(nil, nil)
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(nil, nil)
 
 	resultTask, err := svc.CreateTask(ctx, userID, input)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
+	assert.Equal(t, ErrMilestoneNotFound, err)
 	assert.Nil(t, resultTask)
 	mockRepo.AssertExpectations(t)
 }
@@ -686,26 +470,21 @@ func TestCreateTask_WithParentTask_Success(t *testing.T) {
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "project-123"
 	parentTaskID := "task-parent"
 	input := task.CreateTaskInput{
 		Name:         "Child Task",
-		ProjectID:    projectID,
 		ParentTaskID: &parentTaskID,
 	}
 
-	expectedProject := &task.Project{ID: projectID, UserID: userID, Name: "Test Project"}
 	expectedParentTask := &task.Task{ID: parentTaskID, UserID: userID, Name: "Parent Task"}
 	expectedTask := &task.Task{
 		ID:           "task-new",
 		UserID:       userID,
-		ProjectID:    projectID,
 		Name:         "Child Task",
 		ParentTaskID: &parentTaskID,
 		Completed:    false,
 	}
 
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(expectedProject, nil)
 	mockRepo.On("GetTaskByID", ctx, userID, parentTaskID).Return(expectedParentTask, nil)
 	mockRepo.On("CreateTask", ctx, userID, input).Return(expectedTask, nil)
 
@@ -723,16 +502,12 @@ func TestCreateTask_WithParentTask_ParentNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	userID := "user-123"
-	projectID := "project-123"
 	parentTaskID := "nonexistent"
 	input := task.CreateTaskInput{
 		Name:         "Child Task",
-		ProjectID:    projectID,
 		ParentTaskID: &parentTaskID,
 	}
 
-	expectedProject := &task.Project{ID: projectID, UserID: userID, Name: "Test Project"}
-	mockRepo.On("GetProjectByID", ctx, userID, projectID).Return(expectedProject, nil)
 	mockRepo.On("GetTaskByID", ctx, userID, parentTaskID).Return(nil, nil)
 
 	resultTask, err := svc.CreateTask(ctx, userID, input)
@@ -795,26 +570,26 @@ func TestUpdateTask_NotFound(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestUpdateTask_ChangeProject_ProjectNotFound(t *testing.T) {
+func TestUpdateTask_ChangeMilestone_MilestoneNotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 
 	ctx := context.Background()
 	userID := "user-123"
 	taskID := "task-123"
-	newProjectID := "nonexistent"
+	newMilestoneID := "nonexistent"
 	input := task.UpdateTaskInput{
-		ProjectID: &newProjectID,
+		MilestoneID: &newMilestoneID,
 	}
 
 	existingTask := &task.Task{ID: taskID, UserID: userID, Name: "Task"}
 	mockRepo.On("GetTaskByID", ctx, userID, taskID).Return(existingTask, nil)
-	mockRepo.On("GetProjectByID", ctx, userID, newProjectID).Return(nil, nil)
+	mockRepo.On("GetMilestoneByID", ctx, userID, newMilestoneID).Return(nil, nil)
 
 	resultTask, err := svc.UpdateTask(ctx, userID, taskID, input)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrProjectNotFound, err)
+	assert.Equal(t, ErrMilestoneNotFound, err)
 	assert.Nil(t, resultTask)
 	mockRepo.AssertExpectations(t)
 }
@@ -888,7 +663,6 @@ func TestToggleTaskComplete_Success(t *testing.T) {
 	existingTask := &task.Task{
 		ID:        taskID,
 		UserID:    userID,
-		ProjectID: "project-1",
 		Name:      "Test Task",
 		Completed: false,
 	}
@@ -896,7 +670,6 @@ func TestToggleTaskComplete_Success(t *testing.T) {
 	expectedTask := &task.Task{
 		ID:        taskID,
 		UserID:    userID,
-		ProjectID: "project-1",
 		Name:      "Test Task",
 		Completed: true, // After toggle
 	}
@@ -977,25 +750,464 @@ func TestGetChildTasks_ParentNotFound(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-// ========== GoalTag Validation Tests ==========
+// ========== Goal Tests ==========
 
-func TestGoalTag_IsValid(t *testing.T) {
+func TestListGoals_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	filter := task.GoalFilter{}
+
+	expectedGoals := []task.Goal{
+		{ID: "goal-1", Name: "Goal 1", UserID: userID},
+		{ID: "goal-2", Name: "Goal 2", UserID: userID},
+	}
+
+	mockRepo.On("ListGoals", ctx, userID, filter).Return(expectedGoals, nil)
+
+	goals, err := svc.ListGoals(ctx, userID, filter)
+
+	assert.NoError(t, err)
+	assert.Len(t, goals, 2)
+	assert.Equal(t, "Goal 1", goals[0].Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetGoal_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "goal-123"
+
+	expectedGoal := &task.Goal{
+		ID:     goalID,
+		UserID: userID,
+		Name:   "Test Goal",
+	}
+
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(expectedGoal, nil)
+
+	goal, err := svc.GetGoal(ctx, userID, goalID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, goal)
+	assert.Equal(t, "Test Goal", goal.Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetGoal_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "nonexistent"
+
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(nil, nil)
+
+	goal, err := svc.GetGoal(ctx, userID, goalID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrGoalNotFound, err)
+	assert.Nil(t, goal)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateGoal_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	input := task.CreateGoalInput{
+		Name:  "New Goal",
+		Color: "#FF0000",
+	}
+
+	expectedGoal := &task.Goal{
+		ID:     "goal-new",
+		UserID: userID,
+		Name:   "New Goal",
+		Color:  "#FF0000",
+	}
+
+	mockRepo.On("CreateGoal", ctx, userID, input).Return(expectedGoal, nil)
+
+	goal, err := svc.CreateGoal(ctx, userID, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, goal)
+	assert.Equal(t, "New Goal", goal.Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateGoal_EmptyName(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	input := task.CreateGoalInput{
+		Name: "",
+	}
+
+	goal, err := svc.CreateGoal(ctx, userID, input)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrInvalidInput, err)
+	assert.Nil(t, goal)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteGoal_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "goal-123"
+
+	existingGoal := &task.Goal{ID: goalID, UserID: userID}
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(existingGoal, nil)
+	mockRepo.On("DeleteGoal", ctx, userID, goalID).Return(nil)
+
+	err := svc.DeleteGoal(ctx, userID, goalID)
+
+	assert.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteGoal_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "nonexistent"
+
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(nil, nil)
+
+	err := svc.DeleteGoal(ctx, userID, goalID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrGoalNotFound, err)
+	mockRepo.AssertExpectations(t)
+}
+
+// ========== Milestone Tests ==========
+
+func TestListMilestones_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	filter := task.MilestoneFilter{}
+
+	expectedMilestones := []task.Milestone{
+		{ID: "milestone-1", Name: "Milestone 1", UserID: userID},
+		{ID: "milestone-2", Name: "Milestone 2", UserID: userID},
+	}
+
+	mockRepo.On("ListMilestones", ctx, userID, filter).Return(expectedMilestones, nil)
+
+	milestones, err := svc.ListMilestones(ctx, userID, filter)
+
+	assert.NoError(t, err)
+	assert.Len(t, milestones, 2)
+	assert.Equal(t, "Milestone 1", milestones[0].Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetMilestone_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	milestoneID := "nonexistent"
+
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(nil, nil)
+
+	milestone, err := svc.GetMilestone(ctx, userID, milestoneID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrMilestoneNotFound, err)
+	assert.Nil(t, milestone)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateMilestone_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "goal-123"
+	input := task.CreateMilestoneInput{
+		Name:   "New Milestone",
+		GoalID: goalID,
+	}
+
+	expectedGoal := &task.Goal{ID: goalID, UserID: userID}
+	expectedMilestone := &task.Milestone{
+		ID:     "milestone-new",
+		UserID: userID,
+		GoalID: goalID,
+		Name:   "New Milestone",
+	}
+
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(expectedGoal, nil)
+	mockRepo.On("CreateMilestone", ctx, userID, input).Return(expectedMilestone, nil)
+
+	milestone, err := svc.CreateMilestone(ctx, userID, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, milestone)
+	assert.Equal(t, "New Milestone", milestone.Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateMilestone_EmptyName(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	input := task.CreateMilestoneInput{
+		Name:   "",
+		GoalID: "goal-123",
+	}
+
+	milestone, err := svc.CreateMilestone(ctx, userID, input)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrInvalidInput, err)
+	assert.Nil(t, milestone)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateMilestone_GoalNotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	goalID := "nonexistent"
+	input := task.CreateMilestoneInput{
+		Name:   "New Milestone",
+		GoalID: goalID,
+	}
+
+	mockRepo.On("GetGoalByID", ctx, userID, goalID).Return(nil, nil)
+
+	milestone, err := svc.CreateMilestone(ctx, userID, input)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrGoalNotFound, err)
+	assert.Nil(t, milestone)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteMilestone_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	milestoneID := "milestone-123"
+
+	existingMilestone := &task.Milestone{ID: milestoneID, UserID: userID}
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(existingMilestone, nil)
+	mockRepo.On("DeleteMilestone", ctx, userID, milestoneID).Return(nil)
+
+	err := svc.DeleteMilestone(ctx, userID, milestoneID)
+
+	assert.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteMilestone_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	milestoneID := "nonexistent"
+
+	mockRepo.On("GetMilestoneByID", ctx, userID, milestoneID).Return(nil, nil)
+
+	err := svc.DeleteMilestone(ctx, userID, milestoneID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrMilestoneNotFound, err)
+	mockRepo.AssertExpectations(t)
+}
+
+// ========== Tag Tests ==========
+
+func TestListTags_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+
+	expectedTags := []task.Tag{
+		{ID: "tag-1", Name: "Tag 1", UserID: userID},
+		{ID: "tag-2", Name: "Tag 2", UserID: userID},
+	}
+
+	mockRepo.On("ListTags", ctx, userID).Return(expectedTags, nil)
+
+	tags, err := svc.ListTags(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, tags, 2)
+	assert.Equal(t, "Tag 1", tags[0].Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetTag_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	tagID := "nonexistent"
+
+	mockRepo.On("GetTagByID", ctx, userID, tagID).Return(nil, nil)
+
+	tag, err := svc.GetTag(ctx, userID, tagID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrTagNotFound, err)
+	assert.Nil(t, tag)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateTag_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	input := task.CreateTagInput{
+		Name:  "New Tag",
+		Color: "#FF0000",
+	}
+
+	expectedTag := &task.Tag{
+		ID:     "tag-new",
+		UserID: userID,
+		Name:   "New Tag",
+		Color:  "#FF0000",
+	}
+
+	mockRepo.On("CreateTag", ctx, userID, input).Return(expectedTag, nil)
+
+	tag, err := svc.CreateTag(ctx, userID, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, tag)
+	assert.Equal(t, "New Tag", tag.Name)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateTag_EmptyName(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	input := task.CreateTagInput{
+		Name: "",
+	}
+
+	tag, err := svc.CreateTag(ctx, userID, input)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrInvalidInput, err)
+	assert.Nil(t, tag)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteTag_Success(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	tagID := "tag-123"
+
+	existingTag := &task.Tag{ID: tagID, UserID: userID}
+	mockRepo.On("GetTagByID", ctx, userID, tagID).Return(existingTag, nil)
+	mockRepo.On("DeleteTag", ctx, userID, tagID).Return(nil)
+
+	err := svc.DeleteTag(ctx, userID, tagID)
+
+	assert.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteTag_NotFound(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	tagID := "nonexistent"
+
+	mockRepo.On("GetTagByID", ctx, userID, tagID).Return(nil, nil)
+
+	err := svc.DeleteTag(ctx, userID, tagID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrTagNotFound, err)
+	mockRepo.AssertExpectations(t)
+}
+
+// ========== MilestoneStatus Validation Tests ==========
+
+func TestMilestoneStatus_IsValid(t *testing.T) {
 	testCases := []struct {
-		tag      task.GoalTag
+		status   task.MilestoneStatus
 		expected bool
 	}{
-		{task.GoalTagGK, true},
-		{task.GoalTagOSS, true},
-		{task.GoalTagOutput, true},
-		{task.GoalTagOther, true},
-		{task.GoalTag("Invalid"), false},
-		{task.GoalTag(""), false},
+		{task.MilestoneStatusActive, true},
+		{task.MilestoneStatusCompleted, true},
+		{task.MilestoneStatusArchived, true},
+		{task.MilestoneStatus("Invalid"), false},
+		{task.MilestoneStatus(""), false},
 	}
 
 	for _, tc := range testCases {
-		t.Run(string(tc.tag), func(t *testing.T) {
-			result := tc.tag.IsValid()
+		t.Run(string(tc.status), func(t *testing.T) {
+			result := tc.status.IsValid()
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+// ========== Repository Error Tests ==========
+
+func TestListTasks_RepositoryError(t *testing.T) {
+	mockRepo := new(MockRepository)
+	svc := NewService(mockRepo)
+
+	ctx := context.Background()
+	userID := "user-123"
+	filter := task.TaskFilter{}
+
+	mockRepo.On("ListTasks", ctx, userID, filter).Return(nil, errors.New("database error"))
+
+	tasks, err := svc.ListTasks(ctx, userID, filter)
+
+	assert.Error(t, err)
+	assert.Nil(t, tasks)
+	mockRepo.AssertExpectations(t)
 }

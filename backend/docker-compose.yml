@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -24,7 +22,7 @@ services:
   user-service:
     build:
       context: .
-      dockerfile: cmd/user-service/Dockerfile
+      dockerfile: services/user/Dockerfile
     container_name: kensan-user-service
     environment:
       SERVER_PORT: 8081
@@ -44,7 +42,7 @@ services:
   task-service:
     build:
       context: .
-      dockerfile: cmd/task-service/Dockerfile
+      dockerfile: services/task/Dockerfile
     container_name: kensan-task-service
     environment:
       SERVER_PORT: 8082
@@ -60,23 +58,163 @@ services:
       postgres:
         condition: service_healthy
 
-  # Sync Service
-  sync-service:
+  # Timeblock Service
+  timeblock-service:
     build:
       context: .
-      dockerfile: cmd/sync-service/Dockerfile
-    container_name: kensan-sync-service
+      dockerfile: services/timeblock/Dockerfile
+    container_name: kensan-timeblock-service
     environment:
-      SERVER_PORT: 8083
+      SERVER_PORT: 8084
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: kensan
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-      CLOCKIFY_BASE_URL: https://api.clockify.me/api/v1
     ports:
-      - "8083:8083"
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Routine Service
+  routine-service:
+    build:
+      context: .
+      dockerfile: services/routine/Dockerfile
+    container_name: kensan-routine-service
+    environment:
+      SERVER_PORT: 8085
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Record Service
+  record-service:
+    build:
+      context: .
+      dockerfile: services/record/Dockerfile
+    container_name: kensan-record-service
+    environment:
+      SERVER_PORT: 8086
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Diary Service
+  diary-service:
+    build:
+      context: .
+      dockerfile: services/diary/Dockerfile
+    container_name: kensan-diary-service
+    environment:
+      SERVER_PORT: 8087
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
+    container_name: kensan-analytics-service
+    environment:
+      SERVER_PORT: 8088
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # AI Service
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    container_name: kensan-ai-service
+    environment:
+      SERVER_PORT: 8089
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8089:8089"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Memo Service
+  memo-service:
+    build:
+      context: .
+      dockerfile: services/memo/Dockerfile
+    container_name: kensan-memo-service
+    environment:
+      SERVER_PORT: 8090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Note Service (unified diary, learning, memo)
+  note-service:
+    build:
+      context: .
+      dockerfile: services/note/Dockerfile
+    container_name: kensan-note-service
+    environment:
+      SERVER_PORT: 8091
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8091:8091"
     depends_on:
       postgres:
         condition: service_healthy

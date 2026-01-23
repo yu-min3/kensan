@@ -32,7 +32,6 @@ services:
       args:
         - VITE_USER_SERVICE_URL=http://localhost:8081
         - VITE_TASK_SERVICE_URL=http://localhost:8082
-        - VITE_SYNC_SERVICE_URL=http://localhost:8083
         - VITE_TIMEBLOCK_SERVICE_URL=http://localhost:8084
         - VITE_ROUTINE_SERVICE_URL=http://localhost:8085
         - VITE_RECORD_SERVICE_URL=http://localhost:8086
@@ -87,29 +86,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
     ports:
       - "8082:8082"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - kensan-network
-
-  sync-service:
-    build:
-      context: ./backend
-      dockerfile: services/sync/Dockerfile
-    container_name: kensan-sync-service
-    environment:
-      SERVER_PORT: 8083
-      SERVER_ENV: development
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: kensan
-      DB_PASSWORD: kensan
-      DB_NAME: kensan
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
-      CLOCKIFY_BASE_URL: https://api.clockify.me/api/v1
-    ports:
-      - "8083:8083"
     depends_on:
       postgres:
         condition: service_healthy

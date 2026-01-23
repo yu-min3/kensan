@@ -64,7 +64,7 @@ export function TimeRangeInput({
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={startTime} onValueChange={onStartTimeChange}>
+      <Select value={startTime} onValueChange={onStartTimeChange} scrollToSelected>
         <SelectTrigger className="w-24">
           <SelectValue placeholder="開始" />
         </SelectTrigger>
@@ -79,7 +79,7 @@ export function TimeRangeInput({
 
       <span className="text-muted-foreground">~</span>
 
-      <Select value={endTime} onValueChange={onEndTimeChange}>
+      <Select value={endTime} onValueChange={onEndTimeChange} scrollToSelected>
         <SelectTrigger className="w-24">
           <SelectValue placeholder="終了" />
         </SelectTrigger>

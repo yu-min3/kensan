@@ -27,7 +27,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/summary/weekly", h.GetWeeklySummary)
 		r.Get("/summary/monthly", h.GetMonthlySummary)
 		r.Get("/trends", h.GetTrends)
-		r.Get("/goal-progress", h.GetGoalProgress)
+		r.Get("/daily-study-hours", h.GetDailyStudyHours)
 	})
 }
 
@@ -130,27 +130,27 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 	middleware.JSON(w, r, http.StatusOK, trends)
 }
 
-// GetGoalProgress handles GET /analytics/goal-progress
-func (h *Handler) GetGoalProgress(w http.ResponseWriter, r *http.Request) {
+// GetDailyStudyHours handles GET /analytics/daily-study-hours
+func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
-	filter := analytics.GoalProgressFilter{}
+	filter := analytics.DailyStudyHoursFilter{}
 
-	// Parse goal_tag
-	if goalTagStr := r.URL.Query().Get("goal_tag"); goalTagStr != "" {
-		gt := analytics.GoalTag(goalTagStr)
-		filter.GoalTag = &gt
-	}
-
-	progress, err := h.service.GetGoalProgress(r.Context(), userID, filter)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidGoalTag) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_GOAL_TAG", "Invalid goal_tag value. Must be 'GK', 'OSS', 'Output', or 'Other'")
+	// Parse days
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		days, err := strconv.Atoi(daysStr)
+		if err != nil {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DAYS", "Invalid days format")
 			return
 		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get goal progress")
+		filter.Days = days
+	}
+
+	hours, err := h.service.GetDailyStudyHours(r.Context(), userID, filter)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get daily study hours")
 		return
 	}
 
-	middleware.JSON(w, r, http.StatusOK, progress)
+	middleware.JSON(w, r, http.StatusOK, hours)
 }

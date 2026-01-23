@@ -10,7 +10,6 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
-	Clockify ClockifyConfig
 }
 
 type ServerConfig struct {
@@ -34,10 +33,6 @@ type JWTConfig struct {
 	ExpireHour int
 }
 
-type ClockifyConfig struct {
-	BaseURL string
-}
-
 // Load loads configuration from environment variables
 func Load() *Config {
 	return &Config{
@@ -58,9 +53,6 @@ func Load() *Config {
 			Secret:     getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
 			Issuer:     getEnv("JWT_ISSUER", "kensan"),
 			ExpireHour: getEnvAsInt("JWT_EXPIRE_HOUR", 24),
-		},
-		Clockify: ClockifyConfig{
-			BaseURL: getEnv("CLOCKIFY_BASE_URL", "https://api.clockify.me/api/v1"),
 		},
 	}
 }

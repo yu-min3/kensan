@@ -3,24 +3,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { TagSelect } from '@/components/common/TagSelect'
 import type { DialogState } from '@/hooks/useDialogState'
-import type { Goal, Milestone, Task } from '@/types'
+import type { Goal, Milestone, Tag, Task } from '@/types'
 
 export interface TaskFormData {
   name: string
   milestoneId: string
   parentTaskId?: string
+  tagIds: string[]
 }
 
 interface TaskDialogProps {
   dialog: DialogState<TaskFormData>
   goals: Goal[]
   milestones: Milestone[]
+  tags: Tag[]
   tasks: Task[]
   onSave: (data: TaskFormData, editingId: string | null) => Promise<void>
 }
 
-export function TaskDialog({ dialog, goals, milestones, tasks, onSave }: TaskDialogProps) {
+export function TaskDialog({ dialog, goals, milestones, tags, tasks, onSave }: TaskDialogProps) {
   const handleSave = async () => {
     if (!dialog.data.name) return
     await onSave(dialog.data, dialog.editingId)
@@ -88,7 +91,7 @@ export function TaskDialog({ dialog, goals, milestones, tasks, onSave }: TaskDia
                           {goal.name}
                         </div>
                         {goalMilestones.map(milestone => (
-                          <SelectItem key={milestone.id} value={milestone.id}>
+                          <SelectItem key={milestone.id} value={milestone.id} label={milestone.name}>
                             {milestone.name}
                           </SelectItem>
                         ))}
@@ -106,6 +109,19 @@ export function TaskDialog({ dialog, goals, milestones, tasks, onSave }: TaskDia
                 Goal: {selectedGoal.name}
               </p>
             )}
+          </div>
+
+          {/* Tag selection */}
+          <div>
+            <Label>タグ（任意）</Label>
+            <div className="mt-1">
+              <TagSelect
+                tags={tags}
+                selectedTagIds={dialog.data.tagIds || []}
+                onSelectedTagIdsChange={(tagIds) => dialog.setField('tagIds', tagIds)}
+                placeholder="タグを追加"
+              />
+            </div>
           </div>
 
           {parentTask && (

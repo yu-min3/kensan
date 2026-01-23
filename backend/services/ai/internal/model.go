@@ -60,9 +60,13 @@ type TimeEntryData struct {
 
 // LearningRecordData represents learning record data for AI analysis
 type LearningRecordData struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	GoalTag string `json:"goalTag,omitempty"`
+	Title         string `json:"title"`
+	Content       string `json:"content"`
+	GoalID        string `json:"goalId,omitempty"`
+	GoalName      string `json:"goalName,omitempty"`
+	GoalColor     string `json:"goalColor,omitempty"`
+	MilestoneID   string `json:"milestoneId,omitempty"`
+	MilestoneName string `json:"milestoneName,omitempty"`
 }
 
 // ReviewData represents aggregated data for review generation

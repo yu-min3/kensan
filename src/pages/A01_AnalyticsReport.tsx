@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { formatDurationShort } from '@/lib/dateFormat'
-import { weeklySummary as mockWeeklySummary, dailyStudyHours as mockDailyStudyHours } from '@/mocks/data'
+import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import {
   BarChart3,
   Clock,
   Target,
   TrendingUp,
   Calendar,
+  Loader2,
 } from 'lucide-react'
 import {
   BarChart,
@@ -25,22 +26,41 @@ import {
   CartesianGrid,
 } from 'recharts'
 
-const pieData = mockWeeklySummary.byGoal.map((goal) => ({
-  name: goal.name,
-  value: goal.minutes,
-  color: goal.color,
-})).filter((d) => d.value > 0)
-
-const milestoneData = mockWeeklySummary.byMilestone.map((milestone) => ({
-  name: milestone.name,
-  hours: Math.round((milestone.minutes / 60) * 10) / 10,
-}))
-
 export function A01AnalyticsReport() {
   const [period, setPeriod] = useState<'week' | 'month'>('week')
+  const { weeklySummary, dailyStudyHours, isLoading, fetchDashboardData } = useAnalyticsStore()
 
-  const totalHours = Math.floor(mockWeeklySummary.totalMinutes / 60)
-  const totalMinutes = mockWeeklySummary.totalMinutes % 60
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  const pieData = useMemo(() => {
+    if (!weeklySummary) return []
+    return weeklySummary.byGoal.map((goal) => ({
+      name: goal.name,
+      value: goal.minutes,
+      color: goal.color,
+    })).filter((d) => d.value > 0)
+  }, [weeklySummary])
+
+  const milestoneData = useMemo(() => {
+    if (!weeklySummary) return []
+    return weeklySummary.byMilestone.map((milestone) => ({
+      name: milestone.name,
+      hours: Math.round((milestone.minutes / 60) * 10) / 10,
+    }))
+  }, [weeklySummary])
+
+  const totalHours = weeklySummary ? Math.floor(weeklySummary.totalMinutes / 60) : 0
+  const totalMinutes = weeklySummary ? weeklySummary.totalMinutes % 60 : 0
+
+  if (isLoading || !weeklySummary) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -80,7 +100,7 @@ export function A01AnalyticsReport() {
               <Target className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">完了タスク</p>
-                <p className="text-2xl font-bold">{mockWeeklySummary.completedTasks}</p>
+                <p className="text-2xl font-bold">{weeklySummary.completedTasks}</p>
               </div>
             </div>
           </CardContent>
@@ -94,8 +114,8 @@ export function A01AnalyticsReport() {
                 <p className="text-sm text-muted-foreground">計画達成率</p>
                 <p className="text-2xl font-bold">
                   {Math.round(
-                    (mockWeeklySummary.plannedVsActual.actual /
-                      mockWeeklySummary.plannedVsActual.planned) *
+                    (weeklySummary.plannedVsActual.actual /
+                      weeklySummary.plannedVsActual.planned) *
                       100
                   )}
                   %
@@ -131,7 +151,7 @@ export function A01AnalyticsReport() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={mockDailyStudyHours}>
+              <BarChart data={dailyStudyHours}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="day" fontSize={12} />
                 <YAxis fontSize={12} unit="h" />
@@ -212,7 +232,7 @@ export function A01AnalyticsReport() {
             <CardTitle>目標達成度</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {mockWeeklySummary.byGoal.map((goal) => (
+            {weeklySummary.byGoal.map((goal) => (
               <div key={goal.id}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">

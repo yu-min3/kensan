@@ -19,43 +19,121 @@ type MockService struct {
 	mock.Mock
 }
 
-func (m *MockService) ListProjects(ctx context.Context, userID string, filter task.ProjectFilter) ([]task.Project, error) {
+// Goal Operations
+func (m *MockService) ListGoals(ctx context.Context, userID string, filter task.GoalFilter) ([]task.Goal, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]task.Project), args.Error(1)
+	return args.Get(0).([]task.Goal), args.Error(1)
 }
 
-func (m *MockService) GetProject(ctx context.Context, userID, projectID string) (*task.Project, error) {
-	args := m.Called(ctx, userID, projectID)
+func (m *MockService) GetGoal(ctx context.Context, userID, goalID string) (*task.Goal, error) {
+	args := m.Called(ctx, userID, goalID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockService) CreateProject(ctx context.Context, userID string, input task.CreateProjectInput) (*task.Project, error) {
+func (m *MockService) CreateGoal(ctx context.Context, userID string, input task.CreateGoalInput) (*task.Goal, error) {
 	args := m.Called(ctx, userID, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockService) UpdateProject(ctx context.Context, userID, projectID string, input task.UpdateProjectInput) (*task.Project, error) {
-	args := m.Called(ctx, userID, projectID, input)
+func (m *MockService) UpdateGoal(ctx context.Context, userID, goalID string, input task.UpdateGoalInput) (*task.Goal, error) {
+	args := m.Called(ctx, userID, goalID, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*task.Project), args.Error(1)
+	return args.Get(0).(*task.Goal), args.Error(1)
 }
 
-func (m *MockService) DeleteProject(ctx context.Context, userID, projectID string) error {
-	args := m.Called(ctx, userID, projectID)
+func (m *MockService) DeleteGoal(ctx context.Context, userID, goalID string) error {
+	args := m.Called(ctx, userID, goalID)
 	return args.Error(0)
 }
 
+// Milestone Operations
+func (m *MockService) ListMilestones(ctx context.Context, userID string, filter task.MilestoneFilter) ([]task.Milestone, error) {
+	args := m.Called(ctx, userID, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Milestone), args.Error(1)
+}
+
+func (m *MockService) GetMilestone(ctx context.Context, userID, milestoneID string) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, milestoneID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockService) CreateMilestone(ctx context.Context, userID string, input task.CreateMilestoneInput) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockService) UpdateMilestone(ctx context.Context, userID, milestoneID string, input task.UpdateMilestoneInput) (*task.Milestone, error) {
+	args := m.Called(ctx, userID, milestoneID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Milestone), args.Error(1)
+}
+
+func (m *MockService) DeleteMilestone(ctx context.Context, userID, milestoneID string) error {
+	args := m.Called(ctx, userID, milestoneID)
+	return args.Error(0)
+}
+
+// Tag Operations
+func (m *MockService) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Tag), args.Error(1)
+}
+
+func (m *MockService) GetTag(ctx context.Context, userID, tagID string) (*task.Tag, error) {
+	args := m.Called(ctx, userID, tagID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockService) CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockService) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
+	args := m.Called(ctx, userID, tagID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockService) DeleteTag(ctx context.Context, userID, tagID string) error {
+	args := m.Called(ctx, userID, tagID)
+	return args.Error(0)
+}
+
+// Task Operations
 func (m *MockService) ListTasks(ctx context.Context, userID string, filter task.TaskFilter) ([]task.Task, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
@@ -139,134 +217,6 @@ func newRequestWithParams(method, path string, body interface{}, params map[stri
 	return req
 }
 
-// ========== Project Handler Tests ==========
-
-func TestListProjects_Handler(t *testing.T) {
-	t.Run("returns list of projects", func(t *testing.T) {
-		mockSvc := new(MockService)
-
-		projects := []task.Project{
-			{ID: "p1", Name: "Project 1", IsArchived: false},
-			{ID: "p2", Name: "Project 2", IsArchived: false},
-		}
-
-		mockSvc.On("ListProjects", mock.Anything, "user-123", mock.AnythingOfType("task.ProjectFilter")).
-			Return(projects, nil)
-
-		// Create request
-		req := httptest.NewRequest(http.MethodGet, "/projects", nil)
-		w := httptest.NewRecorder()
-
-		// Simulate handler behavior
-		result, err := mockSvc.ListProjects(req.Context(), "user-123", task.ProjectFilter{})
-
-		assert.NoError(t, err)
-		assert.Len(t, result, 2)
-		assert.Equal(t, "Project 1", result[0].Name)
-		_ = w // Use recorder
-		mockSvc.AssertExpectations(t)
-	})
-
-	t.Run("returns empty list when no projects", func(t *testing.T) {
-		mockSvc := new(MockService)
-
-		mockSvc.On("ListProjects", mock.Anything, "user-123", mock.AnythingOfType("task.ProjectFilter")).
-			Return([]task.Project{}, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/projects", nil)
-		result, err := mockSvc.ListProjects(req.Context(), "user-123", task.ProjectFilter{})
-
-		assert.NoError(t, err)
-		assert.Empty(t, result)
-		mockSvc.AssertExpectations(t)
-	})
-}
-
-func TestCreateProject_Handler(t *testing.T) {
-	t.Run("creates project successfully", func(t *testing.T) {
-		mockSvc := new(MockService)
-
-		input := task.CreateProjectInput{
-			Name: "New Project",
-		}
-
-		expectedProject := &task.Project{
-			ID:         "p-new",
-			Name:       "New Project",
-			IsArchived: false,
-		}
-
-		mockSvc.On("CreateProject", mock.Anything, "user-123", input).
-			Return(expectedProject, nil)
-
-		result, err := mockSvc.CreateProject(context.Background(), "user-123", input)
-
-		assert.NoError(t, err)
-		assert.Equal(t, "New Project", result.Name)
-		mockSvc.AssertExpectations(t)
-	})
-
-	t.Run("creates project with goal tag", func(t *testing.T) {
-		mockSvc := new(MockService)
-		goalTag := task.GoalTagGK
-
-		input := task.CreateProjectInput{
-			Name:    "GK Project",
-			GoalTag: &goalTag,
-		}
-
-		expectedProject := &task.Project{
-			ID:         "p-gk",
-			Name:       "GK Project",
-			GoalTag:    &goalTag,
-			IsArchived: false,
-		}
-
-		mockSvc.On("CreateProject", mock.Anything, "user-123", input).
-			Return(expectedProject, nil)
-
-		result, err := mockSvc.CreateProject(context.Background(), "user-123", input)
-
-		assert.NoError(t, err)
-		assert.Equal(t, &goalTag, result.GoalTag)
-		mockSvc.AssertExpectations(t)
-	})
-}
-
-func TestGetProject_Handler(t *testing.T) {
-	t.Run("returns project by ID", func(t *testing.T) {
-		mockSvc := new(MockService)
-
-		expectedProject := &task.Project{
-			ID:   "p1",
-			Name: "Test Project",
-		}
-
-		mockSvc.On("GetProject", mock.Anything, "user-123", "p1").
-			Return(expectedProject, nil)
-
-		result, err := mockSvc.GetProject(context.Background(), "user-123", "p1")
-
-		assert.NoError(t, err)
-		assert.Equal(t, "Test Project", result.Name)
-		mockSvc.AssertExpectations(t)
-	})
-}
-
-func TestDeleteProject_Handler(t *testing.T) {
-	t.Run("deletes project successfully", func(t *testing.T) {
-		mockSvc := new(MockService)
-
-		mockSvc.On("DeleteProject", mock.Anything, "user-123", "p1").
-			Return(nil)
-
-		err := mockSvc.DeleteProject(context.Background(), "user-123", "p1")
-
-		assert.NoError(t, err)
-		mockSvc.AssertExpectations(t)
-	})
-}
-
 // ========== Task Handler Tests ==========
 
 func TestListTasks_Handler(t *testing.T) {
@@ -274,8 +224,8 @@ func TestListTasks_Handler(t *testing.T) {
 		mockSvc := new(MockService)
 
 		tasks := []task.Task{
-			{ID: "t1", Name: "Task 1", ProjectID: "p1"},
-			{ID: "t2", Name: "Task 2", ProjectID: "p1"},
+			{ID: "t1", Name: "Task 1"},
+			{ID: "t2", Name: "Task 2"},
 		}
 
 		mockSvc.On("ListTasks", mock.Anything, "user-123", mock.AnythingOfType("task.TaskFilter")).
@@ -288,16 +238,16 @@ func TestListTasks_Handler(t *testing.T) {
 		mockSvc.AssertExpectations(t)
 	})
 
-	t.Run("filters by project ID", func(t *testing.T) {
+	t.Run("filters by milestone ID", func(t *testing.T) {
 		mockSvc := new(MockService)
-		projectID := "p1"
+		milestoneID := "m1"
 
 		filter := task.TaskFilter{
-			ProjectID: &projectID,
+			MilestoneID: &milestoneID,
 		}
 
 		tasks := []task.Task{
-			{ID: "t1", Name: "Task 1", ProjectID: projectID},
+			{ID: "t1", Name: "Task 1", MilestoneID: &milestoneID},
 		}
 
 		mockSvc.On("ListTasks", mock.Anything, "user-123", filter).
@@ -307,7 +257,7 @@ func TestListTasks_Handler(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
-		assert.Equal(t, projectID, result[0].ProjectID)
+		assert.Equal(t, &milestoneID, result[0].MilestoneID)
 		mockSvc.AssertExpectations(t)
 	})
 
@@ -340,14 +290,12 @@ func TestCreateTask_Handler(t *testing.T) {
 		mockSvc := new(MockService)
 
 		input := task.CreateTaskInput{
-			Name:      "New Task",
-			ProjectID: "p1",
+			Name: "New Task",
 		}
 
 		expectedTask := &task.Task{
 			ID:        "t-new",
 			Name:      "New Task",
-			ProjectID: "p1",
 			Completed: false,
 		}
 
@@ -368,14 +316,12 @@ func TestCreateTask_Handler(t *testing.T) {
 
 		input := task.CreateTaskInput{
 			Name:         "Sub Task",
-			ProjectID:    "p1",
 			ParentTaskID: &parentID,
 		}
 
 		expectedTask := &task.Task{
 			ID:           "t-sub",
 			Name:         "Sub Task",
-			ProjectID:    "p1",
 			ParentTaskID: &parentID,
 		}
 
@@ -388,6 +334,31 @@ func TestCreateTask_Handler(t *testing.T) {
 		assert.Equal(t, &parentID, result.ParentTaskID)
 		mockSvc.AssertExpectations(t)
 	})
+
+	t.Run("creates task with milestone", func(t *testing.T) {
+		mockSvc := new(MockService)
+		milestoneID := "m1"
+
+		input := task.CreateTaskInput{
+			Name:        "Milestone Task",
+			MilestoneID: &milestoneID,
+		}
+
+		expectedTask := &task.Task{
+			ID:          "t-ms",
+			Name:        "Milestone Task",
+			MilestoneID: &milestoneID,
+		}
+
+		mockSvc.On("CreateTask", mock.Anything, "user-123", input).
+			Return(expectedTask, nil)
+
+		result, err := mockSvc.CreateTask(context.Background(), "user-123", input)
+
+		assert.NoError(t, err)
+		assert.Equal(t, &milestoneID, result.MilestoneID)
+		mockSvc.AssertExpectations(t)
+	})
 }
 
 func TestGetTask_Handler(t *testing.T) {
@@ -395,9 +366,8 @@ func TestGetTask_Handler(t *testing.T) {
 		mockSvc := new(MockService)
 
 		expectedTask := &task.Task{
-			ID:        "t1",
-			Name:      "Test Task",
-			ProjectID: "p1",
+			ID:   "t1",
+			Name: "Test Task",
 		}
 
 		mockSvc.On("GetTask", mock.Anything, "user-123", "t1").
@@ -446,28 +416,213 @@ func TestDeleteTask_Handler(t *testing.T) {
 	})
 }
 
+// ========== Goal Handler Tests ==========
+
+func TestListGoals_Handler(t *testing.T) {
+	t.Run("returns list of goals", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		goals := []task.Goal{
+			{ID: "g1", Name: "Goal 1"},
+			{ID: "g2", Name: "Goal 2"},
+		}
+
+		mockSvc.On("ListGoals", mock.Anything, "user-123", mock.AnythingOfType("task.GoalFilter")).
+			Return(goals, nil)
+
+		result, err := mockSvc.ListGoals(context.Background(), "user-123", task.GoalFilter{})
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestCreateGoal_Handler(t *testing.T) {
+	t.Run("creates goal successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		input := task.CreateGoalInput{
+			Name:  "New Goal",
+			Color: "#FF0000",
+		}
+
+		expectedGoal := &task.Goal{
+			ID:    "g-new",
+			Name:  "New Goal",
+			Color: "#FF0000",
+		}
+
+		mockSvc.On("CreateGoal", mock.Anything, "user-123", input).
+			Return(expectedGoal, nil)
+
+		result, err := mockSvc.CreateGoal(context.Background(), "user-123", input)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "New Goal", result.Name)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestDeleteGoal_Handler(t *testing.T) {
+	t.Run("deletes goal successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		mockSvc.On("DeleteGoal", mock.Anything, "user-123", "g1").
+			Return(nil)
+
+		err := mockSvc.DeleteGoal(context.Background(), "user-123", "g1")
+
+		assert.NoError(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+// ========== Milestone Handler Tests ==========
+
+func TestListMilestones_Handler(t *testing.T) {
+	t.Run("returns list of milestones", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		milestones := []task.Milestone{
+			{ID: "m1", Name: "Milestone 1"},
+			{ID: "m2", Name: "Milestone 2"},
+		}
+
+		mockSvc.On("ListMilestones", mock.Anything, "user-123", mock.AnythingOfType("task.MilestoneFilter")).
+			Return(milestones, nil)
+
+		result, err := mockSvc.ListMilestones(context.Background(), "user-123", task.MilestoneFilter{})
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestCreateMilestone_Handler(t *testing.T) {
+	t.Run("creates milestone successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		input := task.CreateMilestoneInput{
+			Name:   "New Milestone",
+			GoalID: "g1",
+		}
+
+		expectedMilestone := &task.Milestone{
+			ID:     "m-new",
+			Name:   "New Milestone",
+			GoalID: "g1",
+		}
+
+		mockSvc.On("CreateMilestone", mock.Anything, "user-123", input).
+			Return(expectedMilestone, nil)
+
+		result, err := mockSvc.CreateMilestone(context.Background(), "user-123", input)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "New Milestone", result.Name)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestDeleteMilestone_Handler(t *testing.T) {
+	t.Run("deletes milestone successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		mockSvc.On("DeleteMilestone", mock.Anything, "user-123", "m1").
+			Return(nil)
+
+		err := mockSvc.DeleteMilestone(context.Background(), "user-123", "m1")
+
+		assert.NoError(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+// ========== Tag Handler Tests ==========
+
+func TestListTags_Handler(t *testing.T) {
+	t.Run("returns list of tags", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		tags := []task.Tag{
+			{ID: "tag1", Name: "Tag 1"},
+			{ID: "tag2", Name: "Tag 2"},
+		}
+
+		mockSvc.On("ListTags", mock.Anything, "user-123").
+			Return(tags, nil)
+
+		result, err := mockSvc.ListTags(context.Background(), "user-123")
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestCreateTag_Handler(t *testing.T) {
+	t.Run("creates tag successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		input := task.CreateTagInput{
+			Name:  "New Tag",
+			Color: "#FF0000",
+		}
+
+		expectedTag := &task.Tag{
+			ID:    "tag-new",
+			Name:  "New Tag",
+			Color: "#FF0000",
+		}
+
+		mockSvc.On("CreateTag", mock.Anything, "user-123", input).
+			Return(expectedTag, nil)
+
+		result, err := mockSvc.CreateTag(context.Background(), "user-123", input)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "New Tag", result.Name)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestDeleteTag_Handler(t *testing.T) {
+	t.Run("deletes tag successfully", func(t *testing.T) {
+		mockSvc := new(MockService)
+
+		mockSvc.On("DeleteTag", mock.Anything, "user-123", "tag1").
+			Return(nil)
+
+		err := mockSvc.DeleteTag(context.Background(), "user-123", "tag1")
+
+		assert.NoError(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
 // ========== JSON Serialization Tests ==========
 
-func TestProject_JSONSerialization(t *testing.T) {
-	goalTag := task.GoalTagGK
-	project := task.Project{
-		ID:         "p1",
+func TestGoal_JSONSerialization(t *testing.T) {
+	goal := task.Goal{
+		ID:         "g1",
 		UserID:     "u1",
-		Name:       "Test Project",
-		GoalTag:    &goalTag,
+		Name:       "Test Goal",
+		Color:      "#FF0000",
 		IsArchived: false,
 	}
 
-	data, err := json.Marshal(project)
+	data, err := json.Marshal(goal)
 	assert.NoError(t, err)
 
-	var decoded task.Project
+	var decoded task.Goal
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 
-	assert.Equal(t, project.ID, decoded.ID)
-	assert.Equal(t, project.Name, decoded.Name)
-	assert.Equal(t, *project.GoalTag, *decoded.GoalTag)
+	assert.Equal(t, goal.ID, decoded.ID)
+	assert.Equal(t, goal.Name, decoded.Name)
+	assert.Equal(t, goal.Color, decoded.Color)
 }
 
 func TestTask_JSONSerialization(t *testing.T) {
@@ -475,7 +630,6 @@ func TestTask_JSONSerialization(t *testing.T) {
 	tk := task.Task{
 		ID:               "t1",
 		UserID:           "u1",
-		ProjectID:        "p1",
 		Name:             "Test Task",
 		EstimatedMinutes: &estimatedMinutes,
 		Completed:        false,
@@ -491,4 +645,45 @@ func TestTask_JSONSerialization(t *testing.T) {
 	assert.Equal(t, tk.ID, decoded.ID)
 	assert.Equal(t, tk.Name, decoded.Name)
 	assert.Equal(t, *tk.EstimatedMinutes, *decoded.EstimatedMinutes)
+}
+
+func TestMilestone_JSONSerialization(t *testing.T) {
+	milestone := task.Milestone{
+		ID:     "m1",
+		UserID: "u1",
+		GoalID: "g1",
+		Name:   "Test Milestone",
+		Status: task.MilestoneStatusActive,
+	}
+
+	data, err := json.Marshal(milestone)
+	assert.NoError(t, err)
+
+	var decoded task.Milestone
+	err = json.Unmarshal(data, &decoded)
+	assert.NoError(t, err)
+
+	assert.Equal(t, milestone.ID, decoded.ID)
+	assert.Equal(t, milestone.Name, decoded.Name)
+	assert.Equal(t, milestone.Status, decoded.Status)
+}
+
+func TestTag_JSONSerialization(t *testing.T) {
+	tag := task.Tag{
+		ID:     "tag1",
+		UserID: "u1",
+		Name:   "Test Tag",
+		Color:  "#00FF00",
+	}
+
+	data, err := json.Marshal(tag)
+	assert.NoError(t, err)
+
+	var decoded task.Tag
+	err = json.Unmarshal(data, &decoded)
+	assert.NoError(t, err)
+
+	assert.Equal(t, tag.ID, decoded.ID)
+	assert.Equal(t, tag.Name, decoded.Name)
+	assert.Equal(t, tag.Color, decoded.Color)
 }

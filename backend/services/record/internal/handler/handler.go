@@ -43,14 +43,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters for filtering
 	filter := &record.RecordFilter{}
 
-	if projectID := r.URL.Query().Get("project_id"); projectID != "" {
-		filter.ProjectID = &projectID
+	if goalID := r.URL.Query().Get("goal_id"); goalID != "" {
+		filter.GoalID = &goalID
 	}
-	if goalTagStr := r.URL.Query().Get("goal_tag"); goalTagStr != "" {
-		goalTag := record.GoalTag(goalTagStr)
-		if goalTag.IsValid() {
-			filter.GoalTag = &goalTag
-		}
+	if milestoneID := r.URL.Query().Get("milestone_id"); milestoneID != "" {
+		filter.MilestoneID = &milestoneID
 	}
 	if formatStr := r.URL.Query().Get("format"); formatStr != "" {
 		format := record.RecordFormat(formatStr)
@@ -205,8 +202,6 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format is required"}})
 	case errors.Is(err, service.ErrInvalidFormat):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format must be markdown or drawio"}})
-	case errors.Is(err, service.ErrInvalidGoalTag):
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "goalTag", Message: "Goal tag must be GK, OSS, Output, or Other"}})
 	case errors.Is(err, service.ErrQueryRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "query", Message: "Query is required for semantic search"}})
 	default:

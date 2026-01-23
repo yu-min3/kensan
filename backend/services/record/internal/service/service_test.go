@@ -94,28 +94,6 @@ func TestRecordFormat_IsValid(t *testing.T) {
 	}
 }
 
-// ========== GoalTag Validation Tests ==========
-
-func TestGoalTag_IsValid(t *testing.T) {
-	testCases := []struct {
-		tag      record.GoalTag
-		expected bool
-	}{
-		{record.GoalTagGK, true},
-		{record.GoalTagOSS, true},
-		{record.GoalTagOutput, true},
-		{record.GoalTagOther, true},
-		{record.GoalTag("invalid"), false},
-		{record.GoalTag(""), false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(string(tc.tag), func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.tag.IsValid())
-		})
-	}
-}
-
 // ========== List Tests ==========
 
 func TestService_List_Success(t *testing.T) {
@@ -139,19 +117,19 @@ func TestService_List_Success(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestService_List_WithGoalTagFilter(t *testing.T) {
+func TestService_List_WithGoalIDFilter(t *testing.T) {
 	mockRepo := new(MockRepository)
 	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
-	goalTag := record.GoalTagGK
+	goalID := "goal-123"
 
 	filter := &record.RecordFilter{
-		GoalTag: &goalTag,
+		GoalID: &goalID,
 	}
 
 	expectedRecords := []*record.LearningRecordListItem{
-		{ID: "r1", Title: "GK Study", GoalTag: &goalTag},
+		{ID: "r1", Title: "Goal Study", GoalID: &goalID},
 	}
 
 	mockRepo.On("List", ctx, userID, filter).Return(expectedRecords, nil)
@@ -160,7 +138,7 @@ func TestService_List_WithGoalTagFilter(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
-	assert.Equal(t, &goalTag, result[0].GoalTag)
+	assert.Equal(t, &goalID, result[0].GoalID)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -249,13 +227,13 @@ func TestService_Create_Success(t *testing.T) {
 	svc := NewService(mockRepo)
 	ctx := context.Background()
 	userID := "user-123"
-	goalTag := record.GoalTagGK
+	goalID := "goal-123"
 
 	input := &record.CreateRecordInput{
 		Title:   "New Learning Record",
 		Content: "# Content\n\nDetails here",
 		Format:  record.RecordFormatMarkdown,
-		GoalTag: &goalTag,
+		GoalID:  &goalID,
 	}
 
 	mockRepo.On("Create", ctx, mock.AnythingOfType("*record.LearningRecord")).Return(nil)
@@ -368,28 +346,6 @@ func TestService_Create_InvalidFormat(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, ErrInvalidFormat)
-	mockRepo.AssertNotCalled(t, "Create")
-}
-
-func TestService_Create_InvalidGoalTag(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-	ctx := context.Background()
-	userID := "user-123"
-	invalidTag := record.GoalTag("invalid")
-
-	input := &record.CreateRecordInput{
-		Title:   "Valid Title",
-		Content: "Some content",
-		Format:  record.RecordFormatMarkdown,
-		GoalTag: &invalidTag,
-	}
-
-	result, err := svc.Create(ctx, userID, input)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.ErrorIs(t, err, ErrInvalidGoalTag)
 	mockRepo.AssertNotCalled(t, "Create")
 }
 
@@ -527,36 +483,6 @@ func TestService_Update_InvalidFormat(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, ErrInvalidFormat)
-	mockRepo.AssertNotCalled(t, "Update")
-}
-
-func TestService_Update_InvalidGoalTag(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-	ctx := context.Background()
-	userID := "user-123"
-	recordID := "record-123"
-	invalidTag := record.GoalTag("invalid")
-
-	existingRecord := &record.LearningRecord{
-		ID:      recordID,
-		UserID:  userID,
-		Title:   "Original Title",
-		Content: "Original content",
-		Format:  record.RecordFormatMarkdown,
-	}
-
-	input := &record.UpdateRecordInput{
-		GoalTag: &invalidTag,
-	}
-
-	mockRepo.On("GetByIDAndUserID", ctx, recordID, userID).Return(existingRecord, nil)
-
-	result, err := svc.Update(ctx, userID, recordID, input)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.ErrorIs(t, err, ErrInvalidGoalTag)
 	mockRepo.AssertNotCalled(t, "Update")
 }
 

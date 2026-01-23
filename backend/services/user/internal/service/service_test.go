@@ -105,25 +105,6 @@ func TestEmailValidation(t *testing.T) {
 	}
 }
 
-func TestMaskAPIKey(t *testing.T) {
-	testCases := []struct {
-		input    string
-		expected string
-	}{
-		{"12345678901234", "1234****1234"},
-		{"abcdefghij", "abcd****ghij"},
-		{"short", "****"},
-		{"12345678", "****"},
-		{"", "****"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.input, func(t *testing.T) {
-			result := maskAPIKey(tc.input)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
 
 // ========== Register Tests ==========
 
@@ -535,9 +516,6 @@ func TestGetSettings_Success(t *testing.T) {
 
 	expectedSettings := &user.UserSettings{
 		UserID:         userID,
-		ClockifyAPIKey: "api-key-12345678",
-		WorkspaceID:    "workspace-123",
-		WorkspaceName:  "My Workspace",
 		Theme:          "dark",
 		Timezone:       "Asia/Tokyo",
 		IsConfigured:   true,
@@ -554,9 +532,7 @@ func TestGetSettings_Success(t *testing.T) {
 	assert.Equal(t, "dark", result.Theme)
 	assert.Equal(t, "Asia/Tokyo", result.Timezone)
 	assert.True(t, result.AIEnabled)
-	assert.True(t, result.HasClockifyAPIKey)
-	// API key should be masked
-	assert.Equal(t, "api-****5678", result.ClockifyAPIKey)
+	assert.True(t, result.IsConfigured)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -669,20 +645,18 @@ func TestUpdateSettings_SetsIsConfigured(t *testing.T) {
 	}
 
 	req := &user.UpdateSettingsRequest{
-		ClockifyAPIKey: "new-api-key",
-		WorkspaceID:    "workspace-123",
+		Timezone: "Asia/Tokyo",
 	}
 
 	mockRepo.On("GetSettings", ctx, userID).Return(existingSettings, nil).Once()
 	mockRepo.On("UpdateSettings", ctx, mock.MatchedBy(func(s *user.UserSettings) bool {
-		return s.IsConfigured == true
+		return s.IsConfigured == true && s.Timezone == "Asia/Tokyo"
 	})).Return(nil)
 
 	updatedSettings := &user.UserSettings{
-		UserID:         userID,
-		ClockifyAPIKey: "new-api-key",
-		WorkspaceID:    "workspace-123",
-		IsConfigured:   true,
+		UserID:       userID,
+		Timezone:     "Asia/Tokyo",
+		IsConfigured: true,
 	}
 	mockRepo.On("GetSettings", ctx, userID).Return(updatedSettings, nil).Once()
 

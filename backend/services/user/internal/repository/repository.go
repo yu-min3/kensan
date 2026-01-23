@@ -155,22 +155,16 @@ func (r *PostgresRepository) Update(ctx context.Context, u *user.User) error {
 
 // GetSettings retrieves user settings
 func (r *PostgresRepository) GetSettings(ctx context.Context, userID string) (*user.UserSettings, error) {
-	// ADR-0003: Plaintext storage for development phase
 	query := `
-		SELECT user_id, clockify_api_key, workspace_id, workspace_name,
-		       timezone, theme, is_configured, ai_enabled, ai_consent_given
+		SELECT user_id, timezone, theme, is_configured, ai_enabled, ai_consent_given
 		FROM user_settings
 		WHERE user_id = $1
 	`
 
 	var s user.UserSettings
-	var clockifyAPIKey, workspaceID, workspaceName *string
 
 	err := r.pool.QueryRow(ctx, query, userID).Scan(
 		&s.UserID,
-		&clockifyAPIKey,
-		&workspaceID,
-		&workspaceName,
 		&s.Timezone,
 		&s.Theme,
 		&s.IsConfigured,
@@ -184,47 +178,19 @@ func (r *PostgresRepository) GetSettings(ctx context.Context, userID string) (*u
 		return nil, err
 	}
 
-	// Handle nullable fields
-	if clockifyAPIKey != nil {
-		s.ClockifyAPIKey = *clockifyAPIKey
-	}
-	if workspaceID != nil {
-		s.WorkspaceID = *workspaceID
-	}
-	if workspaceName != nil {
-		s.WorkspaceName = *workspaceName
-	}
-
 	return &s, nil
 }
 
 // UpdateSettings updates user settings
 func (r *PostgresRepository) UpdateSettings(ctx context.Context, s *user.UserSettings) error {
-	// ADR-0003: Plaintext storage for development phase
 	query := `
 		UPDATE user_settings
-		SET clockify_api_key = $2, workspace_id = $3, workspace_name = $4,
-		    timezone = $5, theme = $6, is_configured = $7, ai_enabled = $8, ai_consent_given = $9
+		SET timezone = $2, theme = $3, is_configured = $4, ai_enabled = $5, ai_consent_given = $6
 		WHERE user_id = $1
 	`
 
-	// Convert empty strings to nil for nullable columns
-	var clockifyAPIKey, workspaceID, workspaceName *string
-	if s.ClockifyAPIKey != "" {
-		clockifyAPIKey = &s.ClockifyAPIKey
-	}
-	if s.WorkspaceID != "" {
-		workspaceID = &s.WorkspaceID
-	}
-	if s.WorkspaceName != "" {
-		workspaceName = &s.WorkspaceName
-	}
-
 	result, err := r.pool.Exec(ctx, query,
 		s.UserID,
-		clockifyAPIKey,
-		workspaceID,
-		workspaceName,
 		s.Timezone,
 		s.Theme,
 		s.IsConfigured,

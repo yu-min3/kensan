@@ -49,6 +49,7 @@ export interface Task {
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string // YYYY-MM-DD
+  sortOrder: number // 並び順（小さいほど上）
   createdAt: Date
   updatedAt: Date
 }
@@ -110,10 +111,68 @@ export interface RoutineTask {
 }
 
 // ============================================
-// LearningRecord (学習記録)
+// Note (統合ノート - 日記・学習記録・メモ)
 // ============================================
+export type NoteType = 'diary' | 'learning' | 'memo'
+export type NoteFormat = 'markdown' | 'drawio'
+
+export interface Note {
+  id: string
+  userId: string
+  type: NoteType
+  title?: string // memoでは任意
+  content: string
+  format: NoteFormat
+  date?: string // YYYY-MM-DD, diaryでは必須
+  taskId?: string // 関連タスク
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[] // note_tagsテーブル経由
+  relatedTimeEntryIds?: string[]
+  fileUrl?: string // drawioの場合のファイルURL
+  archived: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Noteの一覧表示用（contentなし）
+export interface NoteListItem {
+  id: string
+  userId: string
+  type: NoteType
+  title?: string
+  format: NoteFormat
+  date?: string
+  taskId?: string
+  milestoneId?: string
+  milestoneName?: string
+  goalId?: string
+  goalName?: string
+  goalColor?: string
+  tagIds?: string[]
+  relatedTimeEntryIds?: string[]
+  fileUrl?: string
+  archived: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// 検索結果
+export interface NoteSearchResult {
+  note: NoteListItem
+  score: number
+}
+
+// ============================================
+// LearningRecord (学習記録) - 後方互換
+// ============================================
+/** @deprecated Use Note with type='learning' instead */
 export type RecordFormat = 'markdown' | 'drawio'
 
+/** @deprecated Use Note with type='learning' instead */
 export interface LearningRecord {
   id: string
   title: string
@@ -131,8 +190,9 @@ export interface LearningRecord {
 }
 
 // ============================================
-// DiaryEntry (日記)
+// DiaryEntry (日記) - 後方互換
 // ============================================
+/** @deprecated Use Note with type='diary' instead */
 export interface DiaryEntry {
   id: string
   date: string // YYYY-MM-DD
@@ -149,9 +209,6 @@ export interface DiaryEntry {
 export type Theme = 'light' | 'dark' | 'system'
 
 export interface UserSettings {
-  clockifyApiKey?: string
-  workspaceId?: string
-  workspaceName?: string
   timezone: string
   theme: Theme
   isConfigured: boolean
@@ -234,17 +291,3 @@ export const DEFAULT_COLORS = [
   '#84CC16', // Lime
 ] as const
 
-// ============================================
-// 後方互換性のための型エイリアス (移行期間中)
-// ============================================
-/** @deprecated Use Goal instead */
-export type GoalTag = 'GK' | 'OSS' | 'Output' | 'Other'
-
-/** @deprecated Use Goal/Milestone instead */
-export interface Project {
-  id: string
-  name: string
-  goalTag?: GoalTag
-  color?: string
-  isArchived: boolean
-}

@@ -17,13 +17,13 @@ up:
 	@echo "Services:"
 	@echo "  - user-service:      http://localhost:8081/health"
 	@echo "  - task-service:      http://localhost:8082/health"
-	@echo "  - sync-service:      http://localhost:8083/health"
 	@echo "  - timeblock-service: http://localhost:8084/health"
 	@echo "  - routine-service:   http://localhost:8085/health"
 	@echo "  - record-service:    http://localhost:8086/health"
 	@echo "  - diary-service:     http://localhost:8087/health"
 	@echo "  - analytics-service: http://localhost:8088/health"
 	@echo "  - ai-service:        http://localhost:8089/health"
+	@echo "  - memo-service:      http://localhost:8090/health"
 	@echo ""
 	@echo "Database:  postgres://kensan:kensan@localhost:5432/kensan"
 	@echo ""
@@ -76,7 +76,7 @@ db:
 
 ## Start only backend services (requires db)
 backend: db
-	docker compose up -d user-service task-service sync-service timeblock-service routine-service record-service diary-service analytics-service ai-service
+	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service ai-service memo-service
 	@echo "All backend services started"
 
 # =============================================================================
@@ -117,13 +117,13 @@ health:
 	@echo ""
 	@curl -s http://localhost:8081/health 2>/dev/null | jq . || echo "user-service: DOWN"
 	@curl -s http://localhost:8082/health 2>/dev/null | jq . || echo "task-service: DOWN"
-	@curl -s http://localhost:8083/health 2>/dev/null | jq . || echo "sync-service: DOWN"
 	@curl -s http://localhost:8084/health 2>/dev/null | jq . || echo "timeblock-service: DOWN"
 	@curl -s http://localhost:8085/health 2>/dev/null | jq . || echo "routine-service: DOWN"
 	@curl -s http://localhost:8086/health 2>/dev/null | jq . || echo "record-service: DOWN"
 	@curl -s http://localhost:8087/health 2>/dev/null | jq . || echo "diary-service: DOWN"
 	@curl -s http://localhost:8088/health 2>/dev/null | jq . || echo "analytics-service: DOWN"
 	@curl -s http://localhost:8089/health 2>/dev/null | jq . || echo "ai-service: DOWN"
+	@curl -s http://localhost:8090/health 2>/dev/null | jq . || echo "memo-service: DOWN"
 
 # =============================================================================
 # Help
