@@ -12,8 +12,8 @@ import (
 var (
 	ErrNoteNotFound     = errors.New("note not found")
 	ErrTypeRequired     = errors.New("type is required")
-	ErrInvalidType      = errors.New("type must be diary, learning, or memo")
-	ErrTitleRequired    = errors.New("title is required for diary and learning notes")
+	ErrInvalidType      = errors.New("type must be diary or learning")
+	ErrTitleRequired    = errors.New("title is required")
 	ErrContentRequired  = errors.New("content is required")
 	ErrFormatRequired   = errors.New("format is required")
 	ErrInvalidFormat    = errors.New("format must be markdown or drawio")
@@ -105,8 +105,8 @@ func (s *Service) Update(ctx context.Context, userID, noteID string, input *note
 	// Update fields
 	if input.Title != nil {
 		title := strings.TrimSpace(*input.Title)
-		// Validate title for non-memo types
-		if n.Type != note.NoteTypeMemo && title == "" {
+		// Title is always required for notes
+		if title == "" {
 			return nil, ErrTitleRequired
 		}
 		n.Title = &title
@@ -208,11 +208,9 @@ func (s *Service) validateCreateInput(input *note.CreateNoteInput) error {
 		return ErrInvalidType
 	}
 
-	// Validate title (required for diary and learning)
-	if input.Type != note.NoteTypeMemo {
-		if input.Title == nil || strings.TrimSpace(*input.Title) == "" {
-			return ErrTitleRequired
-		}
+	// Validate title (always required)
+	if input.Title == nil || strings.TrimSpace(*input.Title) == "" {
+		return ErrTitleRequired
 	}
 
 	// Validate content

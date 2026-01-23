@@ -1,43 +1,68 @@
-"""Kensan AI - Entry point for running agents."""
+"""FastAPI application for Kensan AI service."""
 
-import anyio
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
-from .agents import AgentRunner, weekly_review
-from .mcp_server import kensan_server
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from kensan_ai.api import router
+from kensan_ai.config import get_settings
+from kensan_ai.db import get_pool, close_pool
 
 
-def create_weekly_review_agent() -> AgentRunner:
-    """Create a weekly review agent instance."""
-    return AgentRunner(
-        system_prompt=weekly_review.SYSTEM_PROMPT,
-        mcp_servers={"kensan": kensan_server},
-        allowed_tools=weekly_review.ALLOWED_TOOLS,
-        max_turns=5,
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifecycle."""
+    # Startup: Initialize DB pool
+    await get_pool()
+    yield
+    # Shutdown: Close DB pool
+    await close_pool()
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    settings = get_settings()
+
+    app = FastAPI(
+        title="Kensan AI",
+        description="AI service for Kensan learning management app",
+        version="0.1.0",
+        lifespan=lifespan,
     )
 
+    # CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure appropriately for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-async def run_weekly_review(prompt: str | None = None) -> str:
-    """Run the weekly review agent.
+    # Include API routes with /api/v1 prefix for frontend compatibility
+    app.include_router(router, prefix="/api/v1")
 
-    Args:
-        prompt: Custom prompt, or None for default.
+    # Root-level health endpoint for Docker healthcheck
+    @app.get("/health")
+    async def root_health():
+        return {"status": "ok", "version": "0.1.0"}
 
-    Returns:
-        The agent's response text.
-    """
-    if prompt is None:
-        prompt = "今週の振り返りをお願いします。まず目標とマイルストーンを確認してください。"
-
-    agent = create_weekly_review_agent()
-    return await agent.run(prompt)
+    return app
 
 
-async def main():
-    """CLI entry point."""
-    print("=== Kensan AI - Weekly Review ===\n")
-    result = await run_weekly_review()
-    print(result)
+# Create the app instance
+app = create_app()
 
 
 if __name__ == "__main__":
-    anyio.run(main)
+    import uvicorn
+
+    settings = get_settings()
+    uvicorn.run(
+        "kensan_ai.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug,
+    )

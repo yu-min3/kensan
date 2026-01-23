@@ -34,7 +34,6 @@ interface NoteActions {
   // Convenience methods for specific types
   createDiary: (data: Omit<CreateNoteInput, 'type'> & { date: string }) => Promise<Note>
   createLearning: (data: Omit<CreateNoteInput, 'type'>) => Promise<Note>
-  createMemo: (data: Omit<CreateNoteInput, 'type'>) => Promise<Note>
 
   // Filter helpers
   setFilter: (filter: NoteFilter) => void
@@ -232,10 +231,6 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
 
   createLearning: async (data) => {
     return get().createNote({ ...data, type: 'learning' })
-  },
-
-  createMemo: async (data) => {
-    return get().createNote({ ...data, type: 'memo' })
   },
 
   // Filter helpers

@@ -650,7 +650,7 @@ make rebuild
 ]
 
 // ============================================
-// Notes (統合ノート - 日記・学習記録・メモ)
+// Notes (統合ノート - 日記・学習記録)
 // ============================================
 export let notes: Note[] = [
   // Diary type notes
@@ -762,11 +762,12 @@ DestinationRuleは、トラフィックが特定のサービスに到達した�
     createdAt: subDays(new Date(), 2),
     updatedAt: subDays(new Date(), 2),
   },
-  // Memo type notes
+  // Additional learning notes
   {
     id: 'note-m1',
     userId: 'user-1',
-    type: 'memo',
+    type: 'learning',
+    title: '開発環境整備メモ',
     content: `買い物リスト:
 - キーボード
 - モニターアーム
@@ -779,8 +780,8 @@ DestinationRuleは、トラフィックが特定のサービスに到達した�
   {
     id: 'note-m2',
     userId: 'user-1',
-    type: 'memo',
-    title: 'アイデアメモ',
+    type: 'learning',
+    title: 'Kensanの新機能アイデア',
     content: `Kensanの新機能アイデア:
 - AI要約機能
 - ポモドーロタイマー連携

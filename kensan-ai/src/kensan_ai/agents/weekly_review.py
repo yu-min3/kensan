@@ -29,5 +29,7 @@ SYSTEM_PROMPT = """あなたは学習の週次振り返りを支援するエー�
 """
 
 ALLOWED_TOOLS = [
-    "mcp__kensan__get_goals_and_milestones",
+    "get_goals_and_milestones",
+    "get_tasks",
+    "get_time_entries",
 ]

@@ -1,26 +1,25 @@
 """Kensan AI - AI agents for learning management.
 
 Usage:
-    from kensan_ai import run_weekly_review
-    result = await run_weekly_review()
+    # Run as FastAPI server:
+    uvicorn kensan_ai.main:app --reload
 
-    # Or create custom agent:
-    from kensan_ai.agents import AgentRunner
-    from kensan_ai.mcp_server import kensan_server
+    # Or use agents directly:
+    from kensan_ai.agents import AgentRunner, chat
 
     agent = AgentRunner(
-        system_prompt="...",
-        mcp_servers={"kensan": kensan_server},
-        allowed_tools=["mcp__kensan__get_goals_and_milestones"],
+        system_prompt=chat.SYSTEM_PROMPT,
+        allowed_tools=chat.ALLOWED_TOOLS,
     )
-    result = await agent.run("Your prompt")
+    result = await agent.run("今日のタスクを教えて", user_id="...")
 """
 
-from .main import create_weekly_review_agent, run_weekly_review
-from .mcp_server import kensan_server
+from kensan_ai.main import app, create_app
+from kensan_ai.agents import AgentRunner, AgentResult
 
 __all__ = [
-    "create_weekly_review_agent",
-    "run_weekly_review",
-    "kensan_server",
+    "app",
+    "create_app",
+    "AgentRunner",
+    "AgentResult",
 ]

@@ -51,8 +51,7 @@ backend/*-service
 backend/tmp/
 backend/vendor/
 
-# mydocs
-mydocs/*
+ß
 
 # kensan-ai Python
 kensan-ai/.venv/

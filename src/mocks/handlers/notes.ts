@@ -206,7 +206,7 @@ export const noteHandlers = [
     const newNote: Note = {
       id: generateId('note'),
       userId: 'user-1',
-      type: body.type || 'memo',
+      type: body.type || 'diary',
       title: body.title,
       content: body.content || '',
       format: body.format || 'markdown',

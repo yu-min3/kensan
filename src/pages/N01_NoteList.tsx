@@ -25,13 +25,11 @@ import {
 const NOTE_TYPE_ICONS: Record<NoteType, React.ComponentType<{ className?: string }>> = {
   diary: CalendarDays,
   learning: BookOpen,
-  memo: StickyNote,
 }
 
 const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   diary: '日記',
   learning: '学習記録',
-  memo: 'メモ',
 }
 
 export function N01NoteList() {
@@ -125,10 +123,6 @@ export function N01NoteList() {
             <BookOpen className="h-4 w-4" />
             学習記録
           </TabsTrigger>
-          <TabsTrigger value="memo" className="gap-2">
-            <StickyNote className="h-4 w-4" />
-            メモ
-          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -211,7 +205,7 @@ export function N01NoteList() {
                           )}
                         </div>
                         <h3 className="font-medium truncate">
-                          {note.title || (note.type === 'memo' ? '無題のメモ' : '無題')}
+                          {note.title || '無題'}
                         </h3>
                         {note.date && (
                           <p className="text-sm text-muted-foreground">

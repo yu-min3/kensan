@@ -111,16 +111,16 @@ export interface RoutineTask {
 }
 
 // ============================================
-// Note (統合ノート - 日記・学習記録・メモ)
+// Note (統合ノート - 日記・学習記録)
 // ============================================
-export type NoteType = 'diary' | 'learning' | 'memo'
+export type NoteType = 'diary' | 'learning'
 export type NoteFormat = 'markdown' | 'drawio'
 
 export interface Note {
   id: string
   userId: string
   type: NoteType
-  title?: string // memoでは任意
+  title?: string
   content: string
   format: NoteFormat
   date?: string // YYYY-MM-DD, diaryでは必須

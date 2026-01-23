@@ -8,7 +8,6 @@ import { useTaskStore } from '@/stores/useTaskStore'
 import type { NoteType, Note } from '@/types'
 import { format } from 'date-fns'
 import {
-  StickyNote,
   Save,
   Trash2,
   X,
@@ -22,13 +21,11 @@ import {
 const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   diary: '日記',
   learning: '学習記録',
-  memo: 'メモ',
 }
 
 const NOTE_TYPE_ICONS: Record<NoteType, React.ComponentType<{ className?: string }>> = {
   diary: CalendarDays,
   learning: BookOpen,
-  memo: StickyNote,
 }
 
 export function N02NoteEdit() {
@@ -46,7 +43,7 @@ export function N02NoteEdit() {
   const { goals, milestones, tasks, tags, getMilestoneById, getGoalById } = useTaskStore()
 
   const isNew = !id
-  const initialType = (searchParams.get('type') as NoteType) || 'memo'
+  const initialType = (searchParams.get('type') as NoteType) || 'diary'
 
   // Local state for the editor
   const [editorValue, setEditorValue] = useState<NoteEditorValue>({
@@ -173,8 +170,8 @@ export function N02NoteEdit() {
     // Content is required
     if (!editorValue.content.trim()) return false
 
-    // Title is required for diary and learning
-    if (editorValue.type !== 'memo' && !editorValue.title?.trim()) return false
+    // Title is always required
+    if (!editorValue.title?.trim()) return false
 
     // Date is required for diary
     if (editorValue.type === 'diary' && !editorValue.date) return false
@@ -339,12 +336,6 @@ export function N02NoteEdit() {
                 <p>
                   学習記録は技術メモやナレッジベースとして活用できます。
                   マイルストーンやタスクと紐付けて進捗を管理しましょう。
-                </p>
-              )}
-              {editorValue.type === 'memo' && (
-                <p>
-                  メモは自由にアイデアや思いつきを記録できます。
-                  タイトルは任意なので、気軽にメモを取りましょう。
                 </p>
               )}
               <p className="pt-2">

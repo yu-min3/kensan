@@ -3,7 +3,7 @@ services:
   # Infrastructure
   # =============================================================================
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: kensan-postgres
     environment:
       POSTGRES_USER: kensan
@@ -39,6 +39,7 @@ services:
         - VITE_ANALYTICS_SERVICE_URL=http://localhost:8088
         - VITE_AI_SERVICE_URL=http://localhost:8089
         - VITE_MEMO_SERVICE_URL=http://localhost:8090
+        - VITE_NOTE_SERVICE_URL=http://localhost:8091
     container_name: kensan-frontend
     ports:
       - "5173:5173"
@@ -204,8 +205,8 @@ services:
 
   ai-service:
     build:
-      context: ./backend
-      dockerfile: services/ai/Dockerfile
+      context: ./kensan-ai
+      dockerfile: Dockerfile
     container_name: kensan-ai-service
     environment:
       SERVER_PORT: 8089
@@ -217,6 +218,13 @@ services:
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY:-}
+      R2_SECRET_KEY: ${R2_SECRET_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-kensan-files}
     ports:
       - "8089:8089"
     depends_on:
@@ -224,6 +232,12 @@ services:
         condition: service_healthy
     networks:
       - kensan-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   memo-service:
     build:
@@ -241,6 +255,28 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
     ports:
       - "8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kensan-network
+
+  note-service:
+    build:
+      context: ./backend
+      dockerfile: services/note/Dockerfile
+    container_name: kensan-note-service
+    environment:
+      SERVER_PORT: 8091
+      SERVER_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: kensan
+      DB_PASSWORD: kensan
+      DB_NAME: kensan
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+    ports:
+      - "8091:8091"
     depends_on:
       postgres:
         condition: service_healthy

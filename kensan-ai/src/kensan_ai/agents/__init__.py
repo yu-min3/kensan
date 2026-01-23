@@ -6,10 +6,14 @@ To add a new agent:
 3. Import and export from this file
 """
 
-from .base import AgentRunner
-from . import weekly_review
+from kensan_ai.agents.base import AgentRunner, AgentResult, ToolCall
+from kensan_ai.agents import weekly_review
+from kensan_ai.agents import chat
 
 __all__ = [
     "AgentRunner",
+    "AgentResult",
+    "ToolCall",
     "weekly_review",
+    "chat",
 ]

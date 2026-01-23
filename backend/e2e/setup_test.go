@@ -240,12 +240,16 @@ func (e *TestEnv) CleanupDB(t *testing.T) {
 		"ai_review_reports",
 		"diary_entries",
 		"learning_records",
+		"memos",
 		"routine_tasks",
 		"time_entries",
 		"time_blocks",
-		"sync_status",
+		"running_timers",
+		"task_tags",
 		"tasks",
-		"projects",
+		"milestones",
+		"goals",
+		"tags",
 		"user_settings",
 		"users",
 	}
@@ -285,8 +289,6 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 
 	migrationFiles := []string{
 		"001_init.sql",
-		"003_clockify_api_key_plaintext.sql",
-		"004_sync_schema_fix.sql",
 	}
 
 	for _, file := range migrationFiles {

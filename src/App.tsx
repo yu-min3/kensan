@@ -5,10 +5,6 @@ import { S01Settings } from '@/pages/S01_Settings'
 import { S02Dashboard } from '@/pages/S02_Dashboard'
 import { M01Morning } from '@/pages/M01_Morning'
 import { E01Evening } from '@/pages/E01_Evening'
-import { L01LearningRecordList } from '@/pages/L01_LearningRecordList'
-import { L02LearningRecordEdit } from '@/pages/L02_LearningRecordEdit'
-import { D01DiaryList } from '@/pages/D01_DiaryList'
-import { D02DiaryEdit } from '@/pages/D02_DiaryEdit'
 import { N01NoteList } from '@/pages/N01_NoteList'
 import { N02NoteEdit } from '@/pages/N02_NoteEdit'
 import { T01TaskManagement } from '@/pages/T01_TaskManagement'
@@ -76,12 +72,6 @@ function App() {
           <Route index element={<S02Dashboard />} />
           <Route path="morning" element={<M01Morning />} />
           <Route path="evening" element={<E01Evening />} />
-          <Route path="learning-records" element={<L01LearningRecordList />} />
-          <Route path="learning-records/new" element={<L02LearningRecordEdit />} />
-          <Route path="learning-records/:id" element={<L02LearningRecordEdit />} />
-          <Route path="diary" element={<D01DiaryList />} />
-          <Route path="diary/new" element={<D02DiaryEdit />} />
-          <Route path="diary/:id" element={<D02DiaryEdit />} />
           <Route path="notes" element={<N01NoteList />} />
           <Route path="notes/new" element={<N02NoteEdit />} />
           <Route path="notes/:id" element={<N02NoteEdit />} />

@@ -10,13 +10,12 @@ type NoteType string
 const (
 	NoteTypeDiary    NoteType = "diary"
 	NoteTypeLearning NoteType = "learning"
-	NoteTypeMemo     NoteType = "memo"
 )
 
 // IsValid checks if the note type is valid
 func (t NoteType) IsValid() bool {
 	switch t {
-	case NoteTypeDiary, NoteTypeLearning, NoteTypeMemo:
+	case NoteTypeDiary, NoteTypeLearning:
 		return true
 	}
 	return false
@@ -39,7 +38,7 @@ func (f NoteFormat) IsValid() bool {
 	return false
 }
 
-// Note represents a unified note entity (diary, learning record, memo)
+// Note represents a unified note entity (diary, learning record)
 type Note struct {
 	ID                  string     `json:"id"`
 	UserID              string     `json:"userId"`

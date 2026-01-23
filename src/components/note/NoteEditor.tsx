@@ -108,8 +108,8 @@ export function NoteEditor({
     handleChange({ format, content: '' })
   }
 
-  // Determine if title is required based on note type
-  const isTitleRequired = value.type !== 'memo'
+  // Title is always required for notes
+  const isTitleRequired = true
 
   return (
     <div className="space-y-4">
@@ -127,7 +127,6 @@ export function NoteEditor({
             <SelectContent>
               <SelectItem value="diary">日記</SelectItem>
               <SelectItem value="learning">学習記録</SelectItem>
-              <SelectItem value="memo">メモ</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -157,9 +156,7 @@ export function NoteEditor({
           placeholder={
             value.type === 'diary'
               ? '今日の振り返り'
-              : value.type === 'learning'
-              ? '学習内容のタイトル'
-              : 'メモのタイトル（任意）'
+              : '学習内容のタイトル'
           }
         />
       </div>

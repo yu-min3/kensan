@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TimeBlockTimeline } from '@/components/common/TimeBlockTimeline'
-import { TimeEntryList } from '@/components/common/TimeEntryList'
 import { TimeBlockDialog } from '@/components/common/TimeBlockDialog'
+import { TimeEntryForm } from '@/components/common/TimeEntryForm'
 import { StartTimerDialog } from '@/components/common/StartTimerDialog'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
@@ -15,6 +15,7 @@ import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { useTimeBlockDialog } from '@/hooks/useTimeBlockDialog'
 import { formatDateJa, formatDateIso, formatMinutes } from '@/lib/dateFormat'
+import type { TimeEntry } from '@/types'
 import {
   Sun,
   Plus,
@@ -24,11 +25,12 @@ import {
   // GripVertical, // 未スケジュールタスク用（一時的に非表示）
   RotateCcw,
   Square,
+  ClipboardList,
 } from 'lucide-react'
 
 export function M01Morning() {
   const { userName } = useSettingsStore()
-  const { getTodayTimeBlocks, getTodayTimeEntries, updateTimeBlock } = useTimeBlockStore()
+  const { getTodayTimeBlocks, getTodayTimeEntries, updateTimeBlock, updateTimeEntry, deleteTimeEntry, addTimeEntry } = useTimeBlockStore()
   const { getTodayRoutines } = useRoutineStore()
   const { weeklySummary, fetchWeeklySummary } = useAnalyticsStore()
   const { currentTimer, elapsedSeconds, stopTimer, isLoading: isTimerLoading } = useTimerStore()
@@ -40,6 +42,10 @@ export function M01Morning() {
 
   // Timer Dialog State
   const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false)
+
+  // TimeEntry Dialog State
+  const [isEntryDialogOpen, setIsEntryDialogOpen] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | undefined>(undefined)
 
   useEffect(() => {
     fetchWeeklySummary()
@@ -53,6 +59,64 @@ export function M01Morning() {
   // Timer handlers
   const handleStopTimer = async () => {
     await stopTimer()
+  }
+
+  // TimeEntry handlers
+  const handleEntryClick = (entry: TimeEntry) => {
+    setEditingEntry(entry)
+    setIsEntryDialogOpen(true)
+  }
+
+  const handleEntryDelete = async (entryId: string) => {
+    if (window.confirm('この実績を削除しますか？')) {
+      await deleteTimeEntry(entryId)
+    }
+  }
+
+  const handleEntrySave = async (data: {
+    taskName: string
+    date: string
+    startTime: string
+    endTime: string
+    milestoneId?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+    description?: string
+  }) => {
+    if (editingEntry) {
+      // Update existing entry
+      await updateTimeEntry(editingEntry.id, {
+        taskName: data.taskName,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        milestoneId: data.milestoneId,
+        goalId: data.goalId,
+        goalName: data.goalName,
+        goalColor: data.goalColor,
+        description: data.description,
+      })
+    } else {
+      // Create new entry
+      await addTimeEntry({
+        taskName: data.taskName,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        milestoneId: data.milestoneId,
+        goalId: data.goalId,
+        goalName: data.goalName,
+        goalColor: data.goalColor,
+        description: data.description,
+      })
+    }
+    setEditingEntry(undefined)
+  }
+
+  const handleOpenNewEntryDialog = () => {
+    setEditingEntry(undefined)
+    setIsEntryDialogOpen(true)
   }
 
   // Format elapsed time for display
@@ -101,10 +165,16 @@ export function M01Morning() {
                 <Clock className="h-5 w-5" />
                 今日のタイムブロック
               </CardTitle>
-              <Button size="sm" className="gap-1" onClick={() => timeBlockDialog.openDialog()}>
-                <Plus className="h-4 w-4" />
-                追加
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-1" onClick={handleOpenNewEntryDialog}>
+                  <ClipboardList className="h-4 w-4" />
+                  実績追加
+                </Button>
+                <Button size="sm" className="gap-1" onClick={() => timeBlockDialog.openDialog()}>
+                  <Plus className="h-4 w-4" />
+                  予定追加
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="mb-4 flex gap-4 text-sm">
@@ -128,17 +198,11 @@ export function M01Morning() {
                 onBlockResize={(blockId, startTime, endTime) => {
                   updateTimeBlock(blockId, { startTime, endTime })
                 }}
+                onEntryClick={handleEntryClick}
+                onEntryDelete={handleEntryDelete}
               />
             </CardContent>
           </Card>
-
-          {/* 今日の実績 */}
-          <TimeEntryList
-            entries={todayEntries}
-            title="今日の実績"
-            showAddButton={true}
-            defaultDate={todayDate}
-          />
 
           {/* 未スケジュールのタスク - 一時的に非表示（将来復活予定） */}
           {/* <Card>
@@ -335,6 +399,15 @@ export function M01Morning() {
         onSave={() => timeBlockDialog.save()}
         showTaskInputModeToggle={true}
         isEditMode={!!timeBlockDialog.editingBlockId}
+      />
+
+      {/* 時間記録（実績）追加/編集ダイアログ */}
+      <TimeEntryForm
+        open={isEntryDialogOpen}
+        onOpenChange={setIsEntryDialogOpen}
+        onSave={handleEntrySave}
+        initialData={editingEntry}
+        defaultDate={todayDate}
       />
     </div>
   )

@@ -24,6 +24,7 @@ up:
 	@echo "  - analytics-service: http://localhost:8088/health"
 	@echo "  - ai-service:        http://localhost:8089/health"
 	@echo "  - memo-service:      http://localhost:8090/health"
+	@echo "  - note-service:      http://localhost:8091/health"
 	@echo ""
 	@echo "Database:  postgres://kensan:kensan@localhost:5432/kensan"
 	@echo ""
@@ -76,7 +77,7 @@ db:
 
 ## Start only backend services (requires db)
 backend: db
-	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service ai-service memo-service
+	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service ai-service memo-service note-service
 	@echo "All backend services started"
 
 # =============================================================================
@@ -124,6 +125,7 @@ health:
 	@curl -s http://localhost:8088/health 2>/dev/null | jq . || echo "analytics-service: DOWN"
 	@curl -s http://localhost:8089/health 2>/dev/null | jq . || echo "ai-service: DOWN"
 	@curl -s http://localhost:8090/health 2>/dev/null | jq . || echo "memo-service: DOWN"
+	@curl -s http://localhost:8091/health 2>/dev/null | jq . || echo "note-service: DOWN"
 
 # =============================================================================
 # Help

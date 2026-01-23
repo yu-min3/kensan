@@ -271,13 +271,6 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
   },
 
   /**
-   * List memos
-   */
-  async listMemos(filters?: Omit<NoteFilter, 'types'>): Promise<NoteListItem[]> {
-    return this.listItems({ ...filters, types: ['memo'] })
-  },
-
-  /**
    * Create a diary entry
    */
   async createDiary(input: Omit<CreateNoteInput, 'type'> & { date: string }): Promise<Note> {
@@ -291,12 +284,6 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
     return baseNotesApi.create({ ...input, type: 'learning' })
   },
 
-  /**
-   * Create a memo
-   */
-  async createMemo(input: Omit<CreateNoteInput, 'type'>): Promise<Note> {
-    return baseNotesApi.create({ ...input, type: 'memo' })
-  },
 }))
 
 // ============================================
