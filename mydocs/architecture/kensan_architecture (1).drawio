@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-01-05T12:00:00.000Z" agent="Kensan Architecture" version="21.0.0" etag="kensan-arch-v1">
+  <diagram id="kensan-architecture" name="Kensan Architecture">
+    <mxGraphModel dx="1434" dy="780" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="Kensan - System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#1a365d;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="400" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Frontend Layer -->
+        <mxCell id="frontend-group" value="Frontend (React)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="200" y="80" width="1200" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="frontend-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="frontend-group">
+          <mxGeometry y="30" width="1200" height="110" as="geometry" />
+        </mxCell>
+        
+        <!-- Milkdown Editor -->
+        <mxCell id="milkdown" value="Milkdown&#xa;(Markdown WYSIWYG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="40" y="20" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- react-drawio -->
+        <mxCell id="react-drawio" value="react-drawio&#xa;(Diagram Editor)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="200" y="20" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- IndexedDB -->
+        <mxCell id="indexeddb" value="IndexedDB&#xa;(Dexie.js)&#xa;キャッシュ・下書き" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="360" y="10" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <!-- DuckDB-WASM -->
+        <mxCell id="duckdb-wasm" value="DuckDB-WASM&#xa;(Client Analytics)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="500" y="20" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- React UI Components -->
+        <mxCell id="react-ui" value="React UI&#xa;朝の画面 / 夜の画面&#xa;ダッシュボード" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="660" y="20" width="160" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- State Management -->
+        <mxCell id="state" value="State Management&#xa;(React Query / Zustand)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="840" y="20" width="160" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- API Client -->
+        <mxCell id="api-client" value="API Client&#xa;(gRPC-Web)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="frontend-inner">
+          <mxGeometry x="1020" y="20" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- API Gateway -->
+        <mxCell id="api-gateway" value="API Gateway&#xa;(Istio Ingress Gateway)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="680" y="260" width="240" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Frontend to Gateway -->
+        <mxCell id="arrow-fe-gw" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="220" as="sourcePoint" />
+            <mxPoint x="800" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Backend Services Layer -->
+        <mxCell id="backend-group" value="Backend Microservices (Go / gRPC)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="100" y="340" width="1400" height="160" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="backend-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="backend-group">
+          <mxGeometry y="30" width="1400" height="130" as="geometry" />
+        </mxCell>
+        
+        <!-- Task Service -->
+        <mxCell id="task-svc" value="Task Service&#xa;&#xa;• Clockify API連携&#xa;• プロジェクト管理&#xa;• タスク管理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="20" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Record Service -->
+        <mxCell id="record-svc" value="Record Service&#xa;&#xa;• 学習記録CRUD&#xa;• ファイル管理&#xa;• テキスト抽出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="180" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Analytics Service -->
+        <mxCell id="analytics-svc" value="Analytics Service&#xa;&#xa;• 時間分析&#xa;• レポート生成&#xa;• 目標進捗計算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="340" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Routine Service -->
+        <mxCell id="routine-svc" value="Routine Service&#xa;&#xa;• 定期タスク管理&#xa;• 習慣トラッキング&#xa;• Done管理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="500" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- AI Service -->
+        <mxCell id="ai-svc" value="AI Service&#xa;&#xa;• 振り返り生成&#xa;• アドバイス&#xa;• Embedding生成" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="660" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- News Service -->
+        <mxCell id="news-svc" value="News Service&#xa;&#xa;• RSS/API連携&#xa;• フィード収集&#xa;• 通知管理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="820" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Search Service -->
+        <mxCell id="search-svc" value="Search Service&#xa;&#xa;• 全文検索&#xa;• ベクトル検索&#xa;• インデックス管理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="980" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Auth Service -->
+        <mxCell id="auth-svc" value="Auth Service&#xa;&#xa;• 認証/認可&#xa;• Keycloak連携&#xa;• セッション管理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="backend-inner">
+          <mxGeometry x="1140" y="15" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Gateway to Services -->
+        <mxCell id="arrow-gw-svc" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="310" as="sourcePoint" />
+            <mxPoint x="800" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Data Layer -->
+        <mxCell id="data-group" value="Data Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="200" y="540" width="800" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="data-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="data-group">
+          <mxGeometry y="30" width="800" height="110" as="geometry" />
+        </mxCell>
+        
+        <!-- PostgreSQL -->
+        <mxCell id="postgresql" value="PostgreSQL + pgvector&#xa;&#xa;• メタデータ&#xa;• 全文検索インデックス&#xa;• Embedding" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="data-inner">
+          <mxGeometry x="40" y="10" width="180" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- MinIO -->
+        <mxCell id="minio" value="MinIO (S3互換)&#xa;&#xa;• md/drawio本体&#xa;• バージョン履歴&#xa;• メディアファイル" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="data-inner">
+          <mxGeometry x="260" y="10" width="180" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Redis -->
+        <mxCell id="redis" value="Redis&#xa;&#xa;• セッション&#xa;• キャッシュ&#xa;• Pub/Sub" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="data-inner">
+          <mxGeometry x="480" y="10" width="140" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Message Queue -->
+        <mxCell id="nats" value="NATS&#xa;&#xa;• イベント配信&#xa;• 非同期処理&#xa;• Service間通信" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="data-inner">
+          <mxGeometry x="640" y="10" width="140" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Services to Data -->
+        <mxCell id="arrow-svc-data" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="500" as="sourcePoint" />
+            <mxPoint x="600" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Observability Layer -->
+        <mxCell id="obs-group" value="Observability (Prometheus / Grafana / Jaeger)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="540" width="450" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="obs-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="obs-group">
+          <mxGeometry y="30" width="450" height="110" as="geometry" />
+        </mxCell>
+        
+        <!-- Prometheus -->
+        <mxCell id="prometheus" value="Prometheus&#xa;Metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="obs-inner">
+          <mxGeometry x="20" y="25" width="100" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Grafana -->
+        <mxCell id="grafana" value="Grafana&#xa;Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="obs-inner">
+          <mxGeometry x="135" y="25" width="100" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Jaeger -->
+        <mxCell id="jaeger" value="Jaeger&#xa;Tracing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="obs-inner">
+          <mxGeometry x="250" y="25" width="100" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Loki -->
+        <mxCell id="loki" value="Loki&#xa;Logging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="obs-inner">
+          <mxGeometry x="365" y="25" width="70" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- External Services -->
+        <mxCell id="external-group" value="External Services" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="200" y="720" width="600" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="external-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="external-group">
+          <mxGeometry y="30" width="600" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Clockify API -->
+        <mxCell id="clockify-api" value="Clockify API&#xa;時間トラッキング" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="external-inner">
+          <mxGeometry x="20" y="15" width="120" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- OpenAI API -->
+        <mxCell id="openai-api" value="OpenAI API&#xa;(or Local LLM)&#xa;AI振り返り" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="external-inner">
+          <mxGeometry x="160" y="15" width="120" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- diagrams.net -->
+        <mxCell id="diagrams-net" value="embed.diagrams.net&#xa;図解エディタ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="external-inner">
+          <mxGeometry x="300" y="15" width="120" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Cloud Storage -->
+        <mxCell id="cloud-storage" value="Cloud Storage&#xa;(S3/GCS/R2)&#xa;バックアップ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="external-inner">
+          <mxGeometry x="440" y="15" width="120" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Platform Layer -->
+        <mxCell id="platform-group" value="Platform (Kubernetes)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="850" y="720" width="650" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="platform-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="platform-group">
+          <mxGeometry y="30" width="650" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- ArgoCD -->
+        <mxCell id="argocd" value="ArgoCD&#xa;GitOps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="platform-inner">
+          <mxGeometry x="20" y="15" width="100" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Istio -->
+        <mxCell id="istio" value="Istio&#xa;Service Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="platform-inner">
+          <mxGeometry x="135" y="15" width="100" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Cilium -->
+        <mxCell id="cilium" value="Cilium&#xa;CNI/eBPF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="platform-inner">
+          <mxGeometry x="250" y="15" width="100" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Keycloak -->
+        <mxCell id="keycloak" value="Keycloak&#xa;認証/SSO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="platform-inner">
+          <mxGeometry x="365" y="15" width="100" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Backstage -->
+        <mxCell id="backstage" value="Backstage&#xa;Developer Portal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="platform-inner">
+          <mxGeometry x="480" y="15" width="120" height="55" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrows: Data to External -->
+        <mxCell id="arrow-data-ext" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#666666;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" target="external-group">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="680" as="sourcePoint" />
+            <mxPoint x="500" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=25;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="80" width="180" height="160" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-inner" value="" style="swimlane;startSize=0;fillColor=none;strokeColor=none;" vertex="1" parent="legend">
+          <mxGeometry y="25" width="180" height="135" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-fe" value="Frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="10" y="5" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-be" value="Backend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="90" y="5" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-data" value="Data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="10" y="35" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext" value="External" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="90" y="35" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ai" value="AI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="10" y="65" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-auth" value="Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="90" y="65" width="70" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-obs" value="Observability" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" vertex="1" parent="legend-inner">
+          <mxGeometry x="10" y="95" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

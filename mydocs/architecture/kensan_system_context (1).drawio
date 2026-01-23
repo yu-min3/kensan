@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-01-05T12:00:00.000Z" agent="Kensan System Context" version="21.0.0" etag="kensan-context-v1">
+  <diagram id="kensan-system-context" name="System Context">
+    <mxGraphModel dx="1434" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="Kensan - System Context Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=28;fontStyle=1;fontColor=#1a365d;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="600" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subtitle" value="C4 Model - Level 1: System Context" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#718096;" vertex="1" parent="1">
+          <mxGeometry x="500" y="65" width="400" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ========== PRIMARY USER ========== -->
+        <mxCell id="user" value="" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="120" width="60" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="user-label" value="エンジニア&#xa;(Self-learner)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2c5282;" vertex="1" parent="1">
+          <mxGeometry x="640" y="220" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="user-desc" value="自己研鑽に取り組む&#xa;ソフトウェアエンジニア" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="620" y="255" width="160" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ========== KENSAN SYSTEM (CENTER) ========== -->
+        <mxCell id="kensan-system" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2c5282;strokeColor=#1a365d;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="500" y="380" width="400" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="kensan-title" value="Kensan" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="600" y="400" width="200" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="kensan-subtitle" value="[Software System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#bee3f8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="435" width="200" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="kensan-desc" value="エンジニアの自己研鑽を支援する&#xa;統合プラットフォーム。&#xa;&#xa;目標・時間・タスク・学習記録を&#xa;一元管理し、AIが振り返りと&#xa;成長をサポート。" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="530" y="460" width="340" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: User to Kensan -->
+        <mxCell id="arrow-user-kensan" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="700" y="290" as="sourcePoint" />
+            <mxPoint x="700" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-user-kensan-label" value="タスク管理、時間記録、&#xa;学習メモ、振り返り" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="710" y="310" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ========== EXTERNAL SYSTEMS ========== -->
+        
+        <!-- Clockify (Left) -->
+        <mxCell id="clockify" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="340" width="200" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-title" value="Clockify" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="130" y="355" width="100" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="115" y="380" width="130" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-desc" value="時間トラッキング&#xa;SaaS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="105" y="405" width="150" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Kensan to Clockify -->
+        <mxCell id="arrow-kensan-clockify" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="280" y="400" as="sourcePoint" />
+            <mxPoint x="500" y="450" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-clockify-label" value="REST API&#xa;プロジェクト/タスク/時間記録" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="320" y="390" width="130" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Claude API (Right) -->
+        <mxCell id="claude" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9f7aea;strokeColor=#6b46c1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="340" width="200" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-title" value="Claude API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="355" width="130" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="380" width="130" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-desc" value="Anthropic LLM&#xa;+ Agent SDK" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1145" y="405" width="150" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Kensan to Claude -->
+        <mxCell id="arrow-kensan-claude" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="900" y="450" as="sourcePoint" />
+            <mxPoint x="1120" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-claude-label" value="Messages API + Tool Use&#xa;振り返り生成、アドバイス" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="950" y="390" width="140" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Diagrams.net (Bottom Left) -->
+        <mxCell id="diagrams" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="520" width="200" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagrams-title" value="diagrams.net" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="105" y="535" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagrams-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="115" y="555" width="130" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagrams-desc" value="図解エディタ (embed)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="105" y="575" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Kensan to Diagrams -->
+        <mxCell id="arrow-kensan-diagrams" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="280" y="570" as="sourcePoint" />
+            <mxPoint x="500" y="530" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-diagrams-label" value="iframe embed&#xa;drawio XML" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="320" y="540" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Cloud Storage (Bottom Right) -->
+        <mxCell id="cloud-storage" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="520" width="200" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-title" value="Cloud Storage" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1145" y="535" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="555" width="130" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-desc" value="S3 / GCS / R2" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1145" y="575" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Kensan to Cloud Storage -->
+        <mxCell id="arrow-kensan-storage" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="900" y="530" as="sourcePoint" />
+            <mxPoint x="1120" y="570" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-storage-label" value="S3 API&#xa;バックアップ" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="970" y="540" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- News/RSS (Bottom Center) -->
+        <mxCell id="news-sources" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="600" y="680" width="200" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-title" value="Tech News Sources" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="610" y="695" width="180" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="635" y="715" width="130" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-desc" value="RSS / Hacker News / etc." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="625" y="735" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrow: Kensan to News -->
+        <mxCell id="arrow-kensan-news" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="700" y="580" as="sourcePoint" />
+            <mxPoint x="700" y="680" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-news-label" value="RSS/API&#xa;技術ニュース取得" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="710" y="610" width="110" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ========== LEGEND ========== -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7fafc;strokeColor=#e2e8f0;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="720" width="280" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-title" value="Legend" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2d3748;" vertex="1" parent="1">
+          <mxGeometry x="100" y="730" width="100" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Legend: Person -->
+        <mxCell id="legend-person" value="" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="760" width="20" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-person-label" value="Person (User)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="130" y="765" width="100" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Legend: Kensan System -->
+        <mxCell id="legend-system" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2c5282;strokeColor=#1a365d;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="100" y="805" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-system-label" value="Kensan System (本システム)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="140" y="800" width="180" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Legend: External System -->
+        <mxCell id="legend-external" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="100" y="835" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-external-label" value="External System (外部サービス)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="140" y="830" width="200" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Legend: AI System -->
+        <mxCell id="legend-ai" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9f7aea;strokeColor=#6b46c1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="100" y="865" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-ai-label" value="AI System (Claude API)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="140" y="860" width="180" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- ========== KEY FEATURES BOX ========== -->
+        <mxCell id="features-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fff4;strokeColor=#9ae6b4;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="720" width="280" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="features-title" value="Kensan Core Features" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#276749;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="730" width="200" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="features-list" value="✓ 時間トラッキング (Clockify連携)&#xa;✓ タスク管理 (目標→プロジェクト→タスク)&#xa;✓ 学習記録 (Markdown / drawio)&#xa;✓ 定期タスク管理&#xa;✓ AI振り返り (Claude Agent SDK)&#xa;✓ 技術ニュース通知&#xa;✓ 朝の画面 / 夜の画面" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#2f855a;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="760" width="250" height="130" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

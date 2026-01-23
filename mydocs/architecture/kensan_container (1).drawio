@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-01-05T12:00:00.000Z" agent="Kensan Container Diagram" version="21.0.0" etag="kensan-container-v1">
+  <diagram id="kensan-container" name="Container Diagram">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="Kensan - Container Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=28;fontStyle=1;fontColor=#1a365d;" vertex="1" parent="1">
+          <mxGeometry x="550" y="15" width="500" height="45" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subtitle" value="C4 Model - Level 2: Container (Kensanシステム内部構造)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#718096;" vertex="1" parent="1">
+          <mxGeometry x="550" y="55" width="500" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- ========== USER ========== -->
+        <mxCell id="user" value="" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="45" y="380" width="50" height="90" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="user-label" value="エンジニア" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#2c5282;" vertex="1" parent="1">
+          <mxGeometry x="20" y="470" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- ========== KENSAN SYSTEM BOUNDARY ========== -->
+        <mxCell id="kensan-boundary" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#2c5282;strokeWidth=3;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="140" y="100" width="1100" height="700" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="boundary-label" value="Kensan System Boundary" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2c5282;" vertex="1" parent="1">
+          <mxGeometry x="160" y="105" width="250" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- ========== FRONTEND ========== -->
+        <mxCell id="spa" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4299e1;strokeColor=#2b6cb0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="180" y="180" width="220" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="spa-title" value="Web Application" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="200" y="190" width="180" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="spa-type" value="[Container: React SPA]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#bee3f8;" vertex="1" parent="1">
+          <mxGeometry x="200" y="212" width="180" height="18" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="spa-desc" value="朝の画面 / 夜の画面&#xa;Milkdown (MD) / react-drawio&#xa;ダッシュボード・分析UI" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="190" y="235" width="200" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- IndexedDB -->
+        <mxCell id="indexeddb" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#63b3ed;strokeColor=#3182ce;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="190" y="370" width="90" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="idb-title" value="IndexedDB" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="195" y="395" width="80" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="idb-desc" value="キャッシュ" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="195" y="412" width="80" height="15" as="geometry" />
+        </mxCell>
+
+        <!-- DuckDB-WASM -->
+        <mxCell id="duckdb" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#63b3ed;strokeColor=#3182ce;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="300" y="370" width="90" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="duck-title" value="DuckDB" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="305" y="395" width="80" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="duck-desc" value="WASM分析" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="305" y="412" width="80" height="15" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: User to SPA -->
+        <mxCell id="arrow-user-spa" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="spa">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="95" y="420" as="sourcePoint" />
+            <mxPoint x="180" y="250" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="140" y="420" />
+              <mxPoint x="140" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-user-spa-label" value="HTTPS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="100" y="300" width="50" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ========== API GATEWAY ========== -->
+        <mxCell id="gateway" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#48bb78;strokeColor=#276749;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="200" width="200" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="gw-title" value="API Gateway" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="530" y="210" width="140" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="gw-type" value="[Container: Istio Ingress]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="530" y="232" width="140" height="18" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="gw-desc" value="認証・ルーティング&#xa;Rate Limiting" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="530" y="255" width="140" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: SPA to Gateway -->
+        <mxCell id="arrow-spa-gw" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="400" y="250" as="sourcePoint" />
+            <mxPoint x="500" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-spa-gw-label" value="gRPC-Web" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="420" y="225" width="70" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ========== MICROSERVICES ========== -->
+        
+        <!-- Task Service -->
+        <mxCell id="task-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="180" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="task-title" value="Task Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="195" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="task-type" value="[Container: Go]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="195" y="530" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="task-desc" value="Clockify連携&#xa;プロジェクト・タスク管理" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="190" y="548" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Record Service -->
+        <mxCell id="record-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="350" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="record-title" value="Record Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="365" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="record-type" value="[Container: Go]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="365" y="530" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="record-desc" value="学習記録CRUD&#xa;ファイル管理・テキスト抽出" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="355" y="548" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Analytics Service -->
+        <mxCell id="analytics-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="520" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="analytics-title" value="Analytics Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="535" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="analytics-type" value="[Container: Go]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="535" y="530" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="analytics-desc" value="時間分析&#xa;レポート生成" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="535" y="548" width="120" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- AI Service -->
+        <mxCell id="ai-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9f7aea;strokeColor=#6b46c1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="690" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-title" value="AI Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="705" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-type" value="[Container: Go + Agent SDK]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e9d8fd;" vertex="1" parent="1">
+          <mxGeometry x="695" y="530" width="140" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-desc" value="振り返り生成&#xa;アドバイス・Embedding" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="548" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Routine Service -->
+        <mxCell id="routine-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="860" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="routine-title" value="Routine Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="875" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="routine-type" value="[Container: Go]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="875" y="530" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="routine-desc" value="定期タスク管理&#xa;習慣トラッキング" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="870" y="548" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- News Service -->
+        <mxCell id="news-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="500" width="150" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-title" value="News Service" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1045" y="510" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-type" value="[Container: Go]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#c6f6d5;" vertex="1" parent="1">
+          <mxGeometry x="1045" y="530" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="news-desc" value="RSS/API連携&#xa;技術ニュース通知" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="548" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Gateway to Services -->
+        <mxCell id="arrow-gw-svcs" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="gateway">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="310" as="sourcePoint" />
+            <mxPoint x="600" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Service Mesh indicator -->
+        <mxCell id="mesh-line" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#48bb78;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="360" width="1020" height="250" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="mesh-label" value="Istio Service Mesh (mTLS, Observability)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#38a169;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="180" y="365" width="250" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ========== DATA STORES ========== -->
+        
+        <!-- PostgreSQL -->
+        <mxCell id="postgresql" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ed8936;strokeColor=#c05621;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="280" y="680" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pg-title" value="PostgreSQL" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="295" y="710" width="110" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pg-type" value="+ pgvector" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#feebc8;" vertex="1" parent="1">
+          <mxGeometry x="295" y="730" width="110" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pg-desc" value="メタデータ, 全文検索&#xa;Embedding" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#feebc8;" vertex="1" parent="1">
+          <mxGeometry x="285" y="748" width="130" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- MinIO -->
+        <mxCell id="minio" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ed8936;strokeColor=#c05621;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="480" y="680" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="minio-title" value="MinIO" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="495" y="710" width="110" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="minio-type" value="[S3互換]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#feebc8;" vertex="1" parent="1">
+          <mxGeometry x="495" y="730" width="110" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="minio-desc" value="md/drawioファイル&#xa;バージョン履歴" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#feebc8;" vertex="1" parent="1">
+          <mxGeometry x="485" y="748" width="130" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Redis -->
+        <mxCell id="redis" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fc8181;strokeColor=#c53030;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="680" y="680" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="redis-title" value="Redis" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="695" y="710" width="110" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="redis-desc" value="セッション&#xa;キャッシュ" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#fed7d7;" vertex="1" parent="1">
+          <mxGeometry x="695" y="740" width="110" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- NATS -->
+        <mxCell id="nats" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b794f4;strokeColor=#805ad5;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="880" y="680" width="140" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="nats-title" value="NATS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="895" y="710" width="110" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="nats-desc" value="イベント配信&#xa;非同期処理" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e9d8fd;" vertex="1" parent="1">
+          <mxGeometry x="895" y="740" width="110" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: Services to Data -->
+        <mxCell id="arrow-svc-data" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="610" as="sourcePoint" />
+            <mxPoint x="600" y="680" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ========== EXTERNAL SYSTEMS ========== -->
+        
+        <!-- Clockify -->
+        <mxCell id="clockify" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="180" width="160" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-title" value="Clockify API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="195" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-type" value="[External System]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="215" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="clockify-desc" value="時間トラッキング" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="232" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Claude API -->
+        <mxCell id="claude" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9f7aea;strokeColor=#6b46c1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="290" width="160" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-title" value="Claude API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="305" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-type" value="[External: Agent SDK]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e9d8fd;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="325" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="claude-desc" value="LLM / Tool Use" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e9d8fd;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="342" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Cloud Storage -->
+        <mxCell id="cloud-storage" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="400" width="160" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-title" value="Cloud Storage" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="415" width="120" height="22" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-type" value="[External: S3/GCS/R2]" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="435" width="120" height="15" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="storage-desc" value="バックアップ" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="452" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows to External -->
+        <mxCell id="arrow-task-clockify" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#4a5568;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="clockify">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1190" y="220" as="sourcePoint" />
+            <mxPoint x="1290" y="220" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1250" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-ai-claude" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;strokeColor=#6b46c1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="claude">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="840" y="550" as="sourcePoint" />
+            <mxPoint x="1290" y="330" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1250" y="550" />
+              <mxPoint x="1250" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ========== LEGEND ========== -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7fafc;strokeColor=#e2e8f0;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="520" width="160" height="250" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-title" value="Legend" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#2d3748;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="530" width="80" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-fe" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4299e1;strokeColor=#2b6cb0;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="560" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-fe-label" value="Web App" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="555" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-gw" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#48bb78;strokeColor=#276749;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="590" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-gw-label" value="Gateway" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="585" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-svc" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#68d391;strokeColor=#38a169;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="620" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-svc-label" value="Microservice" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="615" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-ai" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9f7aea;strokeColor=#6b46c1;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="650" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ai-label" value="AI Service" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="645" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-db" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=5;fillColor=#ed8936;strokeColor=#c05621;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="680" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-db-label" value="Database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="680" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-ext" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#718096;strokeColor=#4a5568;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="710" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext-label" value="External System" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="705" width="100" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="leg-mesh" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#48bb78;strokeWidth=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="740" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-mesh-label" value="Service Mesh" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4a5568;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="735" width="100" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
