@@ -1,8 +1,8 @@
-// Goals, Milestones, Tags, Tasks API Service
+// Goals, Milestones, Tags, Tasks, Todos API Service
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { Goal, Milestone, MilestoneStatus, Tag, Task } from '@/types'
+import type { Goal, Milestone, MilestoneStatus, Tag, Task, EntityMemo, EntityType, Todo, TodoWithStatus, TodoFrequency } from '@/types'
 
 // ============================================
 // Goal API
@@ -267,6 +267,176 @@ export const tasksApi = extendApiService(baseTasksApi, () => ({
       { taskIds, completed }
     )
     return response.map(transformTask)
+  },
+}))
+
+// ============================================
+// EntityMemo API
+// ============================================
+interface EntityMemoResponse {
+  id: string
+  userId: string
+  entityType: EntityType
+  entityId: string
+  content: string
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+const transformEntityMemo = (m: EntityMemoResponse): EntityMemo => ({
+  id: m.id,
+  userId: m.userId,
+  entityType: m.entityType,
+  entityId: m.entityId,
+  content: m.content,
+  pinned: m.pinned,
+  createdAt: new Date(m.createdAt),
+  updatedAt: new Date(m.updatedAt),
+})
+
+export interface CreateEntityMemoInput {
+  entityType: EntityType
+  entityId: string
+  content: string
+  pinned?: boolean
+}
+
+export interface UpdateEntityMemoInput {
+  content?: string
+  pinned?: boolean
+}
+
+export interface EntityMemoFilter {
+  entityType?: EntityType
+  entityId?: string
+  pinned?: boolean
+}
+
+export const entityMemosApi = createApiService<
+  EntityMemoResponse,
+  EntityMemo,
+  CreateEntityMemoInput,
+  UpdateEntityMemoInput,
+  EntityMemoFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.task,
+    resourcePath: '/entity-memos',
+    transform: transformEntityMemo,
+  },
+  {
+    filterMappings: {
+      entityType: 'entity_type',
+      entityId: 'entity_id',
+    },
+  }
+)
+
+// ============================================
+// Todo API
+// ============================================
+interface TodoResponse {
+  id: string
+  userId: string
+  name: string
+  frequency?: TodoFrequency
+  daysOfWeek?: number[]
+  dueDate?: string
+  estimatedMinutes?: number
+  tagIds?: string[]
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface TodoWithStatusResponse extends TodoResponse {
+  completedToday: boolean
+  completedAt?: string
+  isOverdue: boolean
+}
+
+const transformTodo = (t: TodoResponse): Todo => ({
+  id: t.id,
+  userId: t.userId,
+  name: t.name,
+  frequency: t.frequency,
+  daysOfWeek: t.daysOfWeek,
+  dueDate: t.dueDate,
+  estimatedMinutes: t.estimatedMinutes,
+  tagIds: t.tagIds,
+  enabled: t.enabled,
+  createdAt: new Date(t.createdAt),
+  updatedAt: new Date(t.updatedAt),
+})
+
+const transformTodoWithStatus = (t: TodoWithStatusResponse): TodoWithStatus => ({
+  ...transformTodo(t),
+  completedToday: t.completedToday,
+  completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+  isOverdue: t.isOverdue,
+})
+
+export interface CreateTodoInput {
+  name: string
+  frequency?: TodoFrequency
+  daysOfWeek?: number[]
+  dueDate?: string
+  estimatedMinutes?: number
+  tagIds?: string[]
+}
+
+export interface UpdateTodoInput {
+  name?: string
+  frequency?: TodoFrequency
+  daysOfWeek?: number[]
+  dueDate?: string
+  estimatedMinutes?: number
+  tagIds?: string[]
+  enabled?: boolean
+}
+
+export interface TodoFilter {
+  enabled?: boolean
+  isRecurring?: boolean
+}
+
+const baseTodosApi = createApiService<
+  TodoResponse,
+  Todo,
+  CreateTodoInput,
+  UpdateTodoInput,
+  TodoFilter
+>(
+  {
+    baseUrl: API_CONFIG.baseUrls.task,
+    resourcePath: '/todos',
+    transform: transformTodo,
+  },
+  {
+    filterMappings: {
+      isRecurring: 'is_recurring',
+    },
+  }
+)
+
+export const todosApi = extendApiService(baseTodosApi, () => ({
+  // Get todos with completion status for a specific date
+  async listWithStatus(date: string): Promise<TodoWithStatus[]> {
+    const response = await httpClient.get<TodoWithStatusResponse[]>(
+      API_CONFIG.baseUrls.task,
+      `/todos?date=${date}`
+    )
+    return response.map(transformTodoWithStatus)
+  },
+
+  // Toggle completion status for a todo on a specific date
+  async toggleComplete(todoId: string, date: string): Promise<TodoWithStatus> {
+    const response = await httpClient.patch<TodoWithStatusResponse>(
+      API_CONFIG.baseUrls.task,
+      `/todos/${todoId}/complete?date=${date}`
+    )
+    return transformTodoWithStatus(response)
   },
 }))
 

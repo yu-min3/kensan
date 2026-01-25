@@ -158,27 +158,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # AI Service
-  ai-service:
-    build:
-      context: .
-      dockerfile: services/ai/Dockerfile
-    container_name: kensan-ai-service
-    environment:
-      SERVER_PORT: 8089
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: kensan
-      DB_PASSWORD: kensan
-      DB_NAME: kensan
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    ports:
-      - "8089:8089"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   # Memo Service
   memo-service:
     build:
@@ -213,11 +192,56 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      # MinIO/S3設定
+      STORAGE_ENDPOINT: minio:9000
+      STORAGE_ACCESS_KEY: kensan
+      STORAGE_SECRET_KEY: kensan123
+      STORAGE_BUCKET: kensan-notes
+      STORAGE_USE_SSL: "false"
+      STORAGE_PUBLIC_URL: http://localhost:9000/kensan-notes
     ports:
       - "8091:8091"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # MinIO Object Storage (S3互換)
+  minio:
+    image: minio/minio:latest
+    container_name: kensan-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: kensan
+      MINIO_ROOT_PASSWORD: kensan123
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO初期化（バケット作成）
+  minio-init:
+    image: minio/mc:latest
+    container_name: kensan-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 kensan kensan123;
+      mc mb myminio/kensan-notes --ignore-existing;
+      mc anonymous set download myminio/kensan-notes;
+      echo 'Bucket kensan-notes created successfully';
+      exit 0;
+      "
 
 volumes:
   postgres_data:
+  minio_data:

@@ -2,6 +2,8 @@ package note
 
 import (
 	"time"
+
+	"github.com/kensan/backend/shared/types"
 )
 
 // NoteType represents the type of note
@@ -40,47 +42,47 @@ func (f NoteFormat) IsValid() bool {
 
 // Note represents a unified note entity (diary, learning record)
 type Note struct {
-	ID                  string     `json:"id"`
-	UserID              string     `json:"userId"`
-	Type                NoteType   `json:"type"`
-	Title               *string    `json:"title,omitempty"`
-	Content             string     `json:"content"`
-	Format              NoteFormat `json:"format"`
-	Date                *string    `json:"date,omitempty"` // YYYY-MM-DD
-	TaskID              *string    `json:"taskId,omitempty"`
-	MilestoneID         *string    `json:"milestoneId,omitempty"`
-	MilestoneName       *string    `json:"milestoneName,omitempty"`
-	GoalID              *string    `json:"goalId,omitempty"`
-	GoalName            *string    `json:"goalName,omitempty"`
-	GoalColor           *string    `json:"goalColor,omitempty"`
-	TagIDs              []string   `json:"tagIds,omitempty"`
-	RelatedTimeEntryIDs []string   `json:"relatedTimeEntryIds,omitempty"`
-	FileURL             *string    `json:"fileUrl,omitempty"`
-	Archived            bool       `json:"archived"`
-	CreatedAt           time.Time  `json:"createdAt"`
-	UpdatedAt           time.Time  `json:"updatedAt"`
+	ID                  string         `json:"id"`
+	UserID              string         `json:"userId"`
+	Type                NoteType       `json:"type"`
+	Title               *string        `json:"title,omitempty"`
+	Content             string         `json:"content"`
+	Format              NoteFormat     `json:"format"`
+	Date                types.DateOnly `json:"date,omitempty"`
+	TaskID              *string        `json:"taskId,omitempty"`
+	MilestoneID         *string        `json:"milestoneId,omitempty"`
+	MilestoneName       *string        `json:"milestoneName,omitempty"`
+	GoalID              *string        `json:"goalId,omitempty"`
+	GoalName            *string        `json:"goalName,omitempty"`
+	GoalColor           *string        `json:"goalColor,omitempty"`
+	TagIDs              []string       `json:"tagIds,omitempty"`
+	RelatedTimeEntryIDs []string       `json:"relatedTimeEntryIds,omitempty"`
+	FileURL             *string        `json:"fileUrl,omitempty"`
+	Archived            bool           `json:"archived"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
 }
 
 // NoteListItem represents a note without content (for list response)
 type NoteListItem struct {
-	ID                  string     `json:"id"`
-	UserID              string     `json:"userId"`
-	Type                NoteType   `json:"type"`
-	Title               *string    `json:"title,omitempty"`
-	Format              NoteFormat `json:"format"`
-	Date                *string    `json:"date,omitempty"`
-	TaskID              *string    `json:"taskId,omitempty"`
-	MilestoneID         *string    `json:"milestoneId,omitempty"`
-	MilestoneName       *string    `json:"milestoneName,omitempty"`
-	GoalID              *string    `json:"goalId,omitempty"`
-	GoalName            *string    `json:"goalName,omitempty"`
-	GoalColor           *string    `json:"goalColor,omitempty"`
-	TagIDs              []string   `json:"tagIds,omitempty"`
-	RelatedTimeEntryIDs []string   `json:"relatedTimeEntryIds,omitempty"`
-	FileURL             *string    `json:"fileUrl,omitempty"`
-	Archived            bool       `json:"archived"`
-	CreatedAt           time.Time  `json:"createdAt"`
-	UpdatedAt           time.Time  `json:"updatedAt"`
+	ID                  string         `json:"id"`
+	UserID              string         `json:"userId"`
+	Type                NoteType       `json:"type"`
+	Title               *string        `json:"title,omitempty"`
+	Format              NoteFormat     `json:"format"`
+	Date                types.DateOnly `json:"date,omitempty"`
+	TaskID              *string        `json:"taskId,omitempty"`
+	MilestoneID         *string        `json:"milestoneId,omitempty"`
+	MilestoneName       *string        `json:"milestoneName,omitempty"`
+	GoalID              *string        `json:"goalId,omitempty"`
+	GoalName            *string        `json:"goalName,omitempty"`
+	GoalColor           *string        `json:"goalColor,omitempty"`
+	TagIDs              []string       `json:"tagIds,omitempty"`
+	RelatedTimeEntryIDs []string       `json:"relatedTimeEntryIds,omitempty"`
+	FileURL             *string        `json:"fileUrl,omitempty"`
+	Archived            bool           `json:"archived"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
 }
 
 // ToListItem converts a Note to NoteListItem (without content)
@@ -109,38 +111,38 @@ func (n *Note) ToListItem() *NoteListItem {
 
 // CreateNoteInput represents the input for creating a note
 type CreateNoteInput struct {
-	Type                NoteType   `json:"type"`
-	Title               *string    `json:"title,omitempty"`
-	Content             string     `json:"content"`
-	Format              NoteFormat `json:"format"`
-	Date                *string    `json:"date,omitempty"`
-	TaskID              *string    `json:"taskId,omitempty"`
-	MilestoneID         *string    `json:"milestoneId,omitempty"`
-	MilestoneName       *string    `json:"milestoneName,omitempty"`
-	GoalID              *string    `json:"goalId,omitempty"`
-	GoalName            *string    `json:"goalName,omitempty"`
-	GoalColor           *string    `json:"goalColor,omitempty"`
-	TagIDs              []string   `json:"tagIds,omitempty"`
-	RelatedTimeEntryIDs []string   `json:"relatedTimeEntryIds,omitempty"`
-	FileURL             *string    `json:"fileUrl,omitempty"`
+	Type                NoteType       `json:"type"`
+	Title               *string        `json:"title,omitempty"`
+	Content             string         `json:"content"`
+	Format              NoteFormat     `json:"format"`
+	Date                types.DateOnly `json:"date,omitempty"`
+	TaskID              *string        `json:"taskId,omitempty"`
+	MilestoneID         *string        `json:"milestoneId,omitempty"`
+	MilestoneName       *string        `json:"milestoneName,omitempty"`
+	GoalID              *string        `json:"goalId,omitempty"`
+	GoalName            *string        `json:"goalName,omitempty"`
+	GoalColor           *string        `json:"goalColor,omitempty"`
+	TagIDs              []string       `json:"tagIds,omitempty"`
+	RelatedTimeEntryIDs []string       `json:"relatedTimeEntryIds,omitempty"`
+	FileURL             *string        `json:"fileUrl,omitempty"`
 }
 
 // UpdateNoteInput represents the input for updating a note
 type UpdateNoteInput struct {
-	Title               *string     `json:"title,omitempty"`
-	Content             *string     `json:"content,omitempty"`
-	Format              *NoteFormat `json:"format,omitempty"`
-	Date                *string     `json:"date,omitempty"`
-	TaskID              *string     `json:"taskId,omitempty"`
-	MilestoneID         *string     `json:"milestoneId,omitempty"`
-	MilestoneName       *string     `json:"milestoneName,omitempty"`
-	GoalID              *string     `json:"goalId,omitempty"`
-	GoalName            *string     `json:"goalName,omitempty"`
-	GoalColor           *string     `json:"goalColor,omitempty"`
-	TagIDs              []string    `json:"tagIds,omitempty"`
-	RelatedTimeEntryIDs []string    `json:"relatedTimeEntryIds,omitempty"`
-	FileURL             *string     `json:"fileUrl,omitempty"`
-	Archived            *bool       `json:"archived,omitempty"`
+	Title               *string         `json:"title,omitempty"`
+	Content             *string         `json:"content,omitempty"`
+	Format              *NoteFormat     `json:"format,omitempty"`
+	Date                *types.DateOnly `json:"date,omitempty"`
+	TaskID              *string         `json:"taskId,omitempty"`
+	MilestoneID         *string         `json:"milestoneId,omitempty"`
+	MilestoneName       *string         `json:"milestoneName,omitempty"`
+	GoalID              *string         `json:"goalId,omitempty"`
+	GoalName            *string         `json:"goalName,omitempty"`
+	GoalColor           *string         `json:"goalColor,omitempty"`
+	TagIDs              []string        `json:"tagIds,omitempty"`
+	RelatedTimeEntryIDs []string        `json:"relatedTimeEntryIds,omitempty"`
+	FileURL             *string         `json:"fileUrl,omitempty"`
+	Archived            *bool           `json:"archived,omitempty"`
 }
 
 // NoteFilter represents filters for listing notes
@@ -161,4 +163,134 @@ type NoteFilter struct {
 type SearchResult struct {
 	Note  *NoteListItem `json:"note"`
 	Score float64       `json:"score"` // Relevance score
+}
+
+// ============================================
+// NoteContent - 複数コンテンツ対応
+// ============================================
+
+// ContentType represents the type of content
+type ContentType string
+
+const (
+	ContentTypeMarkdown ContentType = "markdown"
+	ContentTypeDrawio   ContentType = "drawio"
+	ContentTypeImage    ContentType = "image"
+	ContentTypePDF      ContentType = "pdf"
+	ContentTypeCode     ContentType = "code"
+)
+
+// IsValid checks if the content type is valid
+func (t ContentType) IsValid() bool {
+	switch t {
+	case ContentTypeMarkdown, ContentTypeDrawio, ContentTypeImage, ContentTypePDF, ContentTypeCode:
+		return true
+	}
+	return false
+}
+
+// StorageProvider represents the storage backend
+type StorageProvider string
+
+const (
+	StorageProviderMinIO StorageProvider = "minio"
+	StorageProviderR2    StorageProvider = "r2"
+	StorageProviderS3    StorageProvider = "s3"
+	StorageProviderLocal StorageProvider = "local"
+)
+
+// IndexStatus represents the indexing status of a note
+type IndexStatus string
+
+const (
+	IndexStatusPending    IndexStatus = "pending"
+	IndexStatusProcessing IndexStatus = "processing"
+	IndexStatusIndexed    IndexStatus = "indexed"
+	IndexStatusFailed     IndexStatus = "failed"
+)
+
+// NoteContent represents a content item within a note
+type NoteContent struct {
+	ID              string           `json:"id"`
+	NoteID          string           `json:"noteId"`
+	ContentType     ContentType      `json:"contentType"`
+	Content         *string          `json:"content,omitempty"`         // インラインコンテンツ
+	StorageProvider *StorageProvider `json:"storageProvider,omitempty"` // ストレージ種別
+	StorageKey      *string          `json:"storageKey,omitempty"`      // ストレージ内のキー
+	FileName        *string          `json:"fileName,omitempty"`
+	MimeType        *string          `json:"mimeType,omitempty"`
+	FileSizeBytes   *int64           `json:"fileSizeBytes,omitempty"`
+	Checksum        *string          `json:"checksum,omitempty"`
+	ThumbnailBase64 *string          `json:"thumbnailBase64,omitempty"`
+	SortOrder       int              `json:"sortOrder"`
+	Metadata        map[string]any   `json:"metadata,omitempty"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	UpdatedAt       time.Time        `json:"updatedAt"`
+}
+
+// GetContentURL returns the public URL for accessing the content
+func (c *NoteContent) GetContentURL(publicBaseURL string) string {
+	if c.StorageKey != nil && *c.StorageKey != "" {
+		return publicBaseURL + "/" + *c.StorageKey
+	}
+	return ""
+}
+
+// CreateNoteContentInput represents input for creating a note content
+type CreateNoteContentInput struct {
+	ContentType     ContentType      `json:"contentType"`
+	Content         *string          `json:"content,omitempty"`
+	StorageProvider *StorageProvider `json:"storageProvider,omitempty"`
+	StorageKey      *string          `json:"storageKey,omitempty"`
+	FileName        *string          `json:"fileName,omitempty"`
+	MimeType        *string          `json:"mimeType,omitempty"`
+	FileSizeBytes   *int64           `json:"fileSizeBytes,omitempty"`
+	Checksum        *string          `json:"checksum,omitempty"`
+	ThumbnailBase64 *string          `json:"thumbnailBase64,omitempty"`
+	SortOrder       *int             `json:"sortOrder,omitempty"`
+	Metadata        map[string]any   `json:"metadata,omitempty"`
+}
+
+// UpdateNoteContentInput represents input for updating a note content
+type UpdateNoteContentInput struct {
+	Content         *string        `json:"content,omitempty"`
+	SortOrder       *int           `json:"sortOrder,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	ThumbnailBase64 *string        `json:"thumbnailBase64,omitempty"`
+}
+
+// UploadURLRequest represents request for getting upload URL
+type UploadURLRequest struct {
+	FileName  string `json:"fileName"`
+	MimeType  string `json:"mimeType"`
+	FileSize  int64  `json:"fileSize"`
+}
+
+// UploadURLResponse represents response with presigned upload URL
+type UploadURLResponse struct {
+	UploadURL  string `json:"uploadUrl"`
+	ContentID  string `json:"contentId"`
+	StorageKey string `json:"storageKey"`
+}
+
+// NoteContentChunk represents a chunk for AI/search indexing
+type NoteContentChunk struct {
+	ID             string     `json:"id"`
+	NoteID         string     `json:"noteId"`
+	NoteContentID  string     `json:"noteContentId"`
+	ChunkIndex     int        `json:"chunkIndex"`
+	ChunkText      string     `json:"chunkText"`
+	TokenCount     *int       `json:"tokenCount,omitempty"`
+	EmbeddingModel *string    `json:"embeddingModel,omitempty"`
+	ProcessedAt    *time.Time `json:"processedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+}
+
+// ChunkSearchResult represents a search result from vector/text search
+type ChunkSearchResult struct {
+	NoteID        string  `json:"noteId"`
+	NoteTitle     string  `json:"noteTitle"`
+	ChunkText     string  `json:"chunkText"`
+	Score         float64 `json:"score"`
+	HighlightText string  `json:"highlightText,omitempty"`
 }

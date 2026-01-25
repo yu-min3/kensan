@@ -54,10 +54,32 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/tasks", func(r chi.Router) {
 		r.Get("/", h.ListTasks)
 		r.Post("/", h.CreateTask)
+		r.Post("/reorder", h.ReorderTasks)
+		r.Post("/bulk-delete", h.BulkDeleteTasks)
+		r.Post("/bulk-complete", h.BulkCompleteTasks)
 		r.Get("/{taskId}", h.GetTask)
 		r.Put("/{taskId}", h.UpdateTask)
 		r.Patch("/{taskId}/complete", h.ToggleTaskComplete)
 		r.Delete("/{taskId}", h.DeleteTask)
+	})
+
+	// EntityMemo routes
+	r.Route("/entity-memos", func(r chi.Router) {
+		r.Get("/", h.ListEntityMemos)
+		r.Post("/", h.CreateEntityMemo)
+		r.Get("/{memoId}", h.GetEntityMemo)
+		r.Put("/{memoId}", h.UpdateEntityMemo)
+		r.Delete("/{memoId}", h.DeleteEntityMemo)
+	})
+
+	// Todo routes
+	r.Route("/todos", func(r chi.Router) {
+		r.Get("/", h.ListTodos)
+		r.Post("/", h.CreateTodo)
+		r.Get("/{todoId}", h.GetTodo)
+		r.Put("/{todoId}", h.UpdateTodo)
+		r.Delete("/{todoId}", h.DeleteTodo)
+		r.Patch("/{todoId}/complete", h.ToggleTodoComplete)
 	})
 }
 
@@ -224,6 +246,88 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ReorderTasks handles POST /tasks/reorder
+func (h *Handler) ReorderTasks(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input struct {
+		TaskIDs []string `json:"taskIds"`
+	}
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if len(input.TaskIDs) == 0 {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "taskIds", Message: "Task IDs are required"},
+		})
+		return
+	}
+
+	tasks, err := h.service.ReorderTasks(r.Context(), userID, input.TaskIDs)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to reorder tasks")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, tasks)
+}
+
+// BulkDeleteTasks handles POST /tasks/bulk-delete
+func (h *Handler) BulkDeleteTasks(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input struct {
+		TaskIDs []string `json:"taskIds"`
+	}
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if len(input.TaskIDs) == 0 {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "taskIds", Message: "Task IDs are required"},
+		})
+		return
+	}
+
+	err := h.service.BulkDeleteTasks(r.Context(), userID, input.TaskIDs)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to bulk delete tasks")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// BulkCompleteTasks handles POST /tasks/bulk-complete
+func (h *Handler) BulkCompleteTasks(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input struct {
+		TaskIDs   []string `json:"taskIds"`
+		Completed bool     `json:"completed"`
+	}
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if len(input.TaskIDs) == 0 {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "taskIds", Message: "Task IDs are required"},
+		})
+		return
+	}
+
+	tasks, err := h.service.BulkCompleteTasks(r.Context(), userID, input.TaskIDs, input.Completed)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to bulk complete tasks")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, tasks)
 }
 
 // ========== Goal Handlers ==========
@@ -585,4 +689,329 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ========== EntityMemo Handlers ==========
+
+// ListEntityMemos handles GET /entity-memos
+func (h *Handler) ListEntityMemos(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	filter := task.EntityMemoFilter{}
+
+	// Parse entity_type filter
+	if entityType := r.URL.Query().Get("entity_type"); entityType != "" {
+		et := task.EntityType(entityType)
+		filter.EntityType = &et
+	}
+
+	// Parse entity_id filter
+	if entityID := r.URL.Query().Get("entity_id"); entityID != "" {
+		filter.EntityID = &entityID
+	}
+
+	// Parse pinned filter
+	if pinned := r.URL.Query().Get("pinned"); pinned != "" {
+		if b, err := strconv.ParseBool(pinned); err == nil {
+			filter.Pinned = &b
+		}
+	}
+
+	memos, err := h.service.ListEntityMemos(r.Context(), userID, filter)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidEntityType) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_ENTITY_TYPE", "Invalid entity type")
+			return
+		}
+		if errors.Is(err, service.ErrGoalNotFound) || errors.Is(err, service.ErrMilestoneNotFound) || errors.Is(err, service.ErrTaskNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "ENTITY_NOT_FOUND", "Entity not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list entity memos")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, memos)
+}
+
+// GetEntityMemo handles GET /entity-memos/{memoId}
+func (h *Handler) GetEntityMemo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	memoID := chi.URLParam(r, "memoId")
+
+	memo, err := h.service.GetEntityMemo(r.Context(), userID, memoID)
+	if err != nil {
+		if errors.Is(err, service.ErrEntityMemoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "ENTITY_MEMO_NOT_FOUND", "Entity memo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get entity memo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, memo)
+}
+
+// CreateEntityMemo handles POST /entity-memos
+func (h *Handler) CreateEntityMemo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input task.CreateEntityMemoInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	// Validation
+	var validationErrors []middleware.ErrorDetail
+	if input.Content == "" {
+		validationErrors = append(validationErrors, middleware.ErrorDetail{
+			Field: "content", Message: "Content is required",
+		})
+	}
+	if input.EntityID == "" {
+		validationErrors = append(validationErrors, middleware.ErrorDetail{
+			Field: "entityId", Message: "Entity ID is required",
+		})
+	}
+	if input.EntityType == "" {
+		validationErrors = append(validationErrors, middleware.ErrorDetail{
+			Field: "entityType", Message: "Entity type is required",
+		})
+	}
+	if len(validationErrors) > 0 {
+		middleware.ValidationError(w, r, validationErrors)
+		return
+	}
+
+	memo, err := h.service.CreateEntityMemo(r.Context(), userID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidEntityType) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_ENTITY_TYPE", "Invalid entity type")
+			return
+		}
+		if errors.Is(err, service.ErrGoalNotFound) || errors.Is(err, service.ErrMilestoneNotFound) || errors.Is(err, service.ErrTaskNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "ENTITY_NOT_FOUND", "Entity not found")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidInput) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create entity memo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, memo)
+}
+
+// UpdateEntityMemo handles PUT /entity-memos/{memoId}
+func (h *Handler) UpdateEntityMemo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	memoID := chi.URLParam(r, "memoId")
+
+	var input task.UpdateEntityMemoInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	memo, err := h.service.UpdateEntityMemo(r.Context(), userID, memoID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrEntityMemoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "ENTITY_MEMO_NOT_FOUND", "Entity memo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update entity memo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, memo)
+}
+
+// DeleteEntityMemo handles DELETE /entity-memos/{memoId}
+func (h *Handler) DeleteEntityMemo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	memoID := chi.URLParam(r, "memoId")
+
+	err := h.service.DeleteEntityMemo(r.Context(), userID, memoID)
+	if err != nil {
+		if errors.Is(err, service.ErrEntityMemoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "ENTITY_MEMO_NOT_FOUND", "Entity memo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete entity memo")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ========== Todo Handlers ==========
+
+// ListTodos handles GET /todos
+func (h *Handler) ListTodos(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	// Check if date is specified (for getting todos with status)
+	if date := r.URL.Query().Get("date"); date != "" {
+		todos, err := h.service.ListTodosWithStatus(r.Context(), userID, date)
+		if err != nil {
+			if errors.Is(err, service.ErrInvalidInput) {
+				middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid date format")
+				return
+			}
+			middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list todos")
+			return
+		}
+		middleware.JSON(w, r, http.StatusOK, todos)
+		return
+	}
+
+	// Otherwise return all todos without status
+	filter := task.TodoFilter{}
+
+	// Parse enabled filter
+	if enabled := r.URL.Query().Get("enabled"); enabled != "" {
+		if b, err := strconv.ParseBool(enabled); err == nil {
+			filter.Enabled = &b
+		}
+	}
+
+	// Parse is_recurring filter
+	if isRecurring := r.URL.Query().Get("is_recurring"); isRecurring != "" {
+		if b, err := strconv.ParseBool(isRecurring); err == nil {
+			filter.IsRecurring = &b
+		}
+	}
+
+	todos, err := h.service.ListTodos(r.Context(), userID, filter)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list todos")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, todos)
+}
+
+// GetTodo handles GET /todos/{todoId}
+func (h *Handler) GetTodo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	todoID := chi.URLParam(r, "todoId")
+
+	todo, err := h.service.GetTodo(r.Context(), userID, todoID)
+	if err != nil {
+		if errors.Is(err, service.ErrTodoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "TODO_NOT_FOUND", "Todo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get todo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, todo)
+}
+
+// CreateTodo handles POST /todos
+func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input task.CreateTodoInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	// Validation
+	if input.Name == "" {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "name", Message: "Name is required"},
+		})
+		return
+	}
+
+	todo, err := h.service.CreateTodo(r.Context(), userID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidInput) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidFrequency) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_FREQUENCY", "Invalid frequency")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create todo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, todo)
+}
+
+// UpdateTodo handles PUT /todos/{todoId}
+func (h *Handler) UpdateTodo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	todoID := chi.URLParam(r, "todoId")
+
+	var input task.UpdateTodoInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	todo, err := h.service.UpdateTodo(r.Context(), userID, todoID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrTodoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "TODO_NOT_FOUND", "Todo not found")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidFrequency) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_FREQUENCY", "Invalid frequency")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update todo")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, todo)
+}
+
+// DeleteTodo handles DELETE /todos/{todoId}
+func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	todoID := chi.URLParam(r, "todoId")
+
+	err := h.service.DeleteTodo(r.Context(), userID, todoID)
+	if err != nil {
+		if errors.Is(err, service.ErrTodoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "TODO_NOT_FOUND", "Todo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete todo")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ToggleTodoComplete handles PATCH /todos/{todoId}/complete
+func (h *Handler) ToggleTodoComplete(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	todoID := chi.URLParam(r, "todoId")
+
+	// Get date from query parameter (required)
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "date", Message: "Date query parameter is required"},
+		})
+		return
+	}
+
+	todo, err := h.service.ToggleTodoComplete(r.Context(), userID, todoID, date)
+	if err != nil {
+		if errors.Is(err, service.ErrTodoNotFound) {
+			middleware.Error(w, r, http.StatusNotFound, "TODO_NOT_FOUND", "Todo not found")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to toggle todo complete")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, todo)
 }

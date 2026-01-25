@@ -2,7 +2,7 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService, buildQueryParams } from '../createApiService'
-import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat } from '@/types'
+import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider } from '@/types'
 
 // ============================================
 // API Response Types
@@ -107,6 +107,55 @@ const transformSearchResult = (r: NoteSearchResultResponse): NoteSearchResult =>
 })
 
 // ============================================
+// NoteContent Types
+// ============================================
+interface NoteContentResponse {
+  id: string
+  noteId: string
+  contentType: ContentType
+  content?: string
+  storageProvider?: StorageProvider
+  storageKey?: string
+  fileName?: string
+  mimeType?: string
+  fileSizeBytes?: number
+  checksum?: string
+  thumbnailBase64?: string
+  sortOrder: number
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+interface UploadURLResponse {
+  uploadUrl: string
+  contentId: string
+  storageKey: string
+}
+
+interface DownloadURLResponse {
+  downloadUrl: string
+}
+
+const transformNoteContent = (c: NoteContentResponse): NoteContent => ({
+  id: c.id,
+  noteId: c.noteId,
+  contentType: c.contentType,
+  content: c.content,
+  storageProvider: c.storageProvider,
+  storageKey: c.storageKey,
+  fileName: c.fileName,
+  mimeType: c.mimeType,
+  fileSizeBytes: c.fileSizeBytes,
+  checksum: c.checksum,
+  thumbnailBase64: c.thumbnailBase64,
+  sortOrder: c.sortOrder,
+  metadata: c.metadata,
+  createdAt: new Date(c.createdAt),
+  updatedAt: new Date(c.updatedAt),
+})
+
+// ============================================
 // Input Types
 // ============================================
 export interface CreateNoteInput {
@@ -154,6 +203,36 @@ export interface NoteFilter {
   archived?: boolean
   format?: NoteFormat
   q?: string // Search query
+}
+
+// ============================================
+// NoteContent Input Types
+// ============================================
+export interface CreateNoteContentInput {
+  contentType: ContentType
+  content?: string
+  storageProvider?: StorageProvider
+  storageKey?: string
+  fileName?: string
+  mimeType?: string
+  fileSizeBytes?: number
+  checksum?: string
+  thumbnailBase64?: string
+  sortOrder?: number
+  metadata?: Record<string, unknown>
+}
+
+export interface UpdateNoteContentInput {
+  content?: string
+  sortOrder?: number
+  metadata?: Record<string, unknown>
+  thumbnailBase64?: string
+}
+
+export interface UploadURLRequest {
+  fileName: string
+  mimeType: string
+  fileSize: number
 }
 
 // ============================================
@@ -284,9 +363,154 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
     return baseNotesApi.create({ ...input, type: 'learning' })
   },
 
+  // ============================================
+  // NoteContent Methods
+  // ============================================
+
+  /**
+   * List all contents for a note
+   */
+  async listContents(noteId: string): Promise<NoteContent[]> {
+    const response = await httpClient.get<NoteContentResponse[]>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents`
+    )
+    return response.map(transformNoteContent)
+  },
+
+  /**
+   * Get a specific content
+   */
+  async getContent(noteId: string, contentId: string): Promise<NoteContent> {
+    const response = await httpClient.get<NoteContentResponse>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/${contentId}`
+    )
+    return transformNoteContent(response)
+  },
+
+  /**
+   * Create a new content
+   */
+  async createContent(noteId: string, input: CreateNoteContentInput): Promise<NoteContent> {
+    const response = await httpClient.post<NoteContentResponse>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents`,
+      input
+    )
+    return transformNoteContent(response)
+  },
+
+  /**
+   * Update a content
+   */
+  async updateContent(noteId: string, contentId: string, input: UpdateNoteContentInput): Promise<NoteContent> {
+    const response = await httpClient.put<NoteContentResponse>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/${contentId}`,
+      input
+    )
+    return transformNoteContent(response)
+  },
+
+  /**
+   * Delete a content
+   */
+  async deleteContent(noteId: string, contentId: string): Promise<void> {
+    await httpClient.delete(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/${contentId}`
+    )
+  },
+
+  /**
+   * Reorder contents
+   */
+  async reorderContents(noteId: string, contentIds: string[]): Promise<void> {
+    await httpClient.patch(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/reorder`,
+      { contentIds }
+    )
+  },
+
+  // ============================================
+  // Storage Methods
+  // ============================================
+
+  /**
+   * Get presigned URL for uploading a file
+   */
+  async getUploadURL(noteId: string, request: UploadURLRequest): Promise<UploadURLResponse> {
+    return httpClient.post<UploadURLResponse>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/upload-url`,
+      request
+    )
+  },
+
+  /**
+   * Get presigned URL for downloading a file
+   */
+  async getDownloadURL(noteId: string, contentId: string): Promise<string> {
+    const response = await httpClient.get<DownloadURLResponse>(
+      API_CONFIG.baseUrls.note,
+      `/notes/${noteId}/contents/${contentId}/download-url`
+    )
+    return response.downloadUrl
+  },
+
+  /**
+   * Upload a file to storage using presigned URL
+   */
+  async uploadFile(uploadUrl: string, file: File): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status}`)
+    }
+  },
+
+  /**
+   * Create content with file upload
+   * Convenience method that handles the full upload flow
+   */
+  async createContentWithFile(
+    noteId: string,
+    file: File,
+    contentType: ContentType,
+    metadata?: Record<string, unknown>
+  ): Promise<NoteContent> {
+    // 1. Get upload URL
+    const { uploadUrl, storageKey } = await this.getUploadURL(noteId, {
+      fileName: file.name,
+      mimeType: file.type,
+      fileSize: file.size,
+    })
+
+    // 2. Upload file to storage
+    await this.uploadFile(uploadUrl, file)
+
+    // 3. Create content record
+    return this.createContent(noteId, {
+      contentType,
+      storageProvider: 'minio',
+      storageKey,
+      fileName: file.name,
+      mimeType: file.type,
+      fileSizeBytes: file.size,
+      metadata,
+    })
+  },
+
 }))
 
 // ============================================
 // Export types for external use
 // ============================================
-export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat }
+export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider }

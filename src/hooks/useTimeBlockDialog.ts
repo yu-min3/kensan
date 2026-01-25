@@ -33,7 +33,7 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
     endTime: '10:00',
     taskId: undefined,
     milestoneId: undefined,
-    taskInputMode: 'manual',
+    taskInputMode: 'existing', // デフォルトはタスクから選択
   })
 
   // Get goal from selected milestone
@@ -44,6 +44,7 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
     taskId?: string
     taskName?: string
     milestoneId?: string
+    taskInputMode?: TaskInputMode
   }) => {
     // Calculate current time rounded to 15 minutes
     const now = new Date()
@@ -59,7 +60,8 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
       endTime: `${endH}:${startM.toString().padStart(2, '0')}`,
       taskId: params?.taskId,
       milestoneId: params?.milestoneId,
-      taskInputMode: params?.taskId ? 'existing' : 'manual',
+      // パラメータで指定があればそれを使用、なければexistingがデフォルト
+      taskInputMode: params?.taskInputMode || (params?.taskId ? 'existing' : 'existing'),
     })
   }, [])
 
@@ -73,6 +75,20 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
       taskId: block.taskId,
       milestoneId: block.milestoneId,
       taskInputMode: block.taskId ? 'existing' : 'manual',
+    })
+  }, [])
+
+  // 指定した時刻でダイアログを開く（空きエリアダブルクリック用）
+  const openDialogWithTime = useCallback((startTime: string, endTime: string) => {
+    setState({
+      isOpen: true,
+      editingBlockId: null,
+      taskName: '',
+      startTime,
+      endTime,
+      taskId: undefined,
+      milestoneId: undefined,
+      taskInputMode: 'existing',
     })
   }, [])
 
@@ -148,6 +164,7 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
 
     // Actions
     openDialog,
+    openDialogWithTime,
     openEditDialog,
     closeDialog,
     setField,

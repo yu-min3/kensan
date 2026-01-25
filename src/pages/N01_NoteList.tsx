@@ -60,7 +60,8 @@ export function N01NoteList() {
     filter.archived = showArchived
 
     fetchNotes(filter)
-  }, [typeFilter, goalFilter, showArchived, fetchNotes])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter, goalFilter, showArchived])
 
   // Handle search
   useEffect(() => {

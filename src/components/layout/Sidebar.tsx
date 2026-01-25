@@ -1,8 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Sun,
-  Moon,
+  CalendarDays,
   StickyNote,
   FolderKanban,
   RotateCcw,
@@ -20,8 +19,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'ダッシュボード' },
-  { to: '/morning', icon: Sun, label: '朝の画面' },
-  { to: '/evening', icon: Moon, label: '夜の画面' },
+  { to: '/daily', icon: CalendarDays, label: 'デイリー' },
   { to: '/notes', icon: StickyNote, label: 'ノート' },
   { to: '/tasks', icon: FolderKanban, label: 'タスク管理' },
   { to: '/routines', icon: RotateCcw, label: '定期タスク' },

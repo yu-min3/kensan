@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
 import './index.css'
 import App from './App.tsx'
+import { httpClient } from './api/client'
+import { useAuthStore } from './stores/useAuthStore'
+
+// 401エラー時にログアウト処理を実行
+httpClient.setOnUnauthorized(() => {
+  useAuthStore.getState().logout()
+})
 
 async function enableMocking() {
   // MSWを有効化: 明示的にVITE_ENABLE_MSW=trueの場合のみ

@@ -96,10 +96,11 @@ export interface TimeEntry {
 }
 
 // ============================================
-// RoutineTask (定期タスク)
+// RoutineTask (定期タスク) - 後方互換のため残す
 // ============================================
 export type RoutineFrequency = 'daily' | 'weekly' | 'monthly' | 'custom'
 
+/** @deprecated Use Todo instead */
 export interface RoutineTask {
   id: string
   name: string
@@ -111,18 +112,77 @@ export interface RoutineTask {
 }
 
 // ============================================
+// Todo (単発タスク + 繰り返しタスク統合)
+// ============================================
+export type TodoFrequency = 'daily' | 'weekly' | 'monthly' | 'custom'
+
+export interface Todo {
+  id: string
+  userId: string
+  name: string
+  frequency?: TodoFrequency // undefined = 単発タスク
+  daysOfWeek?: number[] // 0=日, 1=月, ..., 6=土
+  dueDate?: string // YYYY-MM-DD, 単発タスクの期日
+  estimatedMinutes?: number
+  tagIds?: string[]
+  enabled: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// 特定日付の完了状態付きTodo
+export interface TodoWithStatus extends Todo {
+  completedToday: boolean
+  completedAt?: Date
+  isOverdue: boolean // 単発タスクで期日超過
+}
+
+// 完了記録
+export interface TodoCompletion {
+  id: string
+  todoId: string
+  completedDate: string // YYYY-MM-DD
+  completedAt: Date
+}
+
+// ============================================
 // Note (統合ノート - 日記・学習記録)
 // ============================================
 export type NoteType = 'diary' | 'learning'
 export type NoteFormat = 'markdown' | 'drawio'
+
+// コンテンツタイプ（複数コンテンツ対応）
+export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code'
+export type StorageProvider = 'minio' | 'r2' | 's3' | 'local'
+export type IndexStatus = 'pending' | 'processing' | 'indexed' | 'failed'
+
+// NoteContent - ノート内の個別コンテンツ
+export interface NoteContent {
+  id: string
+  noteId: string
+  contentType: ContentType
+  content?: string // インラインコンテンツ（小さい場合）
+  storageProvider?: StorageProvider // ストレージ種別
+  storageKey?: string // ストレージ内のキー
+  fileName?: string
+  mimeType?: string
+  fileSizeBytes?: number
+  checksum?: string
+  thumbnailBase64?: string // 画像のサムネイル
+  sortOrder: number
+  metadata?: Record<string, unknown>
+  createdAt: Date
+  updatedAt: Date
+}
 
 export interface Note {
   id: string
   userId: string
   type: NoteType
   title?: string
-  content: string
-  format: NoteFormat
+  content: string // 後方互換性のため残す
+  format: NoteFormat // 後方互換性のため残す
+  contents?: NoteContent[] // 複数コンテンツ
   date?: string // YYYY-MM-DD, diaryでは必須
   taskId?: string // 関連タスク
   milestoneId?: string
@@ -132,7 +192,9 @@ export interface Note {
   goalColor?: string
   tagIds?: string[] // note_tagsテーブル経由
   relatedTimeEntryIds?: string[]
-  fileUrl?: string // drawioの場合のファイルURL
+  fileUrl?: string // drawioの場合のファイルURL（後方互換）
+  indexStatus?: IndexStatus
+  indexedAt?: Date
   archived: boolean
   createdAt: Date
   updatedAt: Date
@@ -275,6 +337,66 @@ export interface AIReviewReport {
   improvementPoints: string[]
   advice: string[]
   createdAt: Date
+}
+
+// ============================================
+// EntityMemo (エンティティメモ)
+// ============================================
+export type EntityType = 'goal' | 'milestone' | 'task'
+
+export interface EntityMemo {
+  id: string
+  userId: string
+  entityType: EntityType
+  entityId: string
+  content: string
+  pinned: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// ============================================
+// Daily Dashboard
+// ============================================
+
+// 今日のフォーカス
+export interface TodayFocus {
+  id: string
+  text: string
+  taskId?: string
+  completedAt?: Date
+  createdAt: Date
+}
+
+// ピン留め
+export interface PinnedReminder {
+  id: string
+  text: string
+  deadline?: string // YYYY-MM-DD
+  completed: boolean
+  sortOrder: number
+  createdAt: Date
+}
+
+// 付箋
+export type StickyNoteColor = 'yellow' | 'pink' | 'blue' | 'green' | 'orange' | 'purple'
+
+export interface StickyNote {
+  id: string
+  content: string
+  color: StickyNoteColor
+  sortOrder: number
+  createdAt: Date
+}
+
+// ストリーク
+export type StreakType = 'learning' | 'diary' | 'timeblock'
+
+export interface StreakData {
+  type: StreakType
+  label: string
+  currentStreak: number
+  longestStreak: number
 }
 
 // ============================================

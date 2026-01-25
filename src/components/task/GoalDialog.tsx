@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
 import { DEFAULT_COLORS } from '@/types'
 
@@ -85,6 +86,15 @@ export function GoalDialog({ dialog, onSave }: GoalDialogProps) {
               />
             </div>
           </div>
+
+          {/* Entity Memos - only show when editing existing goal */}
+          {dialog.editingId && (
+            <EntityMemoSection
+              entityType="goal"
+              entityId={dialog.editingId}
+              maxHeight="150px"
+            />
+          )}
         </div>
 
         <DialogFooter>

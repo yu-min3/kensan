@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db help dev dev-docker dev-backend
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-docker dev-backend
 
 # Default target
 .DEFAULT_GOAL := help
@@ -7,7 +7,7 @@
 # Full Stack Commands
 # =============================================================================
 
-## Start all services (frontend + backend + database)
+## Start all services (frontend + backend + database + storage)
 up:
 	docker compose up -d
 	@echo ""
@@ -22,11 +22,12 @@ up:
 	@echo "  - record-service:    http://localhost:8086/health"
 	@echo "  - diary-service:     http://localhost:8087/health"
 	@echo "  - analytics-service: http://localhost:8088/health"
-	@echo "  - ai-service:        http://localhost:8089/health"
 	@echo "  - memo-service:      http://localhost:8090/health"
 	@echo "  - note-service:      http://localhost:8091/health"
 	@echo ""
 	@echo "Database:  postgres://kensan:kensan@localhost:5432/kensan"
+	@echo "Storage:   http://localhost:9000 (MinIO API)"
+	@echo "           http://localhost:9001 (MinIO Console - kensan/kensan123)"
 	@echo ""
 	@echo "Use 'make logs' to view logs"
 	@echo "Use 'make down' to stop all services"
@@ -75,9 +76,17 @@ db:
 	@sleep 3
 	@echo "Database: postgres://kensan:kensan@localhost:5432/kensan"
 
-## Start only backend services (requires db)
-backend: db
-	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service ai-service memo-service note-service
+## Start only storage (MinIO)
+storage:
+	docker compose up -d minio minio-init
+	@echo "Waiting for MinIO to be ready..."
+	@sleep 3
+	@echo "Storage API:     http://localhost:9000"
+	@echo "Storage Console: http://localhost:9001 (kensan/kensan123)"
+
+## Start only backend services (requires db and storage)
+backend: db storage
+	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service memo-service note-service
 	@echo "All backend services started"
 
 # =============================================================================
@@ -138,7 +147,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Full Stack:"
-	@echo "  up        Start all services (frontend + backend + db)"
+	@echo "  up        Start all services (frontend + backend + db + storage)"
 	@echo "  down      Stop all services"
 	@echo "  build     Build all Docker images"
 	@echo "  rebuild   Rebuild and start all services"
@@ -148,8 +157,9 @@ help:
 	@echo ""
 	@echo "Selective Start:"
 	@echo "  frontend  Start only frontend"
-	@echo "  backend   Start database + all backend services"
+	@echo "  backend   Start database + storage + all backend services"
 	@echo "  db        Start only database"
+	@echo "  storage   Start only storage (MinIO)"
 	@echo ""
 	@echo "Development:"
 	@echo "  dev           Start frontend with MSW mocking (npm, no backend)"

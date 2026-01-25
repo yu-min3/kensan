@@ -20,6 +20,7 @@ interface RequestOptions {
 
 class HttpClient {
   private authToken: string | null = null
+  private onUnauthorizedCallback: (() => void) | null = null
 
   setAuthToken(token: string | null) {
     this.authToken = token
@@ -27,6 +28,10 @@ class HttpClient {
 
   getAuthToken(): string | null {
     return this.authToken
+  }
+
+  setOnUnauthorized(callback: () => void) {
+    this.onUnauthorizedCallback = callback
   }
 
   async request<T>(baseUrl: string, endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -66,6 +71,18 @@ class HttpClient {
       const errorObj = errorData.error || errorData
       const errorCode = errorObj.code || 'UNKNOWN_ERROR'
       const errorMessage = errorObj.message || `Request failed with status ${response.status}`
+
+      // 401 Unauthorized: セッション無効
+      if (response.status === 401) {
+        toast.error('セッションが無効です', {
+          description: '再ログインしてください',
+          duration: 5000,
+        })
+        if (this.onUnauthorizedCallback) {
+          this.onUnauthorizedCallback()
+        }
+        throw new ApiError(response.status, errorCode, errorMessage)
+      }
 
       // Show toast notification for API errors
       toast.error(`API Error [${response.status}]`, {

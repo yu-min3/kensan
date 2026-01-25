@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { TagSelect } from '@/components/common/TagSelect'
+import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
 import type { Goal, Milestone, Tag, Task } from '@/types'
 
@@ -130,6 +131,15 @@ export function TaskDialog({ dialog, goals, milestones, tags, tasks, onSave }: T
                 親タスク: {parentTask.name}
               </Label>
             </div>
+          )}
+
+          {/* Entity Memos - only show when editing existing task */}
+          {dialog.editingId && (
+            <EntityMemoSection
+              entityType="task"
+              entityId={dialog.editingId}
+              maxHeight="150px"
+            />
           )}
         </div>
 

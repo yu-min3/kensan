@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/note/internal"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -34,7 +35,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*note.Note, error) {
 	query := `
 		SELECT id, user_id, type, title, content, format, date, task_id,
-		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
+		       milestone_id, goal_id, milestone_name, goal_name, goal_color,
 		       related_time_entry_ids, file_url, archived, created_at, updated_at
 		FROM notes
 		WHERE id = $1
@@ -62,7 +63,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*note.Note
 func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*note.Note, error) {
 	query := `
 		SELECT id, user_id, type, title, content, format, date, task_id,
-		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
+		       milestone_id, goal_id, milestone_name, goal_name, goal_color,
 		       related_time_entry_ids, file_url, archived, created_at, updated_at
 		FROM notes
 		WHERE id = $1 AND user_id = $2
@@ -90,7 +91,7 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter *note.NoteFilter) ([]*note.NoteListItem, error) {
 	query := `
 		SELECT n.id, n.user_id, n.type, n.title, n.format, n.date, n.task_id,
-		       n.milestone_id, n.milestone_name, n.goal_id, n.goal_name, n.goal_color,
+		       n.milestone_id, n.goal_id, n.milestone_name, n.goal_name, n.goal_color,
 		       n.related_time_entry_ids, n.file_url, n.archived, n.created_at, n.updated_at
 		FROM notes n
 		WHERE n.user_id = $1
@@ -173,12 +174,14 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *no
 	for rows.Next() {
 		item, err := r.scanNoteListItem(rows)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan note list item")
 			return nil, err
 		}
 
 		// Get tag IDs for each note
 		tagIDs, err := r.GetTagIDs(ctx, item.ID)
 		if err != nil {
+			log.Error().Err(err).Str("noteID", item.ID).Msg("Failed to get tag IDs")
 			return nil, err
 		}
 		item.TagIDs = tagIDs
@@ -334,7 +337,7 @@ func (r *PostgresRepository) Search(ctx context.Context, userID, query string, f
 
 	sqlQuery := `
 		SELECT n.id, n.user_id, n.type, n.title, n.format, n.date, n.task_id,
-		       n.milestone_id, n.milestone_name, n.goal_id, n.goal_name, n.goal_color,
+		       n.milestone_id, n.goal_id, n.milestone_name, n.goal_name, n.goal_color,
 		       n.related_time_entry_ids, n.file_url, n.archived, n.created_at, n.updated_at,
 		       CASE
 		           WHEN LOWER(n.title) LIKE $2 THEN 1.0
@@ -448,7 +451,7 @@ func (r *PostgresRepository) GetTagIDs(ctx context.Context, noteID string) ([]st
 
 func (r *PostgresRepository) scanNote(ctx context.Context, row pgx.Row) (*note.Note, error) {
 	var n note.Note
-	var title, date, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+	var title, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
 	var relatedTimeEntryIDs []string
 
 	err := row.Scan(
@@ -458,11 +461,11 @@ func (r *PostgresRepository) scanNote(ctx context.Context, row pgx.Row) (*note.N
 		&title,
 		&n.Content,
 		&n.Format,
-		&date,
+		&n.Date,
 		&taskID,
 		&milestoneID,
-		&milestoneName,
 		&goalID,
+		&milestoneName,
 		&goalName,
 		&goalColor,
 		&relatedTimeEntryIDs,
@@ -476,7 +479,6 @@ func (r *PostgresRepository) scanNote(ctx context.Context, row pgx.Row) (*note.N
 	}
 
 	n.Title = title
-	n.Date = date
 	n.TaskID = taskID
 	n.MilestoneID = milestoneID
 	n.MilestoneName = milestoneName
@@ -491,7 +493,7 @@ func (r *PostgresRepository) scanNote(ctx context.Context, row pgx.Row) (*note.N
 
 func (r *PostgresRepository) scanNoteListItem(rows pgx.Rows) (*note.NoteListItem, error) {
 	var item note.NoteListItem
-	var title, date, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+	var title, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
 	var relatedTimeEntryIDs []string
 
 	err := rows.Scan(
@@ -500,11 +502,11 @@ func (r *PostgresRepository) scanNoteListItem(rows pgx.Rows) (*note.NoteListItem
 		&item.Type,
 		&title,
 		&item.Format,
-		&date,
+		&item.Date,
 		&taskID,
 		&milestoneID,
-		&milestoneName,
 		&goalID,
+		&milestoneName,
 		&goalName,
 		&goalColor,
 		&relatedTimeEntryIDs,
@@ -518,7 +520,6 @@ func (r *PostgresRepository) scanNoteListItem(rows pgx.Rows) (*note.NoteListItem
 	}
 
 	item.Title = title
-	item.Date = date
 	item.TaskID = taskID
 	item.MilestoneID = milestoneID
 	item.MilestoneName = milestoneName
@@ -533,7 +534,7 @@ func (r *PostgresRepository) scanNoteListItem(rows pgx.Rows) (*note.NoteListItem
 
 func (r *PostgresRepository) scanNoteListItemWithScore(rows pgx.Rows) (*note.NoteListItem, float64, error) {
 	var item note.NoteListItem
-	var title, date, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
+	var title, taskID, milestoneID, milestoneName, goalID, goalName, goalColor, fileURL *string
 	var relatedTimeEntryIDs []string
 	var score float64
 
@@ -543,11 +544,11 @@ func (r *PostgresRepository) scanNoteListItemWithScore(rows pgx.Rows) (*note.Not
 		&item.Type,
 		&title,
 		&item.Format,
-		&date,
+		&item.Date,
 		&taskID,
 		&milestoneID,
-		&milestoneName,
 		&goalID,
+		&milestoneName,
 		&goalName,
 		&goalColor,
 		&relatedTimeEntryIDs,
@@ -562,7 +563,6 @@ func (r *PostgresRepository) scanNoteListItemWithScore(rows pgx.Rows) (*note.Not
 	}
 
 	item.Title = title
-	item.Date = date
 	item.TaskID = taskID
 	item.MilestoneID = milestoneID
 	item.MilestoneName = milestoneName
@@ -573,4 +573,233 @@ func (r *PostgresRepository) scanNoteListItemWithScore(rows pgx.Rows) (*note.Not
 	item.FileURL = fileURL
 
 	return &item, score, nil
+}
+
+// ========== NoteContent Operations ==========
+
+// ListContents retrieves all contents for a note
+func (r *PostgresRepository) ListContents(ctx context.Context, noteID string) ([]*note.NoteContent, error) {
+	query := `
+		SELECT id, note_id, content_type, content, storage_provider, storage_key,
+		       file_name, mime_type, file_size_bytes, checksum, thumbnail_base64,
+		       sort_order, metadata, created_at, updated_at
+		FROM note_contents
+		WHERE note_id = $1
+		ORDER BY sort_order, created_at
+	`
+
+	rows, err := r.pool.Query(ctx, query, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contents: %w", err)
+	}
+	defer rows.Close()
+
+	var contents []*note.NoteContent
+	for rows.Next() {
+		content, err := r.scanNoteContent(rows)
+		if err != nil {
+			return nil, err
+		}
+		contents = append(contents, content)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating contents: %w", err)
+	}
+
+	return contents, nil
+}
+
+// GetContent retrieves a content by ID
+func (r *PostgresRepository) GetContent(ctx context.Context, contentID string) (*note.NoteContent, error) {
+	query := `
+		SELECT id, note_id, content_type, content, storage_provider, storage_key,
+		       file_name, mime_type, file_size_bytes, checksum, thumbnail_base64,
+		       sort_order, metadata, created_at, updated_at
+		FROM note_contents
+		WHERE id = $1
+	`
+
+	row := r.pool.QueryRow(ctx, query, contentID)
+	content, err := r.scanNoteContent(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return content, nil
+}
+
+// CreateContent creates a new note content
+func (r *PostgresRepository) CreateContent(ctx context.Context, content *note.NoteContent) error {
+	if content.ID == "" {
+		content.ID = uuid.New().String()
+	}
+	now := time.Now()
+	content.CreatedAt = now
+	content.UpdatedAt = now
+
+	query := `
+		INSERT INTO note_contents (
+			id, note_id, content_type, content, storage_provider, storage_key,
+			file_name, mime_type, file_size_bytes, checksum, thumbnail_base64,
+			sort_order, metadata, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	`
+
+	_, err := r.pool.Exec(ctx, query,
+		content.ID,
+		content.NoteID,
+		content.ContentType,
+		content.Content,
+		content.StorageProvider,
+		content.StorageKey,
+		content.FileName,
+		content.MimeType,
+		content.FileSizeBytes,
+		content.Checksum,
+		content.ThumbnailBase64,
+		content.SortOrder,
+		content.Metadata,
+		content.CreatedAt,
+		content.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create content: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateContent updates an existing note content
+func (r *PostgresRepository) UpdateContent(ctx context.Context, content *note.NoteContent) error {
+	content.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE note_contents
+		SET content = $2, thumbnail_base64 = $3, sort_order = $4, metadata = $5, updated_at = $6
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query,
+		content.ID,
+		content.Content,
+		content.ThumbnailBase64,
+		content.SortOrder,
+		content.Metadata,
+		content.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update content: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("content not found")
+	}
+
+	return nil
+}
+
+// DeleteContent deletes a note content
+func (r *PostgresRepository) DeleteContent(ctx context.Context, contentID string) error {
+	query := `DELETE FROM note_contents WHERE id = $1`
+	result, err := r.pool.Exec(ctx, query, contentID)
+	if err != nil {
+		return fmt.Errorf("failed to delete content: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("content not found")
+	}
+
+	return nil
+}
+
+// ReorderContents updates the sort order of contents
+func (r *PostgresRepository) ReorderContents(ctx context.Context, noteID string, contentIDs []string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+	for i, contentID := range contentIDs {
+		_, err := tx.Exec(ctx, `
+			UPDATE note_contents
+			SET sort_order = $1, updated_at = $2
+			WHERE id = $3 AND note_id = $4
+		`, i, now, contentID, noteID)
+		if err != nil {
+			return fmt.Errorf("failed to update sort order: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateIndexStatus updates the index status of a note
+func (r *PostgresRepository) UpdateIndexStatus(ctx context.Context, noteID string, status note.IndexStatus) error {
+	var indexedAt *time.Time
+	if status == note.IndexStatusIndexed {
+		now := time.Now()
+		indexedAt = &now
+	}
+
+	query := `
+		UPDATE notes
+		SET index_status = $2, indexed_at = $3, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, noteID, status, indexedAt)
+	if err != nil {
+		return fmt.Errorf("failed to update index status: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNoteNotFound
+	}
+
+	return nil
+}
+
+// scanNoteContent scans a row into a NoteContent struct
+func (r *PostgresRepository) scanNoteContent(row pgx.Row) (*note.NoteContent, error) {
+	var content note.NoteContent
+	var storageProvider *string
+
+	err := row.Scan(
+		&content.ID,
+		&content.NoteID,
+		&content.ContentType,
+		&content.Content,
+		&storageProvider,
+		&content.StorageKey,
+		&content.FileName,
+		&content.MimeType,
+		&content.FileSizeBytes,
+		&content.Checksum,
+		&content.ThumbnailBase64,
+		&content.SortOrder,
+		&content.Metadata,
+		&content.CreatedAt,
+		&content.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan content: %w", err)
+	}
+
+	if storageProvider != nil {
+		sp := note.StorageProvider(*storageProvider)
+		content.StorageProvider = &sp
+	}
+
+	return &content, nil
 }

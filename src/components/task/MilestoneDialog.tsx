@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
 import type { Goal, MilestoneStatus } from '@/types'
 
@@ -125,6 +126,15 @@ export function MilestoneDialog({ dialog, goals, onSave }: MilestoneDialogProps)
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {/* Entity Memos - only show when editing existing milestone */}
+          {dialog.editingId && (
+            <EntityMemoSection
+              entityType="milestone"
+              entityId={dialog.editingId}
+              maxHeight="150px"
+            />
           )}
         </div>
 

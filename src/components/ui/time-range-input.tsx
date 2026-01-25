@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useRef } from 'react'
 import {
   Select,
   SelectContent,
@@ -31,11 +31,12 @@ function generateTimeOptions(startHour: number, endHour: number, step: number): 
   return options
 }
 
-// Add 1 hour to time string
-function addHour(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const newHour = Math.min(h + 1, 23)
-  return `${newHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+// Convert minutes to time string (HH:mm)
+function minutesToTime(minutes: number, maxHour: number): string {
+  const clampedMinutes = Math.max(0, Math.min(minutes, maxHour * 60))
+  const h = Math.floor(clampedMinutes / 60)
+  const m = clampedMinutes % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
 export function TimeRangeInput({
@@ -49,22 +50,47 @@ export function TimeRangeInput({
 }: TimeRangeInputProps) {
   const timeOptions = generateTimeOptions(startHour, endHour, step)
 
-  // Auto-adjust end time when start time changes
-  useEffect(() => {
-    if (startTime && endTime) {
-      const startMinutes = timeToMinutes(startTime)
-      const endMinutes = timeToMinutes(endTime)
+  // 前回の開始時間と終了時間を記録して、変更時に duration を維持する
+  const prevStartTimeRef = useRef(startTime)
+  const prevEndTimeRef = useRef(endTime)
 
-      // If end time is before or equal to start time, set it to start + 1 hour
-      if (endMinutes <= startMinutes) {
-        onEndTimeChange(addHour(startTime))
-      }
+  // 開始時間変更時に時間間隔を維持して終了時間も移動
+  const handleStartTimeChange = (newStartTime: string) => {
+    const prevStartMinutes = timeToMinutes(prevStartTimeRef.current)
+    const prevEndMinutes = timeToMinutes(prevEndTimeRef.current)
+    const duration = prevEndMinutes - prevStartMinutes
+
+    const newStartMinutes = timeToMinutes(newStartTime)
+    let newEndMinutes = newStartMinutes + duration
+
+    // 終了時間が範囲外の場合は調整（最低1時間は確保）
+    const maxMinutes = endHour * 60
+    if (newEndMinutes > maxMinutes) {
+      newEndMinutes = maxMinutes
     }
-  }, [startTime]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (newEndMinutes <= newStartMinutes) {
+      newEndMinutes = Math.min(newStartMinutes + 60, maxMinutes)
+    }
+
+    const newEndTime = minutesToTime(newEndMinutes, endHour)
+
+    // 状態を更新
+    prevStartTimeRef.current = newStartTime
+    prevEndTimeRef.current = newEndTime
+
+    onStartTimeChange(newStartTime)
+    onEndTimeChange(newEndTime)
+  }
+
+  // 終了時間変更時はrefを更新
+  const handleEndTimeChange = (newEndTime: string) => {
+    prevEndTimeRef.current = newEndTime
+    onEndTimeChange(newEndTime)
+  }
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={startTime} onValueChange={onStartTimeChange} scrollToSelected>
+      <Select value={startTime} onValueChange={handleStartTimeChange} scrollToSelected>
         <SelectTrigger className="w-24">
           <SelectValue placeholder="開始" />
         </SelectTrigger>
@@ -79,7 +105,7 @@ export function TimeRangeInput({
 
       <span className="text-muted-foreground">~</span>
 
-      <Select value={endTime} onValueChange={onEndTimeChange} scrollToSelected>
+      <Select value={endTime} onValueChange={handleEndTimeChange} scrollToSelected>
         <SelectTrigger className="w-24">
           <SelectValue placeholder="終了" />
         </SelectTrigger>

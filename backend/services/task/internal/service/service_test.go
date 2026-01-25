@@ -179,6 +179,27 @@ func (m *MockRepository) ToggleTaskComplete(ctx context.Context, userID, taskID 
 	return args.Get(0).(*task.Task), args.Error(1)
 }
 
+func (m *MockRepository) ReorderTasks(ctx context.Context, userID string, taskIDs []string) ([]task.Task, error) {
+	args := m.Called(ctx, userID, taskIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Task), args.Error(1)
+}
+
+func (m *MockRepository) BulkDeleteTasks(ctx context.Context, userID string, taskIDs []string) error {
+	args := m.Called(ctx, userID, taskIDs)
+	return args.Error(0)
+}
+
+func (m *MockRepository) BulkCompleteTasks(ctx context.Context, userID string, taskIDs []string, completed bool) ([]task.Task, error) {
+	args := m.Called(ctx, userID, taskIDs, completed)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Task), args.Error(1)
+}
+
 func (m *MockRepository) GetChildTasks(ctx context.Context, userID, parentTaskID string) ([]task.Task, error) {
 	args := m.Called(ctx, userID, parentTaskID)
 	if args.Get(0) == nil {

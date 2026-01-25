@@ -32,6 +32,18 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Put("/notes/{noteId}", h.Update)
 	r.Delete("/notes/{noteId}", h.Delete)
 	r.Post("/notes/{noteId}/archive", h.Archive)
+
+	// NoteContent routes
+	r.Get("/notes/{noteId}/contents", h.ListContents)
+	r.Post("/notes/{noteId}/contents", h.CreateContent)
+	r.Get("/notes/{noteId}/contents/{contentId}", h.GetContent)
+	r.Put("/notes/{noteId}/contents/{contentId}", h.UpdateContent)
+	r.Delete("/notes/{noteId}/contents/{contentId}", h.DeleteContent)
+	r.Patch("/notes/{noteId}/contents/reorder", h.ReorderContents)
+
+	// Storage routes
+	r.Post("/notes/{noteId}/contents/upload-url", h.GetUploadURL)
+	r.Get("/notes/{noteId}/contents/{contentId}/download-url", h.GetDownloadURL)
 }
 
 // List handles listing notes
@@ -289,7 +301,217 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "date", Message: "Date is required for diary notes"}})
 	case errors.Is(err, service.ErrQueryRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "q", Message: "Query is required for search"}})
+	case errors.Is(err, service.ErrContentNotFound):
+		middleware.Error(w, r, http.StatusNotFound, "CONTENT_NOT_FOUND", "Content not found")
+	case errors.Is(err, service.ErrContentTypeRequired):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "contentType", Message: "Content type is required"}})
+	case errors.Is(err, service.ErrInvalidContentType):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "contentType", Message: "Invalid content type"}})
+	case errors.Is(err, service.ErrStorageUnavailable):
+		middleware.Error(w, r, http.StatusServiceUnavailable, "STORAGE_UNAVAILABLE", "Storage service is not configured")
 	default:
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
+}
+
+// ========== NoteContent Handlers ==========
+
+// ListContents handles listing contents for a note
+// GET /notes/{noteId}/contents
+func (h *Handler) ListContents(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+
+	contents, err := h.service.ListContents(r.Context(), userID, noteID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, contents)
+}
+
+// GetContent handles getting a specific content
+// GET /notes/{noteId}/contents/{contentId}
+func (h *Handler) GetContent(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+	contentID := chi.URLParam(r, "contentId")
+
+	content, err := h.service.GetContent(r.Context(), userID, noteID, contentID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, content)
+}
+
+// CreateContent handles creating a new content
+// POST /notes/{noteId}/contents
+func (h *Handler) CreateContent(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+
+	var input note.CreateNoteContentInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	content, err := h.service.CreateContent(r.Context(), userID, noteID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, content)
+}
+
+// UpdateContent handles updating an existing content
+// PUT /notes/{noteId}/contents/{contentId}
+func (h *Handler) UpdateContent(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+	contentID := chi.URLParam(r, "contentId")
+
+	var input note.UpdateNoteContentInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	content, err := h.service.UpdateContent(r.Context(), userID, noteID, contentID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, content)
+}
+
+// DeleteContent handles deleting a content
+// DELETE /notes/{noteId}/contents/{contentId}
+func (h *Handler) DeleteContent(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+	contentID := chi.URLParam(r, "contentId")
+
+	if err := h.service.DeleteContent(r.Context(), userID, noteID, contentID); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ReorderContents handles reordering contents
+// PATCH /notes/{noteId}/contents/reorder
+func (h *Handler) ReorderContents(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+
+	var input struct {
+		ContentIDs []string `json:"contentIds"`
+	}
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if err := h.service.ReorderContents(r.Context(), userID, noteID, input.ContentIDs); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ========== Storage Handlers ==========
+
+// GetUploadURL handles getting presigned upload URL
+// POST /notes/{noteId}/contents/upload-url
+func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+
+	var input note.UploadURLRequest
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	// Validate input
+	if input.FileName == "" {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "fileName", Message: "File name is required"}})
+		return
+	}
+	if input.MimeType == "" {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "mimeType", Message: "MIME type is required"}})
+		return
+	}
+	if input.FileSize <= 0 {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "fileSize", Message: "File size must be positive"}})
+		return
+	}
+
+	resp, err := h.service.GetUploadURL(r.Context(), userID, noteID, &input)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, resp)
+}
+
+// GetDownloadURL handles getting presigned download URL
+// GET /notes/{noteId}/contents/{contentId}/download-url
+func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
+		return
+	}
+
+	noteID := chi.URLParam(r, "noteId")
+	contentID := chi.URLParam(r, "contentId")
+
+	downloadURL, err := h.service.GetDownloadURL(r.Context(), userID, noteID, contentID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, map[string]string{"downloadUrl": downloadURL})
 }

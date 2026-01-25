@@ -169,3 +169,140 @@ type TaskFilter struct {
 	ParentTaskID *string
 	HasParent    *bool // true = only subtasks, false = only root tasks, nil = all
 }
+
+// ============================================
+// EntityMemo (エンティティメモ)
+// ============================================
+
+// EntityType represents the type of entity a memo is attached to
+type EntityType string
+
+const (
+	EntityTypeGoal      EntityType = "goal"
+	EntityTypeMilestone EntityType = "milestone"
+	EntityTypeTask      EntityType = "task"
+)
+
+// IsValid checks if the entity type is valid
+func (t EntityType) IsValid() bool {
+	switch t {
+	case EntityTypeGoal, EntityTypeMilestone, EntityTypeTask:
+		return true
+	}
+	return false
+}
+
+// EntityMemo represents a memo attached to a goal, milestone, or task
+type EntityMemo struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"userId"`
+	EntityType EntityType `json:"entityType"`
+	EntityID   string     `json:"entityId"`
+	Content    string     `json:"content"`
+	Pinned     bool       `json:"pinned"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+}
+
+// CreateEntityMemoInput represents the input for creating an entity memo
+type CreateEntityMemoInput struct {
+	EntityType EntityType `json:"entityType"`
+	EntityID   string     `json:"entityId"`
+	Content    string     `json:"content"`
+	Pinned     bool       `json:"pinned"`
+}
+
+// UpdateEntityMemoInput represents the input for updating an entity memo
+type UpdateEntityMemoInput struct {
+	Content *string `json:"content,omitempty"`
+	Pinned  *bool   `json:"pinned,omitempty"`
+}
+
+// EntityMemoFilter represents filters for listing entity memos
+type EntityMemoFilter struct {
+	EntityType *EntityType
+	EntityID   *string
+	Pinned     *bool
+}
+
+// ============================================
+// Todo (単発タスク + 繰り返しタスク統合)
+// ============================================
+
+// TodoFrequency represents the frequency of a recurring todo
+type TodoFrequency string
+
+const (
+	TodoFrequencyDaily   TodoFrequency = "daily"
+	TodoFrequencyWeekly  TodoFrequency = "weekly"
+	TodoFrequencyMonthly TodoFrequency = "monthly"
+	TodoFrequencyCustom  TodoFrequency = "custom"
+)
+
+// IsValid checks if the todo frequency is valid
+func (f TodoFrequency) IsValid() bool {
+	switch f {
+	case TodoFrequencyDaily, TodoFrequencyWeekly, TodoFrequencyMonthly, TodoFrequencyCustom:
+		return true
+	}
+	return false
+}
+
+// Todo represents a todo item (one-off or recurring)
+type Todo struct {
+	ID               string         `json:"id"`
+	UserID           string         `json:"userId"`
+	Name             string         `json:"name"`
+	Frequency        *TodoFrequency `json:"frequency,omitempty"`  // nil = one-off task
+	DaysOfWeek       []int          `json:"daysOfWeek,omitempty"` // 0=Sun, 1=Mon, ..., 6=Sat
+	DueDate          types.DateOnly `json:"dueDate,omitempty"`    // for one-off tasks
+	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
+	TagIDs           []string       `json:"tagIds,omitempty"`
+	Enabled          bool           `json:"enabled"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+}
+
+// TodoWithStatus includes completion status for a specific date
+type TodoWithStatus struct {
+	Todo
+	CompletedToday bool       `json:"completedToday"`
+	CompletedAt    *time.Time `json:"completedAt,omitempty"`
+	IsOverdue      bool       `json:"isOverdue"` // for one-off tasks with due_date < today
+}
+
+// TodoCompletion represents a completion record for a todo
+type TodoCompletion struct {
+	ID            string         `json:"id"`
+	TodoID        string         `json:"todoId"`
+	CompletedDate types.DateOnly `json:"completedDate"` // YYYY-MM-DD
+	CompletedAt   time.Time      `json:"completedAt"`
+}
+
+// CreateTodoInput represents the input for creating a todo
+type CreateTodoInput struct {
+	Name             string         `json:"name"`
+	Frequency        *TodoFrequency `json:"frequency,omitempty"`
+	DaysOfWeek       []int          `json:"daysOfWeek,omitempty"`
+	DueDate          types.DateOnly `json:"dueDate,omitempty"`
+	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
+	TagIDs           []string       `json:"tagIds,omitempty"`
+}
+
+// UpdateTodoInput represents the input for updating a todo
+type UpdateTodoInput struct {
+	Name             *string         `json:"name,omitempty"`
+	Frequency        *TodoFrequency  `json:"frequency,omitempty"`
+	DaysOfWeek       []int           `json:"daysOfWeek,omitempty"`
+	DueDate          *types.DateOnly `json:"dueDate,omitempty"`
+	EstimatedMinutes *int            `json:"estimatedMinutes,omitempty"`
+	TagIDs           []string        `json:"tagIds,omitempty"`
+	Enabled          *bool           `json:"enabled,omitempty"`
+}
+
+// TodoFilter represents filters for listing todos
+type TodoFilter struct {
+	Date       *string // YYYY-MM-DD - filter todos applicable for this date
+	Enabled    *bool
+	IsRecurring *bool  // true = recurring only, false = one-off only, nil = all
+}

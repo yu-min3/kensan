@@ -37,4 +37,27 @@ type Repository interface {
 
 	// GetTagIDs retrieves the tag IDs for a note
 	GetTagIDs(ctx context.Context, noteID string) ([]string, error)
+
+	// ========== NoteContent Operations ==========
+
+	// ListContents retrieves all contents for a note
+	ListContents(ctx context.Context, noteID string) ([]*note.NoteContent, error)
+
+	// GetContent retrieves a content by ID
+	GetContent(ctx context.Context, contentID string) (*note.NoteContent, error)
+
+	// CreateContent creates a new note content
+	CreateContent(ctx context.Context, content *note.NoteContent) error
+
+	// UpdateContent updates an existing note content
+	UpdateContent(ctx context.Context, content *note.NoteContent) error
+
+	// DeleteContent deletes a note content
+	DeleteContent(ctx context.Context, contentID string) error
+
+	// ReorderContents updates the sort order of contents
+	ReorderContents(ctx context.Context, noteID string, contentIDs []string) error
+
+	// UpdateIndexStatus updates the index status of a note
+	UpdateIndexStatus(ctx context.Context, noteID string, status note.IndexStatus) error
 }

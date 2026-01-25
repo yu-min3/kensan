@@ -27,8 +27,9 @@ CREATE INDEX idx_documents_embedding ON documents
     USING hnsw (embedding vector_cosine_ops);
 
 -- Full-text search index for keyword search
+-- Note: Using 'simple' config as 'japanese' requires additional extensions (pg_bigm)
 CREATE INDEX idx_documents_content_fts ON documents
-    USING gin (to_tsvector('japanese', content));
+    USING gin (to_tsvector('simple', content));
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_documents_updated_at()

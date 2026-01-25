@@ -9,12 +9,16 @@ import (
 )
 
 var (
-	ErrTaskNotFound      = errors.New("task not found")
-	ErrGoalNotFound      = errors.New("goal not found")
-	ErrMilestoneNotFound = errors.New("milestone not found")
-	ErrTagNotFound       = errors.New("tag not found")
-	ErrInvalidStatus     = errors.New("invalid milestone status")
-	ErrInvalidInput      = errors.New("invalid input")
+	ErrTaskNotFound       = errors.New("task not found")
+	ErrGoalNotFound       = errors.New("goal not found")
+	ErrMilestoneNotFound  = errors.New("milestone not found")
+	ErrTagNotFound        = errors.New("tag not found")
+	ErrEntityMemoNotFound = errors.New("entity memo not found")
+	ErrTodoNotFound       = errors.New("todo not found")
+	ErrInvalidStatus      = errors.New("invalid milestone status")
+	ErrInvalidEntityType  = errors.New("invalid entity type")
+	ErrInvalidFrequency   = errors.New("invalid todo frequency")
+	ErrInvalidInput       = errors.New("invalid input")
 )
 
 // Service handles business logic for tasks, goals, milestones, and tags
@@ -195,6 +199,33 @@ func (s *Service) ToggleTaskComplete(ctx context.Context, userID, taskID string)
 	}
 
 	return t, nil
+}
+
+// ReorderTasks updates the sort order of tasks
+func (s *Service) ReorderTasks(ctx context.Context, userID string, taskIDs []string) ([]task.Task, error) {
+	if len(taskIDs) == 0 {
+		return []task.Task{}, nil
+	}
+
+	return s.repo.ReorderTasks(ctx, userID, taskIDs)
+}
+
+// BulkDeleteTasks deletes multiple tasks
+func (s *Service) BulkDeleteTasks(ctx context.Context, userID string, taskIDs []string) error {
+	if len(taskIDs) == 0 {
+		return nil
+	}
+
+	return s.repo.BulkDeleteTasks(ctx, userID, taskIDs)
+}
+
+// BulkCompleteTasks updates the completed status of multiple tasks
+func (s *Service) BulkCompleteTasks(ctx context.Context, userID string, taskIDs []string, completed bool) ([]task.Task, error) {
+	if len(taskIDs) == 0 {
+		return []task.Task{}, nil
+	}
+
+	return s.repo.BulkCompleteTasks(ctx, userID, taskIDs, completed)
 }
 
 // GetChildTasks returns all child tasks for a given parent task
@@ -453,4 +484,275 @@ func (s *Service) DeleteTag(ctx context.Context, userID, tagID string) error {
 		return ErrTagNotFound
 	}
 	return s.repo.DeleteTag(ctx, userID, tagID)
+}
+
+// ========== EntityMemo Operations ==========
+
+// ListEntityMemos returns all entity memos for a user with optional filters
+func (s *Service) ListEntityMemos(ctx context.Context, userID string, filter task.EntityMemoFilter) ([]task.EntityMemo, error) {
+	// Validate entity type if specified
+	if filter.EntityType != nil && !filter.EntityType.IsValid() {
+		return nil, ErrInvalidEntityType
+	}
+
+	// If entity_id is specified, verify entity exists
+	if filter.EntityID != nil && filter.EntityType != nil {
+		exists, err := s.entityExists(ctx, userID, *filter.EntityType, *filter.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, s.entityNotFoundError(*filter.EntityType)
+		}
+	}
+
+	memos, err := s.repo.ListEntityMemos(ctx, userID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if memos == nil {
+		return []task.EntityMemo{}, nil
+	}
+	return memos, nil
+}
+
+// GetEntityMemo returns an entity memo by ID
+func (s *Service) GetEntityMemo(ctx context.Context, userID, memoID string) (*task.EntityMemo, error) {
+	memo, err := s.repo.GetEntityMemoByID(ctx, userID, memoID)
+	if err != nil {
+		return nil, err
+	}
+	if memo == nil {
+		return nil, ErrEntityMemoNotFound
+	}
+	return memo, nil
+}
+
+// CreateEntityMemo creates a new entity memo
+func (s *Service) CreateEntityMemo(ctx context.Context, userID string, input task.CreateEntityMemoInput) (*task.EntityMemo, error) {
+	if input.Content == "" {
+		return nil, ErrInvalidInput
+	}
+	if !input.EntityType.IsValid() {
+		return nil, ErrInvalidEntityType
+	}
+
+	// Verify entity exists
+	exists, err := s.entityExists(ctx, userID, input.EntityType, input.EntityID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, s.entityNotFoundError(input.EntityType)
+	}
+
+	return s.repo.CreateEntityMemo(ctx, userID, input)
+}
+
+// UpdateEntityMemo updates an existing entity memo
+func (s *Service) UpdateEntityMemo(ctx context.Context, userID, memoID string, input task.UpdateEntityMemoInput) (*task.EntityMemo, error) {
+	existing, err := s.repo.GetEntityMemoByID(ctx, userID, memoID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, ErrEntityMemoNotFound
+	}
+
+	memo, err := s.repo.UpdateEntityMemo(ctx, userID, memoID, input)
+	if err != nil {
+		return nil, err
+	}
+	if memo == nil {
+		return nil, ErrEntityMemoNotFound
+	}
+	return memo, nil
+}
+
+// DeleteEntityMemo deletes an entity memo
+func (s *Service) DeleteEntityMemo(ctx context.Context, userID, memoID string) error {
+	existing, err := s.repo.GetEntityMemoByID(ctx, userID, memoID)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		return ErrEntityMemoNotFound
+	}
+	return s.repo.DeleteEntityMemo(ctx, userID, memoID)
+}
+
+// entityExists checks if an entity exists
+func (s *Service) entityExists(ctx context.Context, userID string, entityType task.EntityType, entityID string) (bool, error) {
+	switch entityType {
+	case task.EntityTypeGoal:
+		goal, err := s.repo.GetGoalByID(ctx, userID, entityID)
+		if err != nil {
+			return false, err
+		}
+		return goal != nil, nil
+	case task.EntityTypeMilestone:
+		milestone, err := s.repo.GetMilestoneByID(ctx, userID, entityID)
+		if err != nil {
+			return false, err
+		}
+		return milestone != nil, nil
+	case task.EntityTypeTask:
+		t, err := s.repo.GetTaskByID(ctx, userID, entityID)
+		if err != nil {
+			return false, err
+		}
+		return t != nil, nil
+	default:
+		return false, ErrInvalidEntityType
+	}
+}
+
+// entityNotFoundError returns the appropriate error for an entity type
+func (s *Service) entityNotFoundError(entityType task.EntityType) error {
+	switch entityType {
+	case task.EntityTypeGoal:
+		return ErrGoalNotFound
+	case task.EntityTypeMilestone:
+		return ErrMilestoneNotFound
+	case task.EntityTypeTask:
+		return ErrTaskNotFound
+	default:
+		return ErrInvalidEntityType
+	}
+}
+
+// ========== Todo Operations ==========
+
+// ListTodos returns all todos for a user
+func (s *Service) ListTodos(ctx context.Context, userID string, filter task.TodoFilter) ([]task.Todo, error) {
+	todos, err := s.repo.ListTodos(ctx, userID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if todos == nil {
+		return []task.Todo{}, nil
+	}
+	return todos, nil
+}
+
+// ListTodosWithStatus returns todos with completion status for a specific date
+func (s *Service) ListTodosWithStatus(ctx context.Context, userID string, date string) ([]task.TodoWithStatus, error) {
+	if date == "" {
+		return nil, ErrInvalidInput
+	}
+	todos, err := s.repo.ListTodosWithStatus(ctx, userID, date)
+	if err != nil {
+		return nil, err
+	}
+	if todos == nil {
+		return []task.TodoWithStatus{}, nil
+	}
+	return todos, nil
+}
+
+// GetTodo returns a todo by ID
+func (s *Service) GetTodo(ctx context.Context, userID, todoID string) (*task.Todo, error) {
+	todo, err := s.repo.GetTodoByID(ctx, userID, todoID)
+	if err != nil {
+		return nil, err
+	}
+	if todo == nil {
+		return nil, ErrTodoNotFound
+	}
+	return todo, nil
+}
+
+// CreateTodo creates a new todo
+func (s *Service) CreateTodo(ctx context.Context, userID string, input task.CreateTodoInput) (*task.Todo, error) {
+	if input.Name == "" {
+		return nil, ErrInvalidInput
+	}
+	if input.Frequency != nil && !input.Frequency.IsValid() {
+		return nil, ErrInvalidFrequency
+	}
+	return s.repo.CreateTodo(ctx, userID, input)
+}
+
+// UpdateTodo updates an existing todo
+func (s *Service) UpdateTodo(ctx context.Context, userID, todoID string, input task.UpdateTodoInput) (*task.Todo, error) {
+	existing, err := s.repo.GetTodoByID(ctx, userID, todoID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, ErrTodoNotFound
+	}
+	if input.Frequency != nil && !input.Frequency.IsValid() {
+		return nil, ErrInvalidFrequency
+	}
+	todo, err := s.repo.UpdateTodo(ctx, userID, todoID, input)
+	if err != nil {
+		return nil, err
+	}
+	if todo == nil {
+		return nil, ErrTodoNotFound
+	}
+	return todo, nil
+}
+
+// DeleteTodo deletes a todo
+func (s *Service) DeleteTodo(ctx context.Context, userID, todoID string) error {
+	existing, err := s.repo.GetTodoByID(ctx, userID, todoID)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		return ErrTodoNotFound
+	}
+	return s.repo.DeleteTodo(ctx, userID, todoID)
+}
+
+// ToggleTodoComplete toggles the completion status of a todo for a specific date
+func (s *Service) ToggleTodoComplete(ctx context.Context, userID, todoID, date string) (*task.TodoWithStatus, error) {
+	// Check if todo exists and belongs to user
+	todo, err := s.repo.GetTodoByID(ctx, userID, todoID)
+	if err != nil {
+		return nil, err
+	}
+	if todo == nil {
+		return nil, ErrTodoNotFound
+	}
+
+	// Check if already completed today
+	completion, err := s.repo.GetTodoCompletion(ctx, todoID, date)
+	if err != nil {
+		return nil, err
+	}
+
+	if completion != nil {
+		// Already completed, uncomplete it
+		err = s.repo.DeleteTodoCompletion(ctx, todoID, date)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Not completed, complete it
+		_, err = s.repo.CreateTodoCompletion(ctx, todoID, date)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Get updated status
+	todos, err := s.repo.ListTodosWithStatus(ctx, userID, date)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, t := range todos {
+		if t.ID == todoID {
+			return &t, nil
+		}
+	}
+
+	// Build response manually if not in the list
+	return &task.TodoWithStatus{
+		Todo:           *todo,
+		CompletedToday: completion == nil, // toggled state
+	}, nil
 }

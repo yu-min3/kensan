@@ -31,7 +31,7 @@ export function StartTimerDialog({ open, onOpenChange }: StartTimerDialogProps) 
   const { startTimer, isLoading } = useTimerStore()
   const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
 
-  const [inputMode, setInputMode] = useState<'manual' | 'existing'>('manual')
+  const [inputMode, setInputMode] = useState<'manual' | 'existing'>('existing')
   const [taskName, setTaskName] = useState('')
   const [milestoneId, setMilestoneId] = useState<string>('')
   const [selectedTaskId, setSelectedTaskId] = useState<string>('')
@@ -39,7 +39,7 @@ export function StartTimerDialog({ open, onOpenChange }: StartTimerDialogProps) 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setInputMode('manual')
+      setInputMode('existing')
       setTaskName('')
       setMilestoneId('')
       setSelectedTaskId('')
