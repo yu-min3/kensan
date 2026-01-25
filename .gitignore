@@ -24,8 +24,6 @@ build/
 Thumbs.db
 
 # Claude
-.claude/
-CLAUDE.md
 
 # Logs
 *.log
