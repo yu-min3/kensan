@@ -10,19 +10,22 @@ import (
 	"github.com/kensan/backend/services/note/internal"
 	"github.com/kensan/backend/services/note/internal/repository"
 	"github.com/kensan/backend/services/note/internal/storage"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrNoteNotFound       = errors.New("note not found")
-	ErrTypeRequired       = errors.New("type is required")
+	ErrNoteNotFound       = sharedErrors.NoteNotFound()
+	ErrNoteAlreadyExists  = repository.ErrNoteAlreadyExists
+	ErrTypeRequired       = sharedErrors.Required("type")
 	ErrInvalidType        = errors.New("type must be diary or learning")
-	ErrTitleRequired      = errors.New("title is required")
-	ErrContentRequired    = errors.New("content is required")
-	ErrFormatRequired     = errors.New("format is required")
+	ErrTitleRequired      = sharedErrors.Required("title")
+	ErrContentRequired    = sharedErrors.Required("content")
+	ErrFormatRequired     = sharedErrors.Required("format")
 	ErrInvalidFormat      = errors.New("format must be markdown or drawio")
 	ErrDateRequired       = errors.New("date is required for diary notes")
-	ErrQueryRequired      = errors.New("query is required for search")
-	ErrUnauthorized       = errors.New("not authorized to access this note")
+	ErrQueryRequired      = sharedErrors.Required("query")
+	ErrUnauthorized       = sharedErrors.ErrUnauthorized
 	ErrStorageUnavailable = errors.New("storage is not configured")
 )
 

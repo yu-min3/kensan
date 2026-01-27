@@ -7,7 +7,6 @@ import { TagSelect } from '@/components/common/TagSelect'
 import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
 import type { Goal, Milestone, Tag, Task, TaskFrequency } from '@/types'
-import { Checkbox } from '@/components/ui/checkbox'
 
 export interface TaskFormData {
   name: string
@@ -159,22 +158,24 @@ export function TaskDialog({ dialog, goals, milestones, tags, tasks, onSave }: T
                 {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => {
                   const isSelected = dialog.data.daysOfWeek?.includes(index) ?? false
                   return (
-                    <label
+                    <button
                       key={index}
-                      className="flex items-center gap-1.5 cursor-pointer"
+                      type="button"
+                      onClick={() => {
+                        const current = dialog.data.daysOfWeek || []
+                        const next = isSelected
+                          ? current.filter((d) => d !== index)
+                          : [...current, index].sort((a, b) => a - b)
+                        dialog.setField('daysOfWeek', next.length > 0 ? next : undefined)
+                      }}
+                      className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-muted border-input'
+                      }`}
                     >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          const current = dialog.data.daysOfWeek || []
-                          const next = checked
-                            ? [...current, index].sort((a, b) => a - b)
-                            : current.filter((d) => d !== index)
-                          dialog.setField('daysOfWeek', next.length > 0 ? next : undefined)
-                        }}
-                      />
-                      <span className="text-sm">{day}</span>
-                    </label>
+                      {day}
+                    </button>
                   )
                 })}
               </div>

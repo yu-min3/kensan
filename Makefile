@@ -18,9 +18,6 @@ up:
 	@echo "  - user-service:      http://localhost:8081/health"
 	@echo "  - task-service:      http://localhost:8082/health"
 	@echo "  - timeblock-service: http://localhost:8084/health"
-	@echo "  - routine-service:   http://localhost:8085/health"
-	@echo "  - record-service:    http://localhost:8086/health"
-	@echo "  - diary-service:     http://localhost:8087/health"
 	@echo "  - analytics-service: http://localhost:8088/health"
 	@echo "  - memo-service:      http://localhost:8090/health"
 	@echo "  - note-service:      http://localhost:8091/health"
@@ -86,7 +83,7 @@ storage:
 
 ## Start only backend services (requires db and storage)
 backend: db storage
-	docker compose up -d user-service task-service timeblock-service routine-service record-service diary-service analytics-service memo-service note-service
+	docker compose up -d user-service task-service timeblock-service analytics-service memo-service note-service
 	@echo "All backend services started"
 
 # =============================================================================
@@ -128,9 +125,6 @@ health:
 	@curl -s http://localhost:8081/health 2>/dev/null | jq . || echo "user-service: DOWN"
 	@curl -s http://localhost:8082/health 2>/dev/null | jq . || echo "task-service: DOWN"
 	@curl -s http://localhost:8084/health 2>/dev/null | jq . || echo "timeblock-service: DOWN"
-	@curl -s http://localhost:8085/health 2>/dev/null | jq . || echo "routine-service: DOWN"
-	@curl -s http://localhost:8086/health 2>/dev/null | jq . || echo "record-service: DOWN"
-	@curl -s http://localhost:8087/health 2>/dev/null | jq . || echo "diary-service: DOWN"
 	@curl -s http://localhost:8088/health 2>/dev/null | jq . || echo "analytics-service: DOWN"
 	@curl -s http://localhost:8089/health 2>/dev/null | jq . || echo "ai-service: DOWN"
 	@curl -s http://localhost:8090/health 2>/dev/null | jq . || echo "memo-service: DOWN"

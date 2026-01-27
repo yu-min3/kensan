@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { useRoutineStore } from '@/stores/useRoutineStore'
-import { useDiaryStore } from '@/stores/useDiaryStore'
-import { useLearningRecordStore } from '@/stores/useLearningRecordStore'
+import { useNoteStore } from '@/stores/useNoteStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { getTodayInTimezone } from '@/lib/timezone'
@@ -25,14 +23,8 @@ export function useInitializeData() {
   const fetchTimeBlocksForLocalDate = useTimeBlockStore((state) => state.fetchTimeBlocksForLocalDate)
   const fetchTimeEntriesForLocalDate = useTimeBlockStore((state) => state.fetchTimeEntriesForLocalDate)
 
-  // Routine store
-  const fetchRoutines = useRoutineStore((state) => state.fetchAll)
-
-  // Diary store
-  const fetchDiaries = useDiaryStore((state) => state.fetchAll)
-
-  // Learning records store
-  const fetchRecords = useLearningRecordStore((state) => state.fetchAll)
+  // Notes store (unified diary + learning records)
+  const fetchNotes = useNoteStore((state) => state.fetchNotes)
 
   // Settings store
   const fetchSettings = useSettingsStore((state) => state.fetchSettings)
@@ -68,9 +60,7 @@ export function useInitializeData() {
           fetchTasks(),
           fetchTimeBlocksForLocalDate(todayLocal, currentTimezone),
           fetchTimeEntriesForLocalDate(todayLocal, currentTimezone),
-          fetchRoutines(),
-          fetchDiaries(),
-          fetchRecords(),
+          fetchNotes(),
           fetchCurrentTimer(),
         ])
 
@@ -84,7 +74,7 @@ export function useInitializeData() {
       }
     }
     init()
-  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchRoutines, fetchDiaries, fetchRecords, fetchSettings, fetchCurrentTimer, timezone])
+  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, timezone])
 
   return { initialized, isLoading, error }
 }

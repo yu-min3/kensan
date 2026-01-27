@@ -20,8 +20,6 @@ const toTimeBlockResponse = (tb: TimeBlock) => ({
   goalName: tb.goalName,
   goalColor: tb.goalColor,
   tagIds: tb.tagIds,
-  isRoutine: tb.isRoutine,
-  routineTaskId: tb.routineTaskId,
 })
 
 const toTimeEntryResponse = (te: TimeEntry) => ({

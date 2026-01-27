@@ -2,19 +2,21 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/kensan/backend/services/analytics/internal"
 	"github.com/kensan/backend/services/analytics/internal/repository"
+	"github.com/kensan/backend/shared/errors"
 )
 
+// Analytics-specific validation errors wrapping shared error base
 var (
-	ErrInvalidWeekStart = errors.New("invalid week start date")
-	ErrInvalidMonth     = errors.New("invalid month")
-	ErrInvalidYear      = errors.New("invalid year")
-	ErrInvalidPeriod    = errors.New("invalid trend period")
-	ErrInvalidCount     = errors.New("invalid count")
+	ErrInvalidWeekStart = fmt.Errorf("invalid week start date: %w", errors.ErrInvalidInput)
+	ErrInvalidMonth     = fmt.Errorf("invalid month: %w", errors.ErrInvalidInput)
+	ErrInvalidYear      = fmt.Errorf("invalid year: %w", errors.ErrInvalidInput)
+	ErrInvalidPeriod    = fmt.Errorf("invalid trend period: %w", errors.ErrInvalidInput)
+	ErrInvalidCount     = fmt.Errorf("invalid count: %w", errors.ErrInvalidInput)
 )
 
 // Service handles business logic for analytics

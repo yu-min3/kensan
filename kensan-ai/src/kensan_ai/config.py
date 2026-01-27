@@ -1,8 +1,9 @@
 """Application configuration using pydantic-settings."""
 
 from functools import lru_cache
+from typing import Any
 
-from pydantic import computed_field
+from pydantic import computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,6 +58,26 @@ class Settings(BaseSettings):
     # Agent settings
     default_max_turns: int = 10
     default_temperature: float = 0.7
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug_bool(cls, v: Any) -> bool:
+        """Parse debug flag from string or boolean."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes")
+        return bool(v)
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        """Validate critical settings in production environment."""
+        if self.server_env == "production":
+            if not self.anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY is required in production")
+            if self.jwt_secret == "dev-secret-key-change-in-production":
+                raise ValueError("JWT_SECRET must be changed in production")
+        return self
 
 
 @lru_cache

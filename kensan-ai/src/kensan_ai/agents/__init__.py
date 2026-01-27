@@ -7,6 +7,7 @@ To add a new agent:
 """
 
 from kensan_ai.agents.base import AgentRunner, AgentResult, ToolCall
+from kensan_ai.agents.message_history import MessageHistory
 from kensan_ai.agents import weekly_review
 from kensan_ai.agents import chat
 
@@ -14,6 +15,7 @@ __all__ = [
     "AgentRunner",
     "AgentResult",
     "ToolCall",
+    "MessageHistory",
     "weekly_review",
     "chat",
 ]

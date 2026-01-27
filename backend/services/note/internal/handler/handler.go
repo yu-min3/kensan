@@ -10,15 +10,16 @@ import (
 	"github.com/kensan/backend/services/note/internal"
 	"github.com/kensan/backend/services/note/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for note operations
 type Handler struct {
-	service *service.Service
+	service service.FullService
 }
 
 // NewHandler creates a new note handler
-func NewHandler(svc *service.Service) *Handler {
+func NewHandler(svc service.FullService) *Handler {
 	return &Handler{service: svc}
 }
 
@@ -283,6 +284,8 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	switch {
 	case errors.Is(err, service.ErrNoteNotFound):
 		middleware.Error(w, r, http.StatusNotFound, "NOTE_NOT_FOUND", "Note not found")
+	case errors.Is(err, service.ErrNoteAlreadyExists):
+		middleware.Error(w, r, http.StatusConflict, "NOTE_ALREADY_EXISTS", "A note of this type already exists for the specified date")
 	case errors.Is(err, service.ErrUnauthorized):
 		middleware.Error(w, r, http.StatusForbidden, "FORBIDDEN", "Not authorized to access this note")
 	case errors.Is(err, service.ErrTypeRequired):
@@ -310,6 +313,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrStorageUnavailable):
 		middleware.Error(w, r, http.StatusServiceUnavailable, "STORAGE_UNAVAILABLE", "Storage service is not configured")
 	default:
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in note-service")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
 }

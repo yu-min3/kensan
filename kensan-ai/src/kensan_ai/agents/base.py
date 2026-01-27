@@ -8,6 +8,7 @@ import anthropic
 
 from kensan_ai.config import get_settings
 from kensan_ai.tools import get_tools_api_schema, execute_tool, format_tool_result
+from kensan_ai.agents.message_history import MessageHistory
 
 
 @dataclass
@@ -74,7 +75,8 @@ class AgentRunner:
         Returns:
             AgentResult with text response, tool calls, and token usage
         """
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+        history = MessageHistory()
+        history.add_user_message(prompt)
         tools = self._get_tools_schema()
 
         all_tool_calls: list[ToolCall] = []
@@ -88,7 +90,7 @@ class AgentRunner:
                 model=self.model,
                 max_tokens=4096,
                 system=self.system_prompt,
-                messages=messages,
+                messages=history.get_messages(),
                 tools=tools if tools else anthropic.NOT_GIVEN,
                 temperature=self.temperature,
             )
@@ -120,7 +122,7 @@ class AgentRunner:
                     })
 
             # Add assistant message
-            messages.append({"role": "assistant", "content": assistant_content})
+            history.add_assistant_message(assistant_content)
 
             # If no tool calls, we're done
             if not tool_use_blocks:
@@ -161,7 +163,7 @@ class AgentRunner:
                     })
 
             # Add tool results as user message
-            messages.append({"role": "user", "content": tool_results})
+            history.add_tool_results(tool_results)
 
             # Check if we should stop (end_turn)
             if response.stop_reason == "end_turn":
@@ -187,7 +189,8 @@ class AgentRunner:
         Yields:
             Text chunks as they arrive from the model
         """
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+        history = MessageHistory()
+        history.add_user_message(prompt)
         tools = self._get_tools_schema()
 
         for turn in range(self.max_turns):
@@ -201,7 +204,7 @@ class AgentRunner:
                 model=self.model,
                 max_tokens=4096,
                 system=self.system_prompt,
-                messages=messages,
+                messages=history.get_messages(),
                 tools=tools if tools else anthropic.NOT_GIVEN,
                 temperature=self.temperature,
             ) as stream:
@@ -244,7 +247,7 @@ class AgentRunner:
                 final_message = await stream.get_final_message()
 
             # Add assistant message to history
-            messages.append({"role": "assistant", "content": assistant_content})
+            history.add_assistant_message(assistant_content)
 
             # If no tool calls, we're done
             if not tool_use_blocks:
@@ -275,7 +278,7 @@ class AgentRunner:
                         "is_error": True,
                     })
 
-            messages.append({"role": "user", "content": tool_results})
+            history.add_tool_results(tool_results)
 
             if final_message.stop_reason == "end_turn":
                 break

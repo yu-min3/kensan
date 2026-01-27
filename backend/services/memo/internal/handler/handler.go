@@ -9,6 +9,7 @@ import (
 	memo "github.com/kensan/backend/services/memo/internal"
 	"github.com/kensan/backend/services/memo/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for memos
@@ -63,6 +64,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	memos, err := h.service.List(r.Context(), userID, filter)
 	if err != nil {
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to list memos")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list memos")
 		return
 	}
@@ -81,6 +83,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get memo")
 		return
 	}
@@ -111,6 +114,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to create memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create memo")
 		return
 	}
@@ -134,6 +138,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to update memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update memo")
 		return
 	}
@@ -152,6 +157,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to archive memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to archive memo")
 		return
 	}
@@ -170,6 +176,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to delete memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete memo")
 		return
 	}

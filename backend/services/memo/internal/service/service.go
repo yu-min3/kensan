@@ -2,15 +2,16 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	memo "github.com/kensan/backend/services/memo/internal"
 	"github.com/kensan/backend/services/memo/internal/repository"
+	"github.com/kensan/backend/shared/errors"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrMemoNotFound = errors.New("memo not found")
-	ErrInvalidInput = errors.New("invalid input")
+	ErrMemoNotFound = errors.ErrMemoNotFound
+	ErrInvalidInput = errors.ErrInvalidInput
 )
 
 // Service handles business logic for memos

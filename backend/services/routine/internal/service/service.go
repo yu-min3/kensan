@@ -2,16 +2,17 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/kensan/backend/services/routine/internal"
 	"github.com/kensan/backend/services/routine/internal/repository"
+	"github.com/kensan/backend/shared/errors"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrRoutineNotFound  = errors.New("routine task not found")
-	ErrInvalidFrequency = errors.New("invalid frequency")
-	ErrInvalidInput     = errors.New("invalid input")
+	ErrRoutineNotFound  = errors.ErrRoutineNotFound
+	ErrInvalidFrequency = errors.ErrInvalidFrequency
+	ErrInvalidInput     = errors.ErrInvalidInput
 )
 
 // Service handles business logic for routine tasks

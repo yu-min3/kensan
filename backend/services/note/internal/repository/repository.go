@@ -11,11 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/note/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	ErrNoteNotFound = errors.New("note not found")
+	ErrNoteNotFound      = errors.New("note not found")
+	ErrNoteAlreadyExists = errors.New("note already exists for this date")
 )
 
 // PostgresRepository handles note data persistence using PostgreSQL
@@ -251,6 +253,9 @@ func (r *PostgresRepository) Create(ctx context.Context, n *note.Note) error {
 		n.UpdatedAt,
 	)
 	if err != nil {
+		if sharedErrors.IsUniqueViolation(err) {
+			return ErrNoteAlreadyExists
+		}
 		return err
 	}
 

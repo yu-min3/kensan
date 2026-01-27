@@ -8,15 +8,16 @@ import (
 	"github.com/kensan/backend/services/user/internal"
 	"github.com/kensan/backend/services/user/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for user operations
 type Handler struct {
-	service *service.Service
+	service service.FullService
 }
 
 // NewHandler creates a new user handler
-func NewHandler(svc *service.Service) *Handler {
+func NewHandler(svc service.FullService) *Handler {
 	return &Handler{service: svc}
 }
 
@@ -197,6 +198,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrInvalidTheme):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "theme", Message: "Theme must be light, dark, or system"}})
 	default:
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in user-service")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
 }

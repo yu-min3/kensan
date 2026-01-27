@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
   CalendarDays,
   StickyNote,
   FolderKanban,
-  RotateCcw,
   BarChart3,
   Bot,
 } from 'lucide-react'
@@ -18,11 +16,9 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/', icon: LayoutDashboard, label: 'ダッシュボード' },
-  { to: '/daily', icon: CalendarDays, label: 'デイリー' },
+  { to: '/', icon: CalendarDays, label: 'デイリー' },
   { to: '/notes', icon: StickyNote, label: 'ノート' },
   { to: '/tasks', icon: FolderKanban, label: 'タスク管理' },
-  { to: '/routines', icon: RotateCcw, label: '定期タスク' },
   { to: '/analytics', icon: BarChart3, label: '分析・レポート' },
   { to: '/ai-review', icon: Bot, label: 'AI振り返り', badge: 'Phase 2' },
 ]

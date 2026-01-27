@@ -9,16 +9,88 @@ import (
 	"github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for tasks, goals, milestones, and tags
 type Handler struct {
-	service *service.Service
+	service service.FullService
 }
 
 // NewHandler creates a new task handler
-func NewHandler(service *service.Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(svc service.FullService) *Handler {
+	return &Handler{service: svc}
+}
+
+// handleServiceError maps service errors to HTTP responses.
+// Returns true if an error was handled, false if no error.
+// If defaultMsg is empty, a generic message is used.
+func (h *Handler) handleServiceError(w http.ResponseWriter, r *http.Request, err error, defaultMsg string) bool {
+	if err == nil {
+		return false
+	}
+
+	// Not found errors
+	if errors.Is(err, service.ErrTaskNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found")
+		return true
+	}
+	if errors.Is(err, service.ErrGoalNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
+		return true
+	}
+	if errors.Is(err, service.ErrMilestoneNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "MILESTONE_NOT_FOUND", "Milestone not found")
+		return true
+	}
+	if errors.Is(err, service.ErrTagNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "TAG_NOT_FOUND", "Tag not found")
+		return true
+	}
+	if errors.Is(err, service.ErrEntityMemoNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "ENTITY_MEMO_NOT_FOUND", "Entity memo not found")
+		return true
+	}
+	if errors.Is(err, service.ErrTodoNotFound) {
+		middleware.Error(w, r, http.StatusNotFound, "TODO_NOT_FOUND", "Todo not found")
+		return true
+	}
+
+	// Already exists errors (conflict)
+	if errors.Is(err, service.ErrTagAlreadyExists) {
+		middleware.Error(w, r, http.StatusConflict, "TAG_ALREADY_EXISTS", "A tag with this name already exists")
+		return true
+	}
+	if errors.Is(err, service.ErrTodoCompletionAlreadyExists) {
+		middleware.Error(w, r, http.StatusConflict, "TODO_COMPLETION_ALREADY_EXISTS", "This todo is already marked as completed for this date")
+		return true
+	}
+
+	// Validation errors
+	if errors.Is(err, service.ErrInvalidInput) {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
+		return true
+	}
+	if errors.Is(err, service.ErrInvalidStatus) {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_STATUS", "Invalid status")
+		return true
+	}
+	if errors.Is(err, service.ErrInvalidEntityType) {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_ENTITY_TYPE", "Invalid entity type")
+		return true
+	}
+	if errors.Is(err, service.ErrInvalidFrequency) {
+		middleware.Error(w, r, http.StatusBadRequest, "INVALID_FREQUENCY", "Invalid frequency")
+		return true
+	}
+
+	// Default: internal error
+	log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in task-service")
+	if defaultMsg == "" {
+		defaultMsg = "An internal error occurred"
+	}
+	middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", defaultMsg)
+	return true
 }
 
 // RegisterRoutes registers the task routes
@@ -131,12 +203,7 @@ func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
 	t, err := h.service.GetTask(r.Context(), userID, taskID)
-	if err != nil {
-		if errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get task")
+	if h.handleServiceError(w, r, err, "Failed to get task") {
 		return
 	}
 
@@ -161,20 +228,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t, err := h.service.CreateTask(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrMilestoneNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "MILESTONE_NOT_FOUND", "Milestone not found")
-			return
-		}
-		if errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Parent task not found")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create task")
+	if h.handleServiceError(w, r, err, "Failed to create task") {
 		return
 	}
 
@@ -192,20 +246,7 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t, err := h.service.UpdateTask(r.Context(), userID, taskID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found")
-			return
-		}
-		if errors.Is(err, service.ErrMilestoneNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "MILESTONE_NOT_FOUND", "Milestone not found")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input (e.g., circular reference)")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update task")
+	if h.handleServiceError(w, r, err, "Failed to update task") {
 		return
 	}
 
@@ -218,12 +259,7 @@ func (h *Handler) ToggleTaskComplete(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
 	t, err := h.service.ToggleTaskComplete(r.Context(), userID, taskID)
-	if err != nil {
-		if errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to toggle task complete")
+	if h.handleServiceError(w, r, err, "Failed to toggle task complete") {
 		return
 	}
 
@@ -236,12 +272,7 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
 	err := h.service.DeleteTask(r.Context(), userID, taskID)
-	if err != nil {
-		if errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete task")
+	if h.handleServiceError(w, r, err, "Failed to delete task") {
 		return
 	}
 
@@ -360,12 +391,7 @@ func (h *Handler) GetGoal(w http.ResponseWriter, r *http.Request) {
 	goalID := chi.URLParam(r, "goalId")
 
 	goal, err := h.service.GetGoal(r.Context(), userID, goalID)
-	if err != nil {
-		if errors.Is(err, service.ErrGoalNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get goal")
+	if h.handleServiceError(w, r, err, "Failed to get goal") {
 		return
 	}
 
@@ -389,12 +415,7 @@ func (h *Handler) CreateGoal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	goal, err := h.service.CreateGoal(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create goal")
+	if h.handleServiceError(w, r, err, "Failed to create goal") {
 		return
 	}
 
@@ -412,12 +433,7 @@ func (h *Handler) UpdateGoal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	goal, err := h.service.UpdateGoal(r.Context(), userID, goalID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrGoalNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update goal")
+	if h.handleServiceError(w, r, err, "Failed to update goal") {
 		return
 	}
 
@@ -430,12 +446,7 @@ func (h *Handler) DeleteGoal(w http.ResponseWriter, r *http.Request) {
 	goalID := chi.URLParam(r, "goalId")
 
 	err := h.service.DeleteGoal(r.Context(), userID, goalID)
-	if err != nil {
-		if errors.Is(err, service.ErrGoalNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete goal")
+	if h.handleServiceError(w, r, err, "Failed to delete goal") {
 		return
 	}
 
@@ -462,16 +473,7 @@ func (h *Handler) ListMilestones(w http.ResponseWriter, r *http.Request) {
 	}
 
 	milestones, err := h.service.ListMilestones(r.Context(), userID, filter)
-	if err != nil {
-		if errors.Is(err, service.ErrGoalNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidStatus) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_STATUS", "Invalid milestone status")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list milestones")
+	if h.handleServiceError(w, r, err, "Failed to list milestones") {
 		return
 	}
 

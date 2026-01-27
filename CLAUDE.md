@@ -110,7 +110,7 @@ src/
 
 ### Backend Structure (Microservices)
 
-Nine Go services, each following identical layered architecture:
+Six Go services, each following identical layered architecture:
 
 ```
 services/<name>/
@@ -132,14 +132,11 @@ services/<name>/
 | Service | Port | Domain | Key Responsibilities |
 |---------|------|--------|---------------------|
 | user-service | 8081 | Auth, Settings | Registration, login, JWT, user settings, AI consent |
-| task-service | 8082 | Projects, Tasks | CRUD for projects/tasks, goal tags, hierarchy |
-| sync-service | 8083 | Clockify | Clockify API integration, time entry sync |
+| task-service | 8082 | Projects, Tasks | CRUD for projects/tasks, goal tags, hierarchy, recurring tasks via frequency |
 | timeblock-service | 8084 | Time Planning | Time blocks (plans), time entries (actuals), timezone-aware queries |
-| routine-service | 8085 | Routines | Daily/weekly/monthly routine task management |
-| record-service | 8086 | Learning | Learning records with markdown/drawio content |
-| diary-service | 8087 | Diary | Daily diary entries with tags |
 | analytics-service | 8088 | Analytics | Weekly/monthly summaries, goal progress |
-| ai-service | 8089 | AI | Claude API integration for weekly reviews |
+| memo-service | 8090 | Memo | Quick memos (scratch pad) |
+| note-service | 8091 | Notes | Unified notes (diary + learning records) |
 
 ### Shared Backend Packages
 
@@ -163,7 +160,7 @@ PostgreSQL 16 with migrations in `backend/migrations/`. Key design decisions:
 - **Audit Trails**: Automatic `updated_at` via triggers
 - **Denormalization**: `project_name`, `goal_tag` duplicated for query performance
 
-**Core Tables**: users, user_settings, projects, tasks, time_blocks, time_entries, routine_tasks, learning_records, diary_entries, ai_review_reports, sync_status
+**Core Tables**: users, user_settings, goals, milestones, tags, tasks, time_blocks, time_entries, routine_tasks, notes, memos, ai_review_reports, sync_status
 
 ---
 
@@ -223,14 +220,11 @@ GET /time-entries?start_timestamp=2026-01-20T15:00:00.000Z&end_timestamp=2026-01
 ### Page Naming Convention
 
 Pages follow a prefix convention for easy navigation:
-- `S` - Settings (S01, S02)
-- `M` - Morning (M01)
-- `E` - Evening (E01)
-- `L` - Learning (L01, L02)
-- `D` - Diary (D01, D02)
-- `T` - Task (T01)
-- `R` - Routine (R01)
-- `A` - Analytics/AI (A01, A02)
+- `S` - Settings (S01_Settings)
+- `D` - Daily (DailyPage - home page)
+- `N` - Notes (N01_NoteList, N02_NoteEdit)
+- `T` - Task (T01_TaskManagement)
+- `A` - Analytics/AI (A01_AnalyticsReport, A02_AIReview)
 
 ### Backend Response Format
 
@@ -272,10 +266,10 @@ Error responses:
 | `VITE_SYNC_SERVICE_URL` | `http://localhost:8083` | Sync service URL |
 | `VITE_TIMEBLOCK_SERVICE_URL` | `http://localhost:8084` | Timeblock service URL |
 | `VITE_ROUTINE_SERVICE_URL` | `http://localhost:8085` | Routine service URL |
-| `VITE_RECORD_SERVICE_URL` | `http://localhost:8086` | Record service URL |
-| `VITE_DIARY_SERVICE_URL` | `http://localhost:8087` | Diary service URL |
 | `VITE_ANALYTICS_SERVICE_URL` | `http://localhost:8088` | Analytics service URL |
 | `VITE_AI_SERVICE_URL` | `http://localhost:8089` | AI service URL |
+| `VITE_MEMO_SERVICE_URL` | `http://localhost:8090` | Memo service URL |
+| `VITE_NOTE_SERVICE_URL` | `http://localhost:8091` | Note service URL |
 | `VITE_ENABLE_MSW` | `false` | Enable MSW mocking |
 
 ### Backend (via Docker or env)

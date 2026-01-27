@@ -2,19 +2,20 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { GoalBadge } from './GoalBadge'
 import { cn } from '@/lib/utils'
-import { Edit, Trash2, Play, Plus, Minus } from 'lucide-react'
+import { Edit, Trash2, Plus, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDroppable } from '@dnd-kit/core'
-
-// 実行中タイマーの型
-interface RunningTimerData {
-  taskName: string
-  startedAt: string // ISO timestamp
-  goalId?: string
-  goalName?: string
-  goalColor?: string
-  milestoneName?: string
-}
+import {
+  TimeBlockTimelineGrid,
+  TimeBlockItem,
+  useTimeBlockDragResize,
+  getMinutesFromTime,
+  minutesToTimeString,
+  snapToInterval,
+  formatTime,
+  calculateTimeFromY,
+} from './timeline'
+import type { RunningTimerData } from './timeline'
 
 interface TimeBlockTimelineProps {
   timeBlocks?: TimeBlock[]
@@ -28,67 +29,20 @@ interface TimeBlockTimelineProps {
   onBlockStartTimer?: (block: TimeBlock) => void
   onEntryClick?: (entry: TimeEntry) => void
   onEntryDelete?: (entryId: string) => void
-  // 空きエリアダブルクリックで予定作成
   onEmptyDoubleClick?: (startTime: string, endTime: string) => void
-  // ドラッグ&ドロップ用
   isDraggingTask?: boolean
   dragOverY?: number | null
-  // タイマー実行中フラグ
   isTimerRunning?: boolean
-  // 実行中タイマー（仮想エントリとして表示）
   runningTimer?: RunningTimerData | null
-  // ズーム機能
   scale?: number
   onScaleChange?: (scale: number) => void
 }
 
-// ズーム設定
+// Zoom settings
 const BASE_HOUR_HEIGHT = 48
 const MIN_SCALE = 0.5
 const MAX_SCALE = 2.0
 const SCALE_STEP = 0.1
-
-type ResizeEdge = 'top' | 'bottom'
-
-interface ResizeState {
-  blockId: string
-  edge: ResizeEdge
-  initialY: number
-  initialStartTime: string
-  initialEndTime: string
-}
-
-interface DragState {
-  blockId: string
-  initialY: number
-  initialStartTime: string
-  initialEndTime: string
-  duration: number // in minutes
-}
-
-function formatTime(time: string): string {
-  // HH:mm:ss → HH:mm に変換（秒を削除）
-  return time.slice(0, 5)
-}
-
-function getMinutesFromTime(time: string): number {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-function getDurationMinutes(start: string, end: string): number {
-  return getMinutesFromTime(end) - getMinutesFromTime(start)
-}
-
-function minutesToTimeString(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
-}
-
-function snapToInterval(minutes: number, interval: number = 15): number {
-  return Math.round(minutes / interval) * interval
-}
 
 export function TimeBlockTimeline({
   timeBlocks = [],
@@ -110,20 +64,16 @@ export function TimeBlockTimeline({
   scale: propScale,
   onScaleChange,
 }: TimeBlockTimelineProps) {
-  const [resizeState, setResizeState] = useState<ResizeState | null>(null)
-  const [dragState, setDragState] = useState<DragState | null>(null)
-  const [previewTime, setPreviewTime] = useState<{ startTime: string; endTime: string } | null>(null)
   const [currentTime, setCurrentTime] = useState<Date>(new Date())
   const [internalScale, setInternalScale] = useState(1.0)
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
-  // スケール管理（propsがあればprops優先、なければ内部state）
+  // Scale management
   const scale = propScale ?? internalScale
   const setScale = onScaleChange ?? setInternalScale
   const hourHeight = BASE_HOUR_HEIGHT * scale
 
-  // マウスホイールでズーム（Ctrl+ホイール）
+  // Mouse wheel zoom (Ctrl+wheel)
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -138,7 +88,7 @@ export function TimeBlockTimeline({
     [scale, setScale]
   )
 
-  // 現在時刻を更新（タイマー実行中は1秒ごと、それ以外は1分ごと）
+  // Update current time (1 second when timer running, 1 minute otherwise)
   useEffect(() => {
     const updateCurrentTime = () => setCurrentTime(new Date())
     const intervalMs = runningTimer ? 1000 : 60000
@@ -146,18 +96,7 @@ export function TimeBlockTimeline({
     return () => clearInterval(interval)
   }, [runningTimer])
 
-  // ドロップゾーン設定
-  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
-    id: 'timeblock-timeline-droppable',
-  })
-
-  // 複数のrefを結合するコールバック
-  const setRefs = useCallback((node: HTMLDivElement | null) => {
-    containerRef.current = node
-    setDroppableRef(node)
-  }, [setDroppableRef])
-
-  // 実行中タイマーから仮想エントリの時間を計算
+  // Calculate running timer entry times
   const runningEntryTimes = runningTimer
     ? (() => {
         const startDate = new Date(runningTimer.startedAt)
@@ -172,7 +111,7 @@ export function TimeBlockTimeline({
       })()
     : null
 
-  // Calculate actual time range from data to ensure all items are visible
+  // Calculate actual time range from data
   const allTimes = [
     ...timeBlocks.flatMap((b) => [b.startTime, b.endTime]),
     ...timeEntries.flatMap((e) => [e.startTime, e.endTime]),
@@ -185,16 +124,13 @@ export function TimeBlockTimeline({
   if (allTimes.length > 0) {
     const hours = allTimes.map((t) => Math.floor(getMinutesFromTime(t) / 60))
     const dataMinHour = Math.min(...hours)
-    const dataMaxHour = Math.max(...hours) + 1 // +1 to include the end hour
-
-    // Expand range to include all data
+    const dataMaxHour = Math.max(...hours) + 1
     minHour = Math.min(defaultStartHour, dataMinHour)
     maxHour = Math.max(defaultEndHour, dataMaxHour)
   }
 
   const startHour = minHour
   const endHour = maxHour
-
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const totalMinutes = (endHour - startHour) * 60
 
@@ -204,197 +140,46 @@ export function TimeBlockTimeline({
   }
 
   const getHeight = (start: string, end: string) => {
-    const duration = getDurationMinutes(start, end)
+    const startMinutes = getMinutesFromTime(start)
+    const endMinutes = getMinutesFromTime(end)
+    const duration = endMinutes - startMinutes
     return (duration / totalMinutes) * 100
   }
 
-  // 常にスクロール可能（表示エリアの高さを固定）
-  // 12時間分の高さを表示エリアとして確保（6:00〜18:00相当）
+  // Scroll area height
   const visibleHours = 12
   const maxHeight = `${visibleHours * hourHeight}px`
 
-  // Convert Y position to minutes
-  const yToMinutes = useCallback(
-    (clientY: number): number => {
-      if (!containerRef.current) return 0
-      const rect = containerRef.current.getBoundingClientRect()
-      const relativeY = clientY - rect.top
-      const percentage = relativeY / rect.height
-      const minutes = percentage * totalMinutes + startHour * 60
-      return snapToInterval(Math.max(startHour * 60, Math.min(endHour * 60, minutes)))
+  // Use drag/resize hook
+  const {
+    resizeState,
+    dragState,
+    containerRef,
+    handleResizeStart,
+    handleDragStart,
+    getDisplayTimes,
+  } = useTimeBlockDragResize({
+    startHour,
+    endHour,
+    totalMinutes,
+    onBlockResize,
+  })
+
+  // Droppable setup
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: 'timeblock-timeline-droppable',
+  })
+
+  // Combine refs
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      ;(containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+      setDroppableRef(node)
     },
-    [totalMinutes, startHour, endHour]
+    [setDroppableRef, containerRef]
   )
 
-  // Handle resize start
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, block: TimeBlock, edge: ResizeEdge) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setResizeState({
-        blockId: block.id,
-        edge,
-        initialY: e.clientY,
-        initialStartTime: block.startTime,
-        initialEndTime: block.endTime,
-      })
-      setPreviewTime({
-        startTime: block.startTime,
-        endTime: block.endTime,
-      })
-    },
-    []
-  )
-
-  // Handle drag start (for moving the entire block)
-  const handleDragStart = useCallback(
-    (e: React.MouseEvent, block: TimeBlock) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const duration = getDurationMinutes(block.startTime, block.endTime)
-      setDragState({
-        blockId: block.id,
-        initialY: e.clientY,
-        initialStartTime: block.startTime,
-        initialEndTime: block.endTime,
-        duration,
-      })
-      setPreviewTime({
-        startTime: block.startTime,
-        endTime: block.endTime,
-      })
-    },
-    []
-  )
-
-  // Handle resize move
-  const handleResizeMove = useCallback(
-    (e: MouseEvent) => {
-      if (!resizeState) return
-
-      const newMinutes = yToMinutes(e.clientY)
-      const initialStartMinutes = getMinutesFromTime(resizeState.initialStartTime)
-      const initialEndMinutes = getMinutesFromTime(resizeState.initialEndTime)
-
-      let newStartMinutes = initialStartMinutes
-      let newEndMinutes = initialEndMinutes
-
-      if (resizeState.edge === 'top') {
-        // Dragging top edge changes start time
-        newStartMinutes = Math.min(newMinutes, initialEndMinutes - 15) // Minimum 15 min duration
-      } else {
-        // Dragging bottom edge changes end time
-        newEndMinutes = Math.max(newMinutes, initialStartMinutes + 15) // Minimum 15 min duration
-      }
-
-      setPreviewTime({
-        startTime: minutesToTimeString(newStartMinutes),
-        endTime: minutesToTimeString(newEndMinutes),
-      })
-    },
-    [resizeState, yToMinutes]
-  )
-
-  // Handle drag move (for moving the entire block)
-  const handleDragMove = useCallback(
-    (e: MouseEvent) => {
-      if (!dragState) return
-
-      const newMinutes = yToMinutes(e.clientY)
-      const initialStartMinutes = getMinutesFromTime(dragState.initialStartTime)
-
-      // Calculate the offset from where we initially clicked
-      // We need to figure out where in the block we clicked and maintain that offset
-      const initialClickMinutes = yToMinutes(dragState.initialY)
-      const offsetFromStart = initialClickMinutes - initialStartMinutes
-
-      // New start time is the new mouse position minus the offset
-      let newStartMinutes = newMinutes - offsetFromStart
-      let newEndMinutes = newStartMinutes + dragState.duration
-
-      // Clamp to valid range
-      if (newStartMinutes < startHour * 60) {
-        newStartMinutes = startHour * 60
-        newEndMinutes = newStartMinutes + dragState.duration
-      }
-      if (newEndMinutes > endHour * 60) {
-        newEndMinutes = endHour * 60
-        newStartMinutes = newEndMinutes - dragState.duration
-      }
-
-      // Snap to 15-minute intervals
-      newStartMinutes = snapToInterval(newStartMinutes)
-      newEndMinutes = newStartMinutes + dragState.duration
-
-      setPreviewTime({
-        startTime: minutesToTimeString(newStartMinutes),
-        endTime: minutesToTimeString(newEndMinutes),
-      })
-    },
-    [dragState, yToMinutes, startHour, endHour]
-  )
-
-  // Handle resize end
-  const handleResizeEnd = useCallback(() => {
-    if (resizeState && previewTime && onBlockResize) {
-      const hasChanged =
-        previewTime.startTime !== resizeState.initialStartTime ||
-        previewTime.endTime !== resizeState.initialEndTime
-      if (hasChanged) {
-        onBlockResize(resizeState.blockId, previewTime.startTime, previewTime.endTime)
-      }
-    }
-    setResizeState(null)
-    setPreviewTime(null)
-  }, [resizeState, previewTime, onBlockResize])
-
-  // Handle drag end
-  const handleDragEnd = useCallback(() => {
-    if (dragState && previewTime && onBlockResize) {
-      const hasChanged =
-        previewTime.startTime !== dragState.initialStartTime ||
-        previewTime.endTime !== dragState.initialEndTime
-      if (hasChanged) {
-        onBlockResize(dragState.blockId, previewTime.startTime, previewTime.endTime)
-      }
-    }
-    setDragState(null)
-    setPreviewTime(null)
-  }, [dragState, previewTime, onBlockResize])
-
-  // Add global mouse event listeners when resizing
-  useEffect(() => {
-    if (resizeState) {
-      window.addEventListener('mousemove', handleResizeMove)
-      window.addEventListener('mouseup', handleResizeEnd)
-      document.body.style.cursor = 'ns-resize'
-      document.body.style.userSelect = 'none'
-      return () => {
-        window.removeEventListener('mousemove', handleResizeMove)
-        window.removeEventListener('mouseup', handleResizeEnd)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-  }, [resizeState, handleResizeMove, handleResizeEnd])
-
-  // Add global mouse event listeners when dragging
-  useEffect(() => {
-    if (dragState) {
-      window.addEventListener('mousemove', handleDragMove)
-      window.addEventListener('mouseup', handleDragEnd)
-      document.body.style.cursor = 'grab'
-      document.body.style.userSelect = 'none'
-      return () => {
-        window.removeEventListener('mousemove', handleDragMove)
-        window.removeEventListener('mouseup', handleDragEnd)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-  }, [dragState, handleDragMove, handleDragEnd])
-
-  // 初期スクロール位置を8:00に設定
+  // Initial scroll position to 8:00
   useEffect(() => {
     if (scrollContainerRef.current && startHour < 8) {
       const scrollToHour = 8
@@ -403,17 +188,9 @@ export function TimeBlockTimeline({
     }
   }, [startHour, hourHeight])
 
-  // Get display times for a block (use preview if resizing or dragging)
-  const getDisplayTimes = (block: TimeBlock) => {
-    if ((resizeState?.blockId === block.id || dragState?.blockId === block.id) && previewTime) {
-      return previewTime
-    }
-    return { startTime: block.startTime, endTime: block.endTime }
-  }
-
   return (
     <div className="relative">
-      {/* ズームコントロール（スクロール外に配置で常時表示） */}
+      {/* Zoom controls */}
       <div className="absolute top-2 right-2 z-30 flex items-center gap-0.5 bg-background/95 border rounded-md shadow-sm">
         <Button
           variant="ghost"
@@ -444,457 +221,293 @@ export function TimeBlockTimeline({
         </Button>
       </div>
 
-      {/* スクロールコンテナ */}
+      {/* Scroll container */}
       <div
         ref={scrollContainerRef}
         className="relative flex overflow-y-auto"
         style={{ maxHeight }}
         onWheel={handleWheel}
       >
-      {/* 時間軸 */}
-      <div className="w-16 flex-shrink-0">
-        {hours.map((hour) => (
-          <div
-            key={hour}
-            className="border-t text-xs text-muted-foreground flex items-start pt-1 pr-2 justify-end"
-            style={{ height: `${hourHeight}px` }}
-          >
-            {hour === 24 ? '0:00' : `${hour}:00`}
-          </div>
-        ))}
-      </div>
+        {/* Time axis */}
+        <TimeBlockTimelineGrid hours={hours} hourHeight={hourHeight} />
 
-      {/* タイムブロック表示エリア */}
-      <div
-        ref={setRefs}
-        data-timeline-container
-        data-start-hour={startHour}
-        data-end-hour={endHour}
-        className={cn(
-          'flex-1 relative border-l',
-          isDraggingTask && 'ring-2 ring-primary/30 ring-inset bg-primary/5',
-          isOver && 'ring-primary/50 bg-primary/10',
-          onEmptyDoubleClick && 'cursor-pointer'
-        )}
-        style={{ height: `${hours.length * hourHeight}px` }}
-        onDoubleClick={(e) => {
-          if (!onEmptyDoubleClick || !containerRef.current) return
-
-          // タイムブロックやエントリー上のダブルクリックは無視（data-block属性で判定）
-          const target = e.target as HTMLElement
-          if (target.closest('[data-block]')) return
-
-          const rect = containerRef.current.getBoundingClientRect()
-          const { startTime, endTime } = calculateTimeFromY(
-            e.clientY,
-            rect,
-            startHour,
-            endHour
-          )
-          onEmptyDoubleClick(startTime, endTime)
-        }}
-      >
-        {/* 時間線 */}
-        {hours.map((hour, index) => (
-          <div
-            key={hour}
-            className="absolute w-full border-t border-dashed border-muted"
-            style={{ top: `${(index / hours.length) * 100}%` }}
-          />
-        ))}
-
-        {/* 現在時刻インジケーター */}
-        {(() => {
-          const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes()
-          const timeRangeStart = startHour * 60
-          const timeRangeEnd = endHour * 60
-
-          // 現在時刻が表示範囲内の場合のみ表示
-          if (currentMinutes >= timeRangeStart && currentMinutes <= timeRangeEnd) {
-            const topPosition = ((currentMinutes - timeRangeStart) / totalMinutes) * 100
-
-            return (
-              <div
-                className="absolute left-0 right-0 z-30 pointer-events-none"
-                style={{ top: `${topPosition}%` }}
-              >
-                {/* 小さな丸マーカー */}
-                <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-primary" />
-                {/* 現在時刻のドット線 */}
-                <div
-                  className="absolute left-0 right-0 border-t border-dotted border-primary"
-                />
-              </div>
+        {/* Time block display area */}
+        <div
+          ref={setRefs}
+          data-timeline-container
+          data-start-hour={startHour}
+          data-end-hour={endHour}
+          className={cn(
+            'flex-1 relative border-l',
+            isDraggingTask && 'ring-2 ring-primary/30 ring-inset bg-primary/5',
+            isOver && 'ring-primary/50 bg-primary/10',
+            onEmptyDoubleClick && 'cursor-pointer'
+          )}
+          style={{ height: `${hours.length * hourHeight}px` }}
+          onDoubleClick={(e) => {
+            if (!onEmptyDoubleClick || !containerRef.current) return
+            const target = e.target as HTMLElement
+            if (target.closest('[data-block]')) return
+            const rect = containerRef.current.getBoundingClientRect()
+            const { startTime, endTime } = calculateTimeFromY(
+              e.clientY,
+              rect,
+              startHour,
+              endHour
             )
-          }
-          return null
-        })()}
-
-        {/* タイムブロック（計画） */}
-        {timeBlocks.map((block) => {
-          const displayTimes = getDisplayTimes(block)
-          const isResizing = resizeState?.blockId === block.id
-          const isDragging = dragState?.blockId === block.id
-          const isActive = isResizing || isDragging
-          const hasGoal = !!(block.goalId && block.goalColor)
-
-          return (
+            onEmptyDoubleClick(startTime, endTime)
+          }}
+        >
+          {/* Hour lines */}
+          {hours.map((hour, index) => (
             <div
-              key={block.id}
-              data-block
-              className={cn(
-                'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group overflow-hidden',
-                showComparison ? 'left-1 right-[52%]' : 'right-1',
-                onBlockResize && !isActive && 'cursor-grab',
-                isActive && 'ring-2 ring-primary z-10',
-                isDragging && 'cursor-grabbing',
-                // 目標なしの場合は点線ボーダー
-                !hasGoal && 'border border-dashed border-muted-foreground/40'
-              )}
-              style={{
-                // 目標ありの場合: 目標色の薄い背景
-                // 目標なしの場合: mutedの背景
-                backgroundColor: hasGoal
-                  ? `color-mix(in srgb, ${block.goalColor} 12%, transparent)`
-                  : 'hsl(var(--muted))',
-                top: `${getTopPosition(displayTimes.startTime)}%`,
-                height: `${getHeight(displayTimes.startTime, displayTimes.endTime)}%`,
-                minHeight: '24px',
-              }}
-              onMouseDown={(e) => {
-                // Only start drag if clicking on the block itself (not on buttons or resize handles)
-                if (onBlockResize && e.target === e.currentTarget) {
-                  handleDragStart(e, block)
-                }
-              }}
-            >
-              {/* 目標ありの場合: 左ボーダーに目標色 */}
-              {hasGoal && (
-                <div
-                  className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
-                  style={{ backgroundColor: block.goalColor }}
-                />
-              )}
+              key={hour}
+              className="absolute w-full border-t border-dashed border-muted"
+              style={{ top: `${(index / hours.length) * 100}%` }}
+            />
+          ))}
 
-              {/* Top resize handle */}
-              {onBlockResize && (
+          {/* Current time indicator */}
+          {(() => {
+            const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes()
+            const timeRangeStart = startHour * 60
+            const timeRangeEnd = endHour * 60
+
+            if (currentMinutes >= timeRangeStart && currentMinutes <= timeRangeEnd) {
+              const topPosition = ((currentMinutes - timeRangeStart) / totalMinutes) * 100
+
+              return (
                 <div
-                  className="absolute left-0 right-0 top-0 h-2 cursor-ns-resize group/handle hover:bg-primary/20 rounded-t-md"
-                  onMouseDown={(e) => handleResizeStart(e, block, 'top')}
+                  className="absolute left-0 right-0 z-30 pointer-events-none"
+                  style={{ top: `${topPosition}%` }}
                 >
-                  <div className="absolute left-1/2 -translate-x-1/2 top-0.5 w-8 h-1 bg-muted-foreground/30 rounded-full opacity-0 group-hover/handle:opacity-100" />
+                  <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-primary" />
+                  <div className="absolute left-0 right-0 border-t border-dotted border-primary" />
                 </div>
-              )}
+              )
+            }
+            return null
+          })()}
 
-              {/* Draggable content area */}
-              <div
-                className={cn(
-                  'relative',
-                  hasGoal && 'pl-1', // 左ボーダー分のパディング
-                  onBlockResize && !isActive && 'cursor-grab active:cursor-grabbing'
-                )}
-                onMouseDown={(e) => {
-                  if (onBlockResize) {
-                    handleDragStart(e, block)
-                  }
-                }}
-              >
-                <div className="flex items-center gap-1">
-                  {hasGoal ? (
-                    <GoalBadge name={block.goalName!} color={block.goalColor!} size="sm" />
-                  ) : (
-                    <span className="text-muted-foreground text-[10px] px-1 py-0.5 rounded bg-muted-foreground/10">
-                      目標なし
-                    </span>
-                  )}
-                  {block.milestoneName && (
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[80px]" title={block.milestoneName}>
-                      {block.milestoneName}
-                    </span>
-                  )}
-                  <span className="truncate font-medium flex-1">{block.taskName}</span>
-                  {(onBlockClick || onBlockDelete || onBlockStartTimer) && !isActive && (
-                    <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-                      {onBlockStartTimer && !isTimerRunning && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0 text-primary hover:text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onBlockStartTimer(block)
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          title="タイマー開始"
-                        >
-                          <Play className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {onBlockClick && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onBlockClick(block)
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          title="編集"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {onBlockDelete && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onBlockDelete(block.id)
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          title="削除"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="text-muted-foreground">
-                  {formatTime(displayTimes.startTime)} - {formatTime(displayTimes.endTime)}
-                </div>
-              </div>
-
-              {/* Bottom resize handle */}
-              {onBlockResize && (
-                <div
-                  className="absolute left-0 right-0 bottom-0 h-2 cursor-ns-resize group/handle hover:bg-primary/20 rounded-b-md"
-                  onMouseDown={(e) => handleResizeStart(e, block, 'bottom')}
-                >
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-8 h-1 bg-muted-foreground/30 rounded-full opacity-0 group-hover/handle:opacity-100" />
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {/* 時間記録（実績） */}
-        {showComparison &&
-          timeEntries.map((entry) => {
-            const hasGoal = !!(entry.goalId && entry.goalColor)
+          {/* Time blocks (plans) */}
+          {timeBlocks.map((block) => {
+            const displayTimes = getDisplayTimes(block)
+            const isResizing = resizeState?.blockId === block.id
+            const isDragging = dragState?.blockId === block.id
+            const isActive = isResizing || isDragging
 
             return (
-              <div
-                key={entry.id}
-                data-block
-                className={cn(
-                  'absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs group overflow-hidden',
-                  // 目標なしの場合は点線ボーダー
-                  !hasGoal && 'border border-dashed border-muted-foreground/40'
-                )}
-                style={{
-                  // 目標ありの場合: 目標色の薄い背景
-                  // 目標なしの場合: mutedの背景
-                  backgroundColor: hasGoal
-                    ? `color-mix(in srgb, ${entry.goalColor} 12%, transparent)`
-                    : 'hsl(var(--muted))',
-                  top: `${getTopPosition(entry.startTime)}%`,
-                  height: `${getHeight(entry.startTime, entry.endTime)}%`,
-                  minHeight: '24px',
-                }}
-              >
-                {/* 目標ありの場合: 左ボーダーに目標色 */}
-                {hasGoal && (
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
-                    style={{ backgroundColor: entry.goalColor }}
-                  />
-                )}
-
-                <div className={cn('relative', hasGoal && 'pl-1')}>
-                  <div className="flex items-center gap-1">
-                    {hasGoal ? (
-                      <GoalBadge name={entry.goalName!} color={entry.goalColor!} size="sm" />
-                    ) : (
-                      <span className="text-muted-foreground text-[10px] px-1 py-0.5 rounded bg-muted-foreground/10">
-                        目標なし
-                      </span>
-                    )}
-                    {entry.milestoneName && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[80px]" title={entry.milestoneName}>
-                        {entry.milestoneName}
-                      </span>
-                    )}
-                    <span className="truncate font-medium flex-1">{entry.taskName}</span>
-                    {(onEntryClick || onEntryDelete) && (
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-                        {onEntryClick && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 w-5 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEntryClick(entry)
-                            }}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                        )}
-                        {onEntryDelete && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEntryDelete(entry.id)
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-muted-foreground">
-                    {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-                  </div>
-                </div>
-              </div>
+              <TimeBlockItem
+                key={block.id}
+                block={block}
+                displayTimes={displayTimes}
+                isActive={isActive}
+                isDragging={isDragging}
+                showComparison={showComparison}
+                isTimerRunning={isTimerRunning}
+                onBlockClick={onBlockClick}
+                onBlockDelete={onBlockDelete}
+                onBlockResize={onBlockResize}
+                onBlockStartTimer={onBlockStartTimer}
+                onDragStart={handleDragStart}
+                onResizeStart={handleResizeStart}
+                getTopPosition={getTopPosition}
+                getHeight={getHeight}
+              />
             )
           })}
 
-        {/* 実行中タイマー（仮想エントリ） */}
-        {showComparison && runningTimer && runningEntryTimes && (() => {
-          const hasGoal = !!(runningTimer.goalId && runningTimer.goalColor)
-          const heightPercent = getHeight(runningEntryTimes.startTime, runningEntryTimes.endTime)
-          // 最小高さを確保（開始直後は短いため）
-          const effectiveHeight = Math.max(heightPercent, 2)
+          {/* Time entries (actuals) */}
+          {showComparison &&
+            timeEntries.map((entry) => {
+              const hasGoal = !!(entry.goalId && entry.goalColor)
 
-          return (
-            <div
-              data-block
-              className={cn(
-                'absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs overflow-hidden',
-                'animate-pulse',
-                'ring-2 ring-primary/50',
-                // 目標なしの場合は点線ボーダー
-                !hasGoal && 'border border-dashed border-muted-foreground/40'
-              )}
-              style={{
-                backgroundColor: hasGoal
-                  ? `color-mix(in srgb, ${runningTimer.goalColor} 20%, transparent)`
-                  : 'hsl(var(--primary) / 0.15)',
-                top: `${getTopPosition(runningEntryTimes.startTime)}%`,
-                height: `${effectiveHeight}%`,
-                minHeight: '24px',
-              }}
-            >
-              {/* 目標ありの場合: 左ボーダーに目標色 */}
-              {hasGoal && (
+              return (
                 <div
-                  className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
-                  style={{ backgroundColor: runningTimer.goalColor }}
-                />
-              )}
-
-              <div className={cn('relative', hasGoal && 'pl-1')}>
-                <div className="flex items-center gap-1">
-                  {hasGoal ? (
-                    <GoalBadge name={runningTimer.goalName!} color={runningTimer.goalColor!} size="sm" />
-                  ) : (
-                    <span className="text-primary text-[10px] px-1 py-0.5 rounded bg-primary/10 font-medium">
-                      作業中
-                    </span>
+                  key={entry.id}
+                  data-block
+                  className={cn(
+                    'absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs group overflow-hidden',
+                    !hasGoal && 'border border-dashed border-muted-foreground/40'
                   )}
-                  {runningTimer.milestoneName && (
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[80px]" title={runningTimer.milestoneName}>
-                      {runningTimer.milestoneName}
-                    </span>
-                  )}
-                  <span className="truncate font-medium flex-1">{runningTimer.taskName}</span>
-                  <span className="text-primary text-[10px] font-medium flex-shrink-0">
-                    REC
-                  </span>
-                </div>
-                <div className="text-muted-foreground">
-                  {formatTime(runningEntryTimes.startTime)} - 作業中
-                </div>
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* ドロップインジケーター */}
-        {isDraggingTask && dragOverY !== null && containerRef.current && (
-          (() => {
-            const rect = containerRef.current.getBoundingClientRect()
-            const relativeY = Math.max(0, Math.min(dragOverY - rect.top, rect.height))
-            const percentage = relativeY / rect.height
-            const rawMinutes = percentage * totalMinutes + startHour * 60
-            const snappedMinutes = snapToInterval(Math.max(startHour * 60, Math.min(endHour * 60 - 60, rawMinutes)))
-            const timeString = minutesToTimeString(snappedMinutes)
-            const topPercentage = ((snappedMinutes - startHour * 60) / totalMinutes) * 100
-
-            return (
-              <div
-                className="absolute left-0 right-0 pointer-events-none z-20"
-                style={{ top: `${topPercentage}%` }}
-              >
-                {/* 時刻インジケーター線 */}
-                <div className="absolute left-0 right-0 h-0.5 bg-primary" />
-                {/* 時刻ラベル */}
-                <div className="absolute -left-16 -top-2.5 bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded font-medium">
-                  {timeString}
-                </div>
-                {/* 予定プレビュー（1時間分） */}
-                <div
-                  className="absolute left-1 right-1 rounded-md border-2 border-dashed border-primary bg-primary/10"
                   style={{
-                    height: `${hourHeight}px`,
-                    minHeight: `${hourHeight}px`,
+                    backgroundColor: hasGoal
+                      ? `color-mix(in srgb, ${entry.goalColor} 12%, transparent)`
+                      : 'hsl(var(--muted))',
+                    top: `${getTopPosition(entry.startTime)}%`,
+                    height: `${getHeight(entry.startTime, entry.endTime)}%`,
+                    minHeight: '24px',
                   }}
-                />
-              </div>
-            )
-          })()
-        )}
-      </div>
+                >
+                  {hasGoal && (
+                    <div
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
+                      style={{ backgroundColor: entry.goalColor }}
+                    />
+                  )}
+
+                  <div className={cn('relative', hasGoal && 'pl-1')}>
+                    <div className="flex items-center gap-1">
+                      {hasGoal ? (
+                        <GoalBadge name={entry.goalName!} color={entry.goalColor!} size="sm" />
+                      ) : (
+                        <span className="text-muted-foreground text-[10px] px-1 py-0.5 rounded bg-muted-foreground/10">
+                          目標なし
+                        </span>
+                      )}
+                      {entry.milestoneName && (
+                        <span
+                          className="text-[10px] text-muted-foreground truncate max-w-[80px]"
+                          title={entry.milestoneName}
+                        >
+                          {entry.milestoneName}
+                        </span>
+                      )}
+                      <span className="truncate font-medium flex-1">{entry.taskName}</span>
+                      {(onEntryClick || onEntryDelete) && (
+                        <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
+                          {onEntryClick && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onEntryClick(entry)
+                              }}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {onEntryDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onEntryDelete(entry.id)
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+          {/* Running timer (virtual entry) */}
+          {showComparison &&
+            runningTimer &&
+            runningEntryTimes &&
+            (() => {
+              const hasGoal = !!(runningTimer.goalId && runningTimer.goalColor)
+              const heightPercent = getHeight(runningEntryTimes.startTime, runningEntryTimes.endTime)
+              const effectiveHeight = Math.max(heightPercent, 2)
+
+              return (
+                <div
+                  data-block
+                  className={cn(
+                    'absolute left-[52%] right-1 rounded-md px-2 py-1 text-xs overflow-hidden',
+                    'animate-pulse',
+                    'ring-2 ring-primary/50',
+                    !hasGoal && 'border border-dashed border-muted-foreground/40'
+                  )}
+                  style={{
+                    backgroundColor: hasGoal
+                      ? `color-mix(in srgb, ${runningTimer.goalColor} 20%, transparent)`
+                      : 'hsl(var(--primary) / 0.15)',
+                    top: `${getTopPosition(runningEntryTimes.startTime)}%`,
+                    height: `${effectiveHeight}%`,
+                    minHeight: '24px',
+                  }}
+                >
+                  {hasGoal && (
+                    <div
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
+                      style={{ backgroundColor: runningTimer.goalColor }}
+                    />
+                  )}
+
+                  <div className={cn('relative', hasGoal && 'pl-1')}>
+                    <div className="flex items-center gap-1">
+                      {hasGoal ? (
+                        <GoalBadge
+                          name={runningTimer.goalName!}
+                          color={runningTimer.goalColor!}
+                          size="sm"
+                        />
+                      ) : (
+                        <span className="text-primary text-[10px] px-1 py-0.5 rounded bg-primary/10 font-medium">
+                          作業中
+                        </span>
+                      )}
+                      {runningTimer.milestoneName && (
+                        <span
+                          className="text-[10px] text-muted-foreground truncate max-w-[80px]"
+                          title={runningTimer.milestoneName}
+                        >
+                          {runningTimer.milestoneName}
+                        </span>
+                      )}
+                      <span className="truncate font-medium flex-1">{runningTimer.taskName}</span>
+                      <span className="text-primary text-[10px] font-medium flex-shrink-0">REC</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {formatTime(runningEntryTimes.startTime)} - 作業中
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+          {/* Drop indicator */}
+          {isDraggingTask &&
+            dragOverY !== null &&
+            containerRef.current &&
+            (() => {
+              const rect = containerRef.current.getBoundingClientRect()
+              const relativeY = Math.max(0, Math.min(dragOverY - rect.top, rect.height))
+              const percentage = relativeY / rect.height
+              const rawMinutes = percentage * totalMinutes + startHour * 60
+              const snappedMinutes = snapToInterval(
+                Math.max(startHour * 60, Math.min(endHour * 60 - 60, rawMinutes))
+              )
+              const timeString = minutesToTimeString(snappedMinutes)
+              const topPercentage = ((snappedMinutes - startHour * 60) / totalMinutes) * 100
+
+              return (
+                <div
+                  className="absolute left-0 right-0 pointer-events-none z-20"
+                  style={{ top: `${topPercentage}%` }}
+                >
+                  <div className="absolute left-0 right-0 h-0.5 bg-primary" />
+                  <div className="absolute -left-16 -top-2.5 bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded font-medium">
+                    {timeString}
+                  </div>
+                  <div
+                    className="absolute left-1 right-1 rounded-md border-2 border-dashed border-primary bg-primary/10"
+                    style={{
+                      height: `${hourHeight}px`,
+                      minHeight: `${hourHeight}px`,
+                    }}
+                  />
+                </div>
+              )
+            })()}
+        </div>
       </div>
     </div>
   )
 }
 
-// Y座標から時刻に変換するヘルパー（外部から使用可能）
-export function calculateTimeFromY(
-  clientY: number,
-  containerRect: DOMRect,
-  startHour: number,
-  endHour: number,
-  interval: number = 15
-): { startTime: string; endTime: string } {
-  const totalMinutes = (endHour - startHour) * 60
-  const relativeY = Math.max(0, Math.min(clientY - containerRect.top, containerRect.height))
-  const percentage = relativeY / containerRect.height
-  const rawMinutes = percentage * totalMinutes + startHour * 60
-  const snappedMinutes = Math.round(rawMinutes / interval) * interval
-  const clampedMinutes = Math.max(startHour * 60, Math.min(endHour * 60 - 60, snappedMinutes))
-
-  const startTimeMinutes = clampedMinutes
-  const endTimeMinutes = Math.min(clampedMinutes + 60, endHour * 60)
-
-  const formatTime = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-  }
-
-  return {
-    startTime: formatTime(startTimeMinutes),
-    endTime: formatTime(endTimeMinutes),
-  }
-}
+// Re-export calculateTimeFromY for external use
+export { calculateTimeFromY }

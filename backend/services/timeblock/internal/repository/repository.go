@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/timeblock/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
+)
+
+// Repository-level errors
+var (
+	ErrTimerAlreadyRunning = errors.New("a timer is already running")
 )
 
 // PostgresRepository handles database operations for time blocks and time entries
@@ -776,6 +783,9 @@ func (r *PostgresRepository) StartTimer(ctx context.Context, userID string, inpu
 		&rt.CreatedAt,
 	)
 	if err != nil {
+		if sharedErrors.IsUniqueViolation(err) {
+			return nil, ErrTimerAlreadyRunning
+		}
 		return nil, fmt.Errorf("failed to start timer: %w", err)
 	}
 

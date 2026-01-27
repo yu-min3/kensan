@@ -19,8 +19,6 @@ interface TimeBlockResponse {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
-  isRoutine: boolean
-  routineTaskId?: string
 }
 
 interface TimeEntryResponse {
@@ -53,8 +51,6 @@ const transformTimeBlock = (tb: TimeBlockResponse): TimeBlock => ({
   goalName: tb.goalName,
   goalColor: tb.goalColor,
   tagIds: tb.tagIds,
-  isRoutine: tb.isRoutine,
-  routineTaskId: tb.routineTaskId,
 })
 
 const transformTimeEntry = (te: TimeEntryResponse): TimeEntry => ({

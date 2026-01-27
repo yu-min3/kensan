@@ -12,10 +12,11 @@
 2. [システム全体像](#2-システム全体像)
 3. [フロントエンドの仕組み](#3-フロントエンドの仕組み)
 4. [バックエンドの仕組み](#4-バックエンドの仕組み)
-5. [データの流れ](#5-データの流れ)
-6. [データベース構造](#6-データベース構造)
-7. [目標・タスク管理の階層](#7-目標タスク管理の階層)
-8. [開発モードと本番モードの違い](#8-開発モードと本番モードの違い)
+5. [AIサービス（kensan-ai）の仕組み](#5-aiサービスkensan-aiの仕組み)
+6. [データの流れ](#6-データの流れ)
+7. [データベース構造](#7-データベース構造)
+8. [目標・タスク管理の階層](#8-目標タスク管理の階層)
+9. [開発モードと本番モードの違い](#9-開発モードと本番モードの違い)
 
 ---
 
@@ -51,16 +52,13 @@ graph TB
         BE1["👤 user-service<br/>:8081"]
         BE2["📋 task-service<br/>:8082"]
         BE4["⏰ timeblock-service<br/>:8084"]
-        BE5["🔁 routine-service<br/>:8085"]
-        BE6["📚 record-service<br/>:8086"]
-        BE7["📝 diary-service<br/>:8087"]
         BE8["📊 analytics-service<br/>:8088"]
         BE10["📌 memo-service<br/>:8090"]
         BE11["📓 note-service<br/>:8091"]
     end
 
     subgraph "AIサービス（Python）"
-        AI_SVC["🤖 kensan-ai<br/>（開発中）"]
+        AI_SVC["🤖 kensan-ai<br/>:8089"]
     end
 
     subgraph "データベース"
@@ -76,11 +74,10 @@ graph TB
     FE <--> BE2
     FE <--> BE4
     FE <--> BE5
-    FE <--> BE6
-    FE <--> BE7
     FE <--> BE8
     FE <--> BE10
     FE <--> BE11
+    FE <--> AI_SVC
 
     BE1 --> DB
     BE2 --> DB
@@ -92,8 +89,8 @@ graph TB
     BE10 --> DB
     BE11 --> DB
 
-    AI_SVC --> DB
-    AI_SVC --> AI
+    AI_SVC -->|"Direct Tools<br/>(asyncpg)"| DB
+    AI_SVC -->|"週次レビュー生成"| AI
 ```
 
 ### ポイント解説
@@ -102,7 +99,7 @@ graph TB
 |------|------|
 | **フロントエンド** | ユーザーが直接触る画面部分。ブラウザで動作します |
 | **バックエンド** | データの保存・処理を担当。Goで書かれた9つのマイクロサービス |
-| **kensan-ai** | AI機能を担当するPythonサービス（Claude API連携） |
+| **kensan-ai** | AI機能を担当するPythonサービス（ポート8089）。**DBに直接接続**してデータ取得し、Claude APIで週次レビューを生成。バックエンドサービスは経由しない |
 | **PostgreSQL** | すべてのデータを保存するデータベース。ベクトル検索にも対応 |
 
 ---
@@ -123,16 +120,14 @@ graph LR
 
     subgraph "設定"
         S01["⚙️ S01_Settings<br/>初期設定"]
-        S02["🏠 S02_Dashboard<br/>ホーム画面"]
     end
 
-    subgraph "日常"
-        Daily["📅 DailyPage<br/>朝/夜の計画・振り返り"]
+    subgraph "日常（ホーム）"
+        Daily["📅 DailyPage<br/>朝/夜の計画・振り返り<br/>（ホームページ）"]
     end
 
     subgraph "タスク管理"
-        T01["📋 T01_TaskManagement<br/>目標・タスク管理"]
-        R01["🔁 R01_RoutineTaskManagement<br/>定期タスク"]
+        T01["📋 T01_TaskManagement<br/>目標・タスク管理<br/>（定期タスクはfrequencyで対応）"]
     end
 
     subgraph "記録"
@@ -152,14 +147,13 @@ graph LR
 
 | 文字 | 意味 | 例 |
 |------|------|-----|
-| **S** | Settings（設定） | S01_Settings, S02_Dashboard |
-| **D** | Daily（日常） | DailyPage（朝/夜統合） |
-| **T** | Task（タスク） | T01_TaskManagement |
-| **R** | Routine（定期タスク） | R01_RoutineTaskManagement |
+| **S** | Settings（設定） | S01_Settings |
+| **D** | Daily（日常） | DailyPage（ホームページ） |
+| **T** | Task（タスク） | T01_TaskManagement（定期タスクはfrequencyで対応） |
 | **N** | Note（ノート） | N01_NoteList, N02_NoteEdit |
-| **A** | Analytics/AI（分析） | A01_AnalyticsReport, A02_AIReview |
+| **A** | Analytics/AI（分析） | A01_AnalyticsReport（期間選択対応）, A02_AIReview |
 
-> **変更点**: 以前の `M01_Morning`（朝）と `E01_Evening`（夜）は `DailyPage` に統合されました。
+> **変更点**: ダッシュボードはDailyPageに統合され、分析ページに期間選択（今日/今週/今月/カスタム）と学習記録ウィジェットが追加されました。
 
 ### 3.3 フロントエンドの構成
 
@@ -181,7 +175,7 @@ graph TB
         end
 
         subgraph "stores/ - 状態管理"
-            ST["13個のZustandストア"]
+            ST["14個のZustandストア"]
         end
 
         subgraph "api/ - API連携"
@@ -207,18 +201,21 @@ components/
 │   ├── Header.tsx      # ヘッダー
 │   ├── Sidebar.tsx     # サイドバー
 │   └── Layout.tsx      # 全体レイアウト
-├── common/             # ドメイン共通（13個）
+├── common/             # ドメイン共通（14個）
 │   ├── TaskCard.tsx    # タスクカード
 │   ├── TimerWidget.tsx # タイマー
 │   ├── GoalBadge.tsx   # 目標バッジ
-│   ├── PageMemo.tsx    # ページ固有メモ（NEW）
-│   ├── TimeBlockTimeline.tsx  # タイムライン（ズーム機能付き）
+│   ├── PageMemo.tsx    # ページ固有メモ
+│   ├── TimeBlockTimeline.tsx  # タイムライン（コンテナ）
+│   ├── timeline/       # タイムライン部品（SRP分割）
+│   │   ├── TimeBlockTimelineGrid.tsx  # グリッド描画
+│   │   ├── TimeBlockItem.tsx          # 個別ブロック
+│   │   └── useTimeBlockDragResize.ts  # ドラッグ&リサイズ
 │   └── ...
-├── daily/              # 日次（11個）
+├── daily/              # 日次
 │   ├── DailySummary.tsx    # 日次サマリー
 │   ├── TimeBlockSection.tsx # タイムブロック管理
-│   ├── TaskListWidget.tsx  # タスクリスト（カード表示）
-│   └── DailyDashboard/     # ダッシュボード部品（5個）
+│   └── TaskListWidget.tsx  # タスクリスト（カード表示）
 ├── task/               # タスク（6個）
 │   ├── GoalDialog.tsx
 │   ├── MilestoneDialog.tsx
@@ -239,23 +236,29 @@ components/
 
 ```mermaid
 graph TB
-    subgraph "13個のZustandストア"
+    subgraph "12個のZustandストア"
         Auth["useAuthStore<br/>認証状態"]
         Settings["useSettingsStore<br/>ユーザー設定"]
-        Task["useTaskStore<br/>目標・タスク"]
+
+        subgraph "タスク管理（ドメイン分割）"
+            Goal["useGoalStore<br/>目標"]
+            Milestone["useMilestoneStore<br/>マイルストーン"]
+            Tag["useTagStore<br/>タグ"]
+            Task["useTaskStore<br/>タスク"]
+            TaskManager["useTaskManagerStore<br/>統合フック"]
+        end
+
         TimeBlock["useTimeBlockStore<br/>タイムブロック"]
         Timer["useTimerStore<br/>タイマー"]
-        Note["useNoteStore<br/>ノート"]
-        Routine["useRoutineStore<br/>定期タスク"]
+        Note["useNoteStore<br/>ノート（日記・学習記録）"]
         Memo["useMemoStore<br/>メモ"]
         Analytics["useAnalyticsStore<br/>分析データ"]
-        Dashboard["useDashboardStore<br/>ダッシュボード"]
-        Legacy1["useLearningRecordStore<br/>（レガシー）"]
-        Legacy2["useDiaryStore<br/>（レガシー）"]
     end
 
-    Note -.->|"統合中"| Legacy1
-    Note -.->|"統合中"| Legacy2
+    TaskManager -->|"統合"| Goal
+    TaskManager -->|"統合"| Milestone
+    TaskManager -->|"統合"| Tag
+    TaskManager -->|"統合"| Task
 ```
 
 **主要ストアの役割:**
@@ -264,10 +267,16 @@ graph TB
 |--------|------|---------|
 | `useAuthStore` | 認証 | ログイン、ログアウト、トークン管理 |
 | `useSettingsStore` | 設定 | タイムゾーン、テーマ、ユーザー名 |
-| `useTaskStore` | タスク | 目標・マイルストーン・タスクのCRUD |
+| `useGoalStore` | 目標 | 目標のCRUD（ISP分割） |
+| `useMilestoneStore` | マイルストーン | マイルストーンのCRUD（ISP分割） |
+| `useTagStore` | タグ | タグのCRUD（ISP分割） |
+| `useTaskStore` | タスク | タスクのCRUD |
+| `useTaskManagerStore` | 統合 | 上記4ストアを統合した便利フック |
 | `useTimeBlockStore` | 時間 | タイムブロック、時間記録（timezone対応） |
 | `useTimerStore` | タイマー | 作業タイマーの開始・停止 |
 | `useNoteStore` | ノート | 日記・学習記録の統合管理 |
+
+> **リファクタリング (2026-01)**: `useTaskStore`は以前、目標・マイルストーン・タグ・タスクを全て管理していましたが、ISP（インターフェース分離原則）に従い、ドメインごとに分割されました。後方互換性のため`useTaskManagerStore`が統合フックとして提供されています。
 
 ### 3.6 主要コンポーネントの特徴
 
@@ -311,16 +320,13 @@ graph TB
         end
 
         subgraph "タスク管理"
-            TS["📋 task-service<br/>ポート: 8082<br/>・目標管理<br/>・マイルストーン<br/>・タスク・タグ"]
+            TS["📋 task-service<br/>ポート: 8082<br/>・目標管理<br/>・マイルストーン<br/>・タスク・タグ<br/>・定期タスク（frequency）"]
             TBS["⏰ timeblock-service<br/>ポート: 8084<br/>・タイムブロック<br/>・時間記録<br/>・タイマー"]
-            RS["🔁 routine-service<br/>ポート: 8085<br/>・定期タスク<br/>・日/週/月"]
         end
 
         subgraph "記録系"
-            RCS["📚 record-service<br/>ポート: 8086<br/>・学習記録<br/>（レガシー）"]
-            DS["📝 diary-service<br/>ポート: 8087<br/>・日記<br/>（レガシー）"]
             MS["📌 memo-service<br/>ポート: 8090<br/>・クイックメモ"]
-            NS["📓 note-service<br/>ポート: 8091<br/>・統合ノート<br/>・日記+学習+メモ"]
+            NS["📓 note-service<br/>ポート: 8091<br/>・統合ノート<br/>（日記・学習記録）"]
         end
 
         subgraph "分析"
@@ -391,16 +397,165 @@ graph TB
 | `auth` | JWT認証 | `jwt.go` - トークン生成・検証 |
 | `config` | 設定読み込み | `config.go` - 環境変数から設定 |
 | `database` | DB接続 | `postgres.go` - pgxpoolでコネクション管理 |
+| `errors` | エラー定義 | `errors.go` - 共通エラー型、エンティティ別ヘルパー |
 | `middleware` | HTTPミドルウェア | `middleware.go` - 認証、ログ、リクエストID |
 | `logging` | ログ出力 | `setup.go` - zerolog設定 |
 
+> **errorsパッケージ**: `errors.TaskNotFound()`, `errors.Required("field")` など、全サービスで統一されたエラーハンドリングを提供します。
+
 ---
 
-## 5. データの流れ
+## 5. AIサービス（kensan-ai）の仕組み
+
+kensan-aiは、Pythonで書かれたAI機能専用のサービスです。
+
+### 5.1 アーキテクチャ概要
+
+```mermaid
+graph TB
+    subgraph "kensan-ai の仕組み"
+        FE["📱 フロントエンド"]
+        API["🌐 FastAPI<br/>:8089"]
+        Agent["🤖 AgentRunner<br/>マルチターン会話"]
+        Tools["🔧 Direct Tools<br/>18個のツール"]
+        DB[("🗄️ PostgreSQL<br/>asyncpg直接接続")]
+        Claude["🧠 Claude API"]
+    end
+
+    FE -->|"POST /chat<br/>POST /ai/reviews/generate"| API
+    API --> Agent
+    Agent -->|"ツール呼び出し"| Tools
+    Tools -->|"SQL実行"| DB
+    Agent <-->|"推論リクエスト"| Claude
+```
+
+**ポイント:**
+- **バックエンドサービス（Go）を経由しない** - DBに直接接続
+- **Direct Tools** - ClaudeがDBを操作するためのツール群
+- **AgentRunner** - マルチターン会話を管理するコア
+
+### 5.2 Direct Tools（18個）
+
+Claudeが使えるツール一覧：
+
+#### Database Tools（7個）- データ操作
+| ツール | 説明 | 書込 |
+|--------|------|:----:|
+| `get_goals_and_milestones` | 目標とマイルストーン取得 | - |
+| `get_tasks` | タスク取得（フィルタ可） | - |
+| `create_task` | タスク作成 | ✓ |
+| `update_task` | タスク更新 | ✓ |
+| `get_time_blocks` | 予定取得 | - |
+| `create_time_block` | 予定作成 | ✓ |
+| `get_time_entries` | 作業実績取得 | - |
+
+#### Memory Tools（4個）- ユーザー記憶
+| ツール | 説明 |
+|--------|------|
+| `get_user_memory` | ユーザープロフィール取得 |
+| `get_user_facts` | 抽出済みファクト取得 |
+| `add_user_fact` | ファクト手動追加 |
+| `get_recent_interactions` | 最近のやり取り取得 |
+
+#### Search Tools（3個）- 検索
+| ツール | 説明 |
+|--------|------|
+| `semantic_search` | ベクトル類似検索（pgvector） |
+| `keyword_search` | 全文検索（tsvector） |
+| `hybrid_search` | セマンティック + キーワード複合 |
+
+#### Storage Tools（4個）- ファイル
+| ツール | 説明 |
+|--------|------|
+| `upload_file` | R2にファイルアップロード |
+| `get_file` | ファイルメタデータ取得 |
+| `delete_file` | ファイル削除 |
+| `get_upload_url` | 署名付きアップロードURL生成 |
+
+### 5.3 AgentRunnerの動作フロー
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 ユーザー
+    participant API as 🌐 FastAPI
+    participant Agent as 🤖 AgentRunner
+    participant Claude as 🧠 Claude API
+    participant Tools as 🔧 Direct Tools
+    participant DB as 🗄️ DB
+
+    U->>API: "明日の予定を作って"
+    API->>Agent: run(message, user_id)
+
+    loop マルチターン（最大10回）
+        Agent->>Claude: メッセージ + ツール定義
+        Claude-->>Agent: tool_use: create_time_block
+
+        Agent->>Tools: execute_tool("create_time_block", args)
+        Tools->>DB: INSERT INTO time_blocks...
+        DB-->>Tools: 結果
+        Tools-->>Agent: ツール結果
+
+        Agent->>Claude: ツール結果を送信
+        Claude-->>Agent: end_turn + 応答テキスト
+    end
+
+    Agent-->>API: AgentResult
+    API-->>U: "明日の予定を作成しました！"
+```
+
+### 5.4 ファクト抽出システム
+
+会話からユーザーの特徴を自動抽出して記憶：
+
+```mermaid
+graph LR
+    subgraph "会話"
+        Conv["💬 '朝型なので7時から作業します'"]
+    end
+
+    subgraph "抽出"
+        Extract["🔍 FactExtractor<br/>Claudeで解析"]
+    end
+
+    subgraph "保存"
+        Facts["📝 user_facts テーブル"]
+    end
+
+    subgraph "活用"
+        Memory["🧠 次回の会話で参照"]
+    end
+
+    Conv --> Extract
+    Extract -->|"habit: '朝7時から作業'"| Facts
+    Facts --> Memory
+```
+
+**ファクトの種類:**
+| タイプ | 説明 | 例 |
+|--------|------|-----|
+| `preference` | 好み | "早朝が好き" |
+| `habit` | 習慣 | "毎朝7時に起きる" |
+| `skill` | スキル | "Pythonが得意" |
+| `goal` | 目標 | "来月までにリリース" |
+| `constraint` | 制約 | "平日は19時以降のみ" |
+
+### 5.5 APIエンドポイント
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/chat` | 非ストリーミングチャット |
+| POST | `/chat/stream` | ストリーミングチャット |
+| POST | `/ai/reviews/generate` | 週次レビュー生成 |
+| GET | `/ai/reviews` | レビュー一覧 |
+| POST | `/interactions/{id}/feedback` | フィードバック送信 |
+
+---
+
+## 6. データの流れ
 
 ユーザーがタスクを追加する場合を例に、データがどう流れるか見てみましょう。
 
-### 5.1 タスク追加の流れ
+### 6.1 タスク追加の流れ
 
 ```mermaid
 sequenceDiagram
@@ -426,7 +581,7 @@ sequenceDiagram
     P-->>U: 13. 新しいタスクが表示される
 ```
 
-### 5.2 認証の流れ
+### 6.2 認証の流れ
 
 すべてのリクエストには「認証」が必要です：
 
@@ -454,7 +609,7 @@ sequenceDiagram
     DB-->>BE: 12. そのユーザーのデータのみ返却
 ```
 
-### 5.3 タイムゾーン処理
+### 6.3 タイムゾーン処理
 
 Kensanは世界中どこからでも使えるよう、タイムゾーンを正しく処理します：
 
@@ -482,11 +637,11 @@ graph LR
 
 ---
 
-## 6. データベース構造
+## 7. データベース構造
 
 すべてのデータはPostgreSQL 16データベースに保存されます。
 
-### 6.1 主要テーブルの関係
+### 7.1 主要テーブルの関係
 
 ```mermaid
 erDiagram
@@ -494,7 +649,6 @@ erDiagram
     users ||--o{ goals : "1対多"
     users ||--o{ notes : "1対多"
     users ||--o{ time_blocks : "1対多"
-    users ||--o{ routine_tasks : "1対多"
 
     goals ||--o{ milestones : "1対多"
     milestones ||--o{ tasks : "1対多"
@@ -554,7 +708,7 @@ erDiagram
     }
 ```
 
-### 6.2 主要テーブル一覧
+### 7.2 主要テーブル一覧
 
 | テーブル | 説明 | 主要カラム |
 |---------|------|-----------|
@@ -568,11 +722,10 @@ erDiagram
 | `time_blocks` | 計画時間 | date, start_time, end_time, task_name |
 | `time_entries` | 実績時間 | date, start_time, end_time, task_name |
 | `running_timers` | 実行中タイマー | task_name, started_at |
-| `routine_tasks` | 定期タスク | name, frequency, days_of_week |
 | `notes` | 統合ノート | type, title, content, format |
 | `memos` | クイックメモ | content, archived |
 
-### 6.3 マルチテナント設計
+### 7.3 マルチテナント設計
 
 すべてのテーブルに`user_id`があり、ユーザーごとにデータが分離されています：
 
@@ -597,11 +750,11 @@ graph TB
 
 ---
 
-## 7. 目標・タスク管理の階層
+## 8. 目標・タスク管理の階層
 
 Kensanでは、**目標 → マイルストーン → タスク**の3層構造でタスクを管理します。
 
-### 7.1 階層構造
+### 8.1 階層構造
 
 ```mermaid
 graph TB
@@ -640,7 +793,7 @@ graph TB
     M5 --> T5
 ```
 
-### 7.2 タグによる横断的な分類
+### 8.2 タグによる横断的な分類
 
 目標・マイルストーンの縦の階層に加え、**タグ**で横断的に分類できます：
 
@@ -672,9 +825,9 @@ graph LR
 
 ---
 
-## 8. 開発モードと本番モードの違い
+## 9. 開発モードと本番モードの違い
 
-### 8.1 MSW（Mock Service Worker）とは？
+### 9.1 MSW（Mock Service Worker）とは？
 
 開発中はバックエンドなしでも動作できるように、**MSW**がAPIリクエストを横取りしてモックデータを返します。
 
@@ -703,7 +856,7 @@ graph TB
     end
 ```
 
-### 8.2 モードの切り替え
+### 9.2 モードの切り替え
 
 | 環境 | MSW | バックエンド | 用途 |
 |------|-----|------------|------|
@@ -765,16 +918,20 @@ graph LR
 5. **Goal → Milestone → Task**の3層でタスク管理、**Tag**で横断分類
 6. 開発時は**MSW**でモック、本番は実際のバックエンドを使用
 7. タイムゾーンは**UTC**で保存、フロントエンドで変換
+8. **SOLID原則**に従った設計：
+   - ISP: ストアやインターフェースはドメインごとに分割
+   - DIP: サービス層はインターフェースに依存
 
 ### ファイル統計
 
 | カテゴリ | 数 |
 |---------|-----|
 | ページ | 10 |
-| コンポーネント | 56 |
-| Zustandストア | 13 |
+| コンポーネント | 59 |
+| Zustandストア | 16 |
 | APIサービス | 12 |
 | バックエンドサービス | 9 |
+| 共有パッケージ | 6 |
 | データベーステーブル | 14+ |
 
 ---

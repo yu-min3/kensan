@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 import time
 import uuid as uuid_module
 from datetime import date
@@ -38,6 +37,7 @@ from kensan_ai.context import Situation, ContextResolver
 from kensan_ai.logging import InteractionLogger
 from kensan_ai.db.queries import ai_reviews
 from kensan_ai.extraction import FactExtractor
+from kensan_ai.lib.parsers import parse_uuid as lib_parse_uuid, parse_date as lib_parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -110,19 +110,25 @@ async def _get_agent_for_situation(
 
 
 def _parse_uuid(value: str) -> UUID:
-    """Parse a string to UUID."""
-    try:
-        return UUID(value)
-    except ValueError:
+    """Parse a string to UUID, raising HTTPException if invalid.
+
+    Uses shared parser from lib.parsers with HTTP error handling.
+    """
+    result = lib_parse_uuid(value)
+    if result is None:
         raise HTTPException(status_code=400, detail=f"Invalid UUID: {value}")
+    return result
 
 
 def _parse_date(value: str) -> date:
-    """Parse a date string (YYYY-MM-DD)."""
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
+    """Parse a date string (YYYY-MM-DD), raising HTTPException if invalid.
+
+    Uses shared parser from lib.parsers with HTTP error handling.
+    """
+    result = lib_parse_date(value)
+    if result is None:
         raise HTTPException(status_code=400, detail=f"Invalid date: {value}")
+    return result
 
 
 def _get_user_id_from_header(authorization: str | None) -> UUID:

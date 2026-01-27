@@ -43,6 +43,8 @@ const toTaskResponse = (t: (typeof tasks)[0], index?: number) => ({
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
+  frequency: t.frequency,
+  daysOfWeek: t.daysOfWeek,
   sortOrder: t.sortOrder ?? index ?? 0,
   createdAt: t.createdAt.toISOString(),
   updatedAt: t.updatedAt.toISOString(),

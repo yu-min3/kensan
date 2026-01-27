@@ -158,12 +158,15 @@ class InteractionLogger:
 
         Args:
             user_id: The user's ID
-            limit: Maximum number of interactions to return
+            limit: Maximum number of interactions to return (max 100)
             situation: Filter by situation type
 
         Returns:
             List of interaction summaries
         """
+        # Cap limit to prevent abuse (max 100)
+        limit = min(limit, 100)
+
         async with get_connection() as conn:
             conditions = ["user_id = $1"]
             params: list[Any] = [user_id]
@@ -174,6 +177,10 @@ class InteractionLogger:
                 params.append(situation)
                 param_idx += 1
 
+            # Add limit as a parameterized value
+            params.append(limit)
+            limit_param = f"${param_idx}"
+
             where_clause = " AND ".join(conditions)
 
             rows = await conn.fetch(
@@ -183,7 +190,7 @@ class InteractionLogger:
                 FROM ai_interactions
                 WHERE {where_clause}
                 ORDER BY created_at DESC
-                LIMIT {limit}
+                LIMIT {limit_param}
                 """,
                 *params,
             )

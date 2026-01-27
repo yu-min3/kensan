@@ -8,16 +8,17 @@ import (
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for time blocks and time entries
 type Handler struct {
-	service *service.Service
+	service service.FullService
 }
 
 // NewHandler creates a new timeblock handler
-func NewHandler(service *service.Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(svc service.FullService) *Handler {
+	return &Handler{service: svc}
 }
 
 // RegisterRoutes registers the timeblock routes
@@ -87,6 +88,7 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to list time blocks")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list time blocks")
 		return
 	}

@@ -8,7 +8,7 @@ GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
 
 # Services
-SERVICES=user-service task-service timeblock-service routine-service record-service diary-service analytics-service ai-service memo-service
+SERVICES=user-service task-service timeblock-service analytics-service memo-service note-service
 
 # Build all services
 all: build

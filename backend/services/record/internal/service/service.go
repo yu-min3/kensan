@@ -7,16 +7,18 @@ import (
 
 	"github.com/kensan/backend/services/record/internal"
 	"github.com/kensan/backend/services/record/internal/repository"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrRecordNotFound  = errors.New("record not found")
-	ErrTitleRequired   = errors.New("title is required")
-	ErrContentRequired = errors.New("content is required")
-	ErrFormatRequired  = errors.New("format is required")
+	ErrRecordNotFound  = sharedErrors.ErrRecordNotFound
+	ErrTitleRequired   = sharedErrors.Required("title")
+	ErrContentRequired = sharedErrors.Required("content")
+	ErrFormatRequired  = sharedErrors.Required("format")
 	ErrInvalidFormat   = errors.New("format must be markdown or drawio")
-	ErrQueryRequired   = errors.New("query is required for semantic search")
-	ErrUnauthorized    = errors.New("not authorized to access this record")
+	ErrQueryRequired   = sharedErrors.Required("query")
+	ErrUnauthorized    = sharedErrors.ErrUnauthorized
 )
 
 // Service handles learning record business logic

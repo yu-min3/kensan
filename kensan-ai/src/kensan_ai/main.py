@@ -3,12 +3,14 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from kensan_ai.api import router
 from kensan_ai.config import get_settings
 from kensan_ai.db import get_pool, close_pool
+from kensan_ai.errors import ToolError
 
 
 @asynccontextmanager
@@ -48,6 +50,25 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def root_health():
         return {"status": "ok", "version": "0.1.0"}
+
+    # Exception handler for ToolError
+    @app.exception_handler(ToolError)
+    async def tool_error_handler(request: Request, exc: ToolError) -> JSONResponse:
+        """Handle ToolError exceptions with structured error response."""
+        status_code = 500
+        if exc.code == "VALIDATION_ERROR":
+            status_code = 400
+        elif exc.code == "NOT_FOUND":
+            status_code = 404
+        elif exc.code == "AUTHENTICATION_ERROR":
+            status_code = 401
+        elif exc.code == "AUTHORIZATION_ERROR":
+            status_code = 403
+
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": exc.to_dict()},
+        )
 
     return app
 

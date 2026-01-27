@@ -1,95 +1,288 @@
-# Kensan AI Architecture
+# Kensan AIアーキテクチャ
 
-Python AI service using Claude with Direct Tools for the Kensan application.
+KensanアプリケーションのためのDirect Toolsを使用したPython AIサービス。
 
 ---
 
-## Table of Contents
+## 目次
 
-1. [Overview](#overview)
+1. [概要](#概要)
 2. [Direct Tools](#direct-tools)
-3. [Agents](#agents)
-4. [Context Management](#context-management)
-5. [Database Queries](#database-queries)
-6. [Embeddings & Search](#embeddings--search)
-7. [Memory & Fact Extraction](#memory--fact-extraction)
-8. [API Endpoints](#api-endpoints)
-9. [Batch Processing](#batch-processing)
-10. [Configuration](#configuration)
-11. [Key Patterns](#key-patterns)
-12. [Development](#development)
+3. [エージェント](#エージェント)
+4. [コンテキスト管理](#コンテキスト管理)
+5. [データベースクエリ](#データベースクエリ)
+6. [埋め込みと検索](#埋め込みと検索)
+7. [メモリとファクト抽出](#メモリとファクト抽出)
+8. [APIエンドポイント](#apiエンドポイント)
+9. [バッチ処理](#バッチ処理)
+10. [設定](#設定)
+11. [主要パターン](#主要パターン)
+12. [開発](#開発)
 
 ---
 
-## Overview
+## 概要
 
-### Architecture Style
-- **FastAPI** application with async support
-- **Agent-based** architecture using Claude's Direct Tools (function calling)
-- **Context-aware** AI with situational personality selection
-- **Memory system** with fact extraction and profile summarization
+### アーキテクチャスタイル
+- **FastAPI** アプリケーション（非同期サポート）
+- **エージェントベース** アーキテクチャ（ClaudeのDirect Tools / Function Calling使用）
+- **コンテキスト認識** AI（状況別パーソナリティ選択）
+- **メモリシステム**（ファクト抽出とプロフィール要約）
 
-### Tech Stack
+### 技術スタック
 
-| Component | Technology |
-|-----------|------------|
-| Framework | FastAPI |
-| Runtime | Python 3.12+ |
-| AI Model | Claude (Anthropic API) |
-| Embeddings | OpenAI text-embedding-3-small |
-| Database | PostgreSQL 16 + pgvector |
-| Async DB | asyncpg |
-| Storage | Cloudflare R2 (S3-compatible) |
+| コンポーネント | 技術 |
+|--------------|------|
+| フレームワーク | FastAPI |
+| ランタイム | Python 3.12+ |
+| AIモデル | Claude (Anthropic API) |
+| 埋め込み | OpenAI text-embedding-3-small |
+| データベース | PostgreSQL 16 + pgvector |
+| 非同期DB | asyncpg |
+| ストレージ | Cloudflare R2 (S3互換) |
 
-### Directory Structure
+### ディレクトリ構成
 
 ```
 kensan-ai/
 ├── src/kensan_ai/
-│   ├── main.py                    # FastAPI app entry
-│   ├── config.py                  # Settings (Pydantic BaseSettings)
-│   ├── agents/                    # Agent implementations
-│   │   ├── base.py               # AgentRunner core
-│   │   ├── chat.py               # General chat agent
-│   │   └── weekly_review.py      # Weekly review agent
-│   ├── tools/                     # Direct Tools (18+ tools)
-│   │   ├── base.py               # Tool registry & decorator
-│   │   ├── db_tools.py           # Database operations (7 tools)
-│   │   ├── memory_tools.py       # User memory (4 tools)
-│   │   ├── search_tools.py       # Semantic/keyword search (3 tools)
-│   │   └── storage_tools.py      # R2 file operations (4 tools)
-│   ├── context/                   # AI context management
-│   │   ├── detector.py           # Situation detection
-│   │   ├── resolver.py           # Context loading
-│   │   ├── variable_replacer.py  # Dynamic prompt variables
-│   │   └── ab_selector.py        # A/B testing
-│   ├── db/                        # Database layer
-│   │   ├── connection.py         # AsyncPG pool
-│   │   └── queries/              # Domain queries
-│   ├── embeddings/                # Vector embeddings
-│   │   └── service.py            # OpenAI embedding service
-│   ├── extraction/                # Fact extraction
-│   │   └── fact_extractor.py     # Claude-based extraction
-│   ├── logging/                   # Interaction logging
+│   ├── main.py                    # FastAPIアプリエントリー
+│   ├── config.py                  # 設定 (Pydantic BaseSettings)
+│   ├── errors.py                  # 統一エラースキーマ
+│   ├── agents/                    # エージェント実装
+│   │   ├── base.py               # AgentRunnerコア
+│   │   ├── message_history.py    # 会話メッセージ管理
+│   │   ├── chat.py               # 汎用チャットエージェント
+│   │   └── weekly_review.py      # 週次レビューエージェント
+│   ├── tools/                     # Direct Tools (18+ツール)
+│   │   ├── base.py               # ツールレジストリ & デコレータ
+│   │   ├── db_tools.py           # データベース操作 (7ツール)
+│   │   ├── memory_tools.py       # ユーザーメモリ (4ツール)
+│   │   ├── search_tools.py       # セマンティック/キーワード検索 (3ツール)
+│   │   └── storage_tools.py      # R2ファイル操作 (4ツール)
+│   ├── lib/                       # 共有ユーティリティ
+│   │   └── parsers.py            # UUID、日付、時刻パース
+│   ├── context/                   # AIコンテキスト管理
+│   │   ├── detector.py           # 状況検出
+│   │   ├── resolver.py           # コンテキスト読み込み
+│   │   ├── variable_replacer.py  # 動的プロンプト変数
+│   │   └── ab_selector.py        # A/Bテスト
+│   ├── db/                        # データベース層
+│   │   ├── connection.py         # AsyncPGプール
+│   │   └── queries/              # ドメインクエリ
+│   ├── embeddings/                # ベクトル埋め込み
+│   │   └── service.py            # OpenAI埋め込みサービス
+│   ├── extraction/                # ファクト抽出
+│   │   └── fact_extractor.py     # Claudeベース抽出
+│   ├── logging/                   # インタラクションログ
 │   │   └── interaction_logger.py
-│   ├── api/                       # HTTP layer
-│   │   ├── routes.py             # Endpoints
-│   │   └── schemas.py            # Pydantic models
-│   └── batch/                     # Offline jobs
+│   ├── api/                       # HTTP層
+│   │   ├── routes.py             # エンドポイント
+│   │   └── schemas.py            # Pydanticモデル
+│   └── batch/                     # オフラインジョブ
 │       ├── profile_summarizer.py
 │       └── run_summarizer.py
+├── tests/                         # テストスイート
+│   ├── test_errors.py
+│   ├── test_message_history.py
+│   ├── test_parsers.py
+│   └── test_config.py
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
+```
+
+### リクエスト処理フロー
+
+```mermaid
+flowchart TB
+    subgraph "API層"
+        Request[POST /chat]
+        JWT[JWTからuserIDを抽出]
+        Response[ChatResponseを返却]
+    end
+
+    subgraph "コンテキスト解決"
+        Detect[状況を検出]
+        Load[DBからAIコンテキストを読込]
+        Replace[プロンプト内の{変数}を置換]
+    end
+
+    subgraph "エージェント実行ループ"
+        Call[Claude APIを呼び出し]
+        Check{レスポンスにtool_use?}
+        Execute[ツールをローカル実行]
+        Inject[argsにuser_idを注入]
+        Append[ツール結果をメッセージに追加]
+        Return[最終テキストを抽出]
+    end
+
+    subgraph "後処理"
+        Log[ai_interactionsに記録]
+        Extract[ファクトを非同期抽出]
+    end
+
+    Request --> JWT
+    JWT --> Detect
+    Detect --> Load
+    Load --> Replace
+    Replace --> Call
+
+    Call --> Check
+    Check -->|Yes| Inject
+    Inject --> Execute
+    Execute --> Append
+    Append --> Call
+    Check -->|No| Return
+
+    Return --> Log
+    Log -.->|async| Extract
+    Log --> Response
+```
+
+---
+
+## エラーハンドリング (`errors.py`)
+
+一貫した例外処理のための統一エラースキーマ:
+
+```python
+# 基底エラークラス
+class ToolError(Exception):
+    """ツール実行失敗の基底エラー"""
+    def __init__(self, message: str, details: dict | None = None):
+        self.message = message
+        self.details = details or {}
+
+class ValidationError(ToolError):
+    """無効な入力または引数エラー"""
+    pass
+
+class NotFoundError(ToolError):
+    """リソース未検出エラー"""
+    pass
+
+class AuthenticationError(ToolError):
+    """認証失敗"""
+    pass
+
+class AuthorizationError(ToolError):
+    """権限拒否エラー"""
+    pass
+
+class DatabaseError(ToolError):
+    """データベース操作失敗"""
+    pass
+
+class ExternalServiceError(ToolError):
+    """外部API失敗 (Anthropic, OpenAI等)"""
+    pass
+```
+
+**ツールでの使用例:**
+```python
+from kensan_ai.errors import ValidationError, NotFoundError
+
+@tool(name="get_task", ...)
+async def get_task(args: dict) -> dict:
+    task_id = args.get("task_id")
+    if not task_id:
+        raise ValidationError("task_id is required")
+
+    task = await db_get_task(task_id)
+    if not task:
+        raise NotFoundError(f"Task not found: {task_id}")
+
+    return {"task": task}
+```
+
+**FastAPI例外ハンドラ:**
+```python
+@app.exception_handler(ToolError)
+async def tool_error_handler(request, exc):
+    status_code = 400 if isinstance(exc, ValidationError) else 500
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": exc.message, "details": exc.details}
+    )
+```
+
+---
+
+## 共有ユーティリティ (`lib/parsers.py`)
+
+バリデーション付きの共通パースユーティリティ:
+
+```python
+# UUIDパース
+def parse_uuid(value: str | None) -> UUID | None:
+    """文字列をUUIDにパース、無効な場合はNoneを返す"""
+
+def require_uuid(value: str | None, field: str = "id") -> UUID:
+    """文字列をUUIDにパース、無効な場合はValidationErrorを発生"""
+
+# 日付パース (YYYY-MM-DD)
+def parse_date(value: str | None) -> date | None:
+    """文字列を日付にパース、無効な場合はNoneを返す"""
+
+def require_date(value: str | None, field: str = "date") -> date:
+    """文字列を日付にパース、無効な場合はValidationErrorを発生"""
+
+# 時刻パース (HH:MM または HH:MM:SS)
+def parse_time(value: str | None) -> time | None:
+    """文字列を時刻にパース、無効な場合はNoneを返す"""
+
+def require_time(value: str | None, field: str = "time") -> time:
+    """文字列を時刻にパース、無効な場合はValidationErrorを発生"""
+```
+
+**使用例:**
+```python
+from kensan_ai.lib.parsers import require_uuid, parse_date
+
+task_id = require_uuid(args.get("task_id"), "task_id")  # ValidationErrorを発生
+due_date = parse_date(args.get("due_date"))  # 無効な場合はNoneを返す
 ```
 
 ---
 
 ## Direct Tools
 
-### Tool Infrastructure (`tools/base.py`)
+### ツール実行シーケンス
 
-Decorator-based tool registry:
+```mermaid
+sequenceDiagram
+    participant Claude as Claude API
+    participant Agent as AgentRunner
+    participant Registry as Tool Registry
+    participant Tool as Tool Function
+    participant DB as PostgreSQL
+
+    Agent->>Claude: messages + tools schema
+    Claude-->>Agent: tool_useブロック付きレスポンス
+
+    loop 各tool_useに対して
+        Agent->>Agent: argsにuser_idがあるか確認
+        Agent->>Agent: 不足ならuser_idを注入
+        Agent->>Registry: execute_tool(name, args)
+        Registry->>Registry: get_tool(name)
+        Registry->>Tool: await tool_func(args)
+        Tool->>DB: SQLクエリ (user_idフィルタ付き)
+        DB-->>Tool: 結果行
+        Tool->>Tool: dictに変換
+        Tool-->>Registry: {result: ...}
+        Registry->>Registry: format_tool_result(result)
+        Registry-->>Agent: フォーマット済み文字列
+    end
+
+    Agent->>Agent: tool_resultをメッセージに追加
+    Agent->>Claude: 会話を継続
+    Claude-->>Agent: 最終テキストレスポンス (end_turn)
+```
+
+### ツールインフラ (`tools/base.py`)
+
+デコレータベースのツールレジストリ:
 
 ```python
 @tool(
@@ -109,19 +302,19 @@ async def get_tasks(args: dict[str, Any]) -> dict[str, Any]:
     return {"tasks": tasks}
 ```
 
-**Core Functions:**
+**コア関数:**
 ```python
 get_tool(name: str) -> ToolDefinition | None
 get_all_tools() -> list[ToolDefinition]
-get_tools_api_schema(tool_names?) -> list[dict]  # Anthropic API format
+get_tools_api_schema(tool_names?) -> list[dict]  # Anthropic API形式
 execute_tool(name: str, args: dict) -> Any
 format_tool_result(result: Any) -> str
 ```
 
-### Database Tools (`db_tools.py`)
+### データベースツール (`db_tools.py`)
 
-| Tool | Description | Writes |
-|------|-------------|--------|
+| ツール | 説明 | 書込 |
+|-------|------|-----|
 | `get_goals_and_milestones` | 目標とマイルストーン取得 | No |
 | `get_tasks` | タスク取得 (フィルタ可) | No |
 | `create_task` | タスク作成 | Yes |
@@ -130,7 +323,7 @@ format_tool_result(result: Any) -> str
 | `create_time_block` | 予定作成 | Yes |
 | `get_time_entries` | 作業実績取得 | No |
 
-**Example - create_time_block:**
+**例 - create_time_block:**
 ```python
 @tool(
     name="create_time_block",
@@ -151,62 +344,97 @@ format_tool_result(result: Any) -> str
     },
 )
 async def create_time_block(args: dict) -> dict:
-    # Validates and creates time block
+    # バリデーションしてタイムブロックを作成
     block = await db_create_time_block(...)
     return {"timeBlock": block}
 ```
 
-### Memory Tools (`memory_tools.py`)
+### メモリツール (`memory_tools.py`)
 
-| Tool | Description |
-|------|-------------|
+| ツール | 説明 |
+|-------|------|
 | `get_user_memory` | ユーザープロフィール取得 |
 | `get_user_facts` | 抽出済みファクト取得 |
 | `add_user_fact` | ファクト手動追加 |
 | `get_recent_interactions` | 最近のやり取り取得 |
 
-**Fact Types:**
+**ファクトタイプ:**
 - `preference` - 好み (例: "早朝が好き")
 - `habit` - 習慣 (例: "毎朝7時に起きる")
 - `skill` - スキル (例: "Pythonが得意")
 - `goal` - 目標 (例: "来月までにリリース")
 - `constraint` - 制約 (例: "平日は19時以降のみ")
 
-### Search Tools (`search_tools.py`)
+### 検索ツール (`search_tools.py`)
 
-| Tool | Description |
-|------|-------------|
+| ツール | 説明 |
+|-------|------|
 | `semantic_search` | ベクトル類似検索 (pgvector) |
 | `keyword_search` | 全文検索 (tsvector) |
 | `hybrid_search` | セマンティック + キーワード複合 |
 
-**Hybrid Search Algorithm:**
+**ハイブリッド検索アルゴリズム:**
 ```python
 combined_score = semantic_score * weight + keyword_score * (1 - weight)
-# Default weight: 0.7 (semantic-heavy)
+# デフォルト重み: 0.7 (セマンティック重視)
 ```
 
-### Storage Tools (`storage_tools.py`)
+### ストレージツール (`storage_tools.py`)
 
-| Tool | Description |
-|------|-------------|
+| ツール | 説明 |
+|-------|------|
 | `upload_file` | R2にファイルアップロード |
 | `get_file` | ファイルメタデータ取得 |
 | `delete_file` | ファイル削除 |
 | `get_upload_url` | 署名付きアップロードURL生成 |
 
-**Key Generation:**
+**キー生成:**
 ```
 users/{user_id}/{timestamp}/{uuid}_{filename}
 ```
 
 ---
 
-## Agents
+## エージェント
+
+### MessageHistory (`agents/message_history.py`)
+
+会話メッセージ履歴を管理（AgentRunnerからSRP抽出）:
+
+```python
+class MessageHistory:
+    """スレッドセーフな会話メッセージストレージ"""
+
+    def __init__(self):
+        self._messages: list[dict] = []
+
+    def add_user_message(self, content: str) -> None:
+        """ユーザーメッセージを追加"""
+        self._messages.append({"role": "user", "content": content})
+
+    def add_assistant_message(self, content: list) -> None:
+        """tool_useブロック付きアシスタントメッセージを追加"""
+        self._messages.append({"role": "assistant", "content": content})
+
+    def add_tool_results(self, results: list[dict]) -> None:
+        """会話継続用のツール結果を追加"""
+        self._messages.append({"role": "user", "content": results})
+
+    def get_messages(self) -> list[dict]:
+        """API呼び出し用のメッセージコピーを返す"""
+        return self._messages.copy()
+
+    def clear(self) -> None:
+        """全メッセージをクリア"""
+        self._messages.clear()
+
+    def __len__(self) -> int:
+        return len(self._messages)
+```
 
 ### AgentRunner (`agents/base.py`)
 
-Core orchestrator for multi-turn Claude interactions:
+マルチターンClaudeインタラクションのコアオーケストレータ:
 
 ```python
 runner = AgentRunner(
@@ -221,29 +449,29 @@ result = await runner.run(
     user_id="user-uuid",
 )
 
-print(result.text)        # Final response
-print(result.tool_calls)  # List of executed tools
+print(result.text)        # 最終レスポンス
+print(result.tool_calls)  # 実行されたツールのリスト
 print(result.tokens_input, result.tokens_output)
 ```
 
-**Execution Flow:**
-1. Call Claude with system prompt + tools
-2. If `tool_use` in response:
-   - Execute each tool locally
-   - Inject `user_id` automatically
-   - Append results to conversation
-   - Continue loop
-3. If `end_turn` or no tools → return result
+**実行フロー:**
+1. システムプロンプト + ツールでClaudeを呼び出し
+2. レスポンスに`tool_use`がある場合:
+   - 各ツールをローカルで実行
+   - `user_id`を自動注入
+   - 結果を会話に追加
+   - ループを継続
+3. `end_turn`またはツールなし → 結果を返却
 
-**Streaming:**
+**ストリーミング:**
 ```python
 async for chunk in runner.stream(user_message, user_id):
-    print(chunk, end="")  # Real-time text output
+    print(chunk, end="")  # リアルタイムテキスト出力
 ```
 
-### Chat Agent (`agents/chat.py`)
+### チャットエージェント (`agents/chat.py`)
 
-General conversation with task/time management:
+タスク/時間管理を伴う汎用会話:
 
 ```python
 SYSTEM_PROMPT = """
@@ -265,9 +493,9 @@ ALLOWED_TOOLS = [
 ]
 ```
 
-### Weekly Review Agent (`agents/weekly_review.py`)
+### 週次レビューエージェント (`agents/weekly_review.py`)
 
-Structured retrospective:
+構造化された振り返り:
 
 ```python
 SYSTEM_PROMPT = """
@@ -278,13 +506,13 @@ SYSTEM_PROMPT = """
 4. 来週へのアドバイス
 """
 
-# Output parsing
+# 出力パース
 def _parse_review_response(text: str) -> ReviewData:
-    # Extracts sections: summary, good_points, improvement_points, advice
-    # Detects bullet points: -, •, ・, ✓, →
+    # セクションを抽出: summary, good_points, improvement_points, advice
+    # 箇条書きを検出: -, •, ・, ✓, →
 ```
 
-**Response Format:**
+**レスポンス形式:**
 ```
 ### 今週の振り返り
 (サマリー)
@@ -302,18 +530,74 @@ def _parse_review_response(text: str) -> ReviewData:
 
 ---
 
-## Context Management
+## コンテキスト管理
 
-### Situation Detection (`context/detector.py`)
+### コンテキスト選択フロー
 
-Time-based context selection:
+```mermaid
+flowchart TB
+    subgraph 入力
+        Time[現在時刻 JST]
+        Explicit[明示的Situationパラメータ]
+    end
+
+    subgraph "状況検出"
+        HasExplicit{明示指定あり?}
+        Morning{05:00-10:00?}
+        Evening{17:00-22:00?}
+        Default[デフォルト: chat]
+    end
+
+    subgraph "コンテキスト読込"
+        Query[ai_contextsテーブルをクエリ]
+        HasExperiment{experiment_id?}
+        ABSelect[重みでA/B選択]
+        DefaultCtx[is_default=trueを取得]
+    end
+
+    subgraph "変数置換"
+        UserMemory["{user_memory}"]
+        TodaySchedule["{today_schedule}"]
+        PendingTasks["{pending_tasks}"]
+        RecentContext["{recent_context}"]
+    end
+
+    subgraph 出力
+        Context[AIContext準備完了]
+    end
+
+    Explicit --> HasExplicit
+    Time --> HasExplicit
+    HasExplicit -->|Yes| Query
+    HasExplicit -->|No| Morning
+    Morning -->|Yes, morning| Query
+    Morning -->|No| Evening
+    Evening -->|Yes, evening| Query
+    Evening -->|No| Default
+    Default --> Query
+
+    Query --> HasExperiment
+    HasExperiment -->|Yes| ABSelect
+    HasExperiment -->|No| DefaultCtx
+    ABSelect --> UserMemory
+    DefaultCtx --> UserMemory
+
+    UserMemory --> TodaySchedule
+    TodaySchedule --> PendingTasks
+    PendingTasks --> RecentContext
+    RecentContext --> Context
+```
+
+### 状況検出 (`context/detector.py`)
+
+時刻ベースのコンテキスト選択:
 
 ```python
 class Situation(Enum):
     MORNING = "morning"   # 05:00-10:00
     EVENING = "evening"   # 17:00-22:00
-    WEEKLY = "weekly"     # Explicit only
-    CHAT = "chat"         # Default
+    WEEKLY = "weekly"     # 明示指定のみ
+    CHAT = "chat"         # デフォルト
 
 def detect_situation(
     explicit: str | None = None,
@@ -330,9 +614,9 @@ def detect_situation(
     return Situation.CHAT
 ```
 
-### Context Resolver (`context/resolver.py`)
+### コンテキストリゾルバ (`context/resolver.py`)
 
-Loads AI configuration from database:
+データベースからAI設定を読み込み:
 
 ```python
 async def get_context(
@@ -340,40 +624,40 @@ async def get_context(
     user_id: str,
     experiment_id: str | None = None
 ) -> AIContext:
-    # 1. If experiment_id → A/B test selection
-    # 2. Else → default context for situation
-    # 3. Apply variable replacement
+    # 1. experiment_idがあれば → A/Bテスト選択
+    # 2. そうでなければ → situationのデフォルトコンテキスト
+    # 3. 変数置換を適用
     return context
 ```
 
-**Database Schema (`ai_contexts`):**
+**データベーススキーマ (`ai_contexts`):**
 ```sql
 id UUID PRIMARY KEY
 name VARCHAR(100)
 situation VARCHAR(20)  -- chat/morning/evening/weekly
-system_prompt TEXT     -- May contain {variables}
-allowed_tools TEXT[]   -- Tool names
+system_prompt TEXT     -- {変数}を含む可能性あり
+allowed_tools TEXT[]   -- ツール名
 max_turns INTEGER
 temperature FLOAT
-experiment_id UUID     -- For A/B testing
+experiment_id UUID     -- A/Bテスト用
 traffic_weight INTEGER
 is_default BOOLEAN
 is_active BOOLEAN
 ```
 
-### Variable Replacement (`context/variable_replacer.py`)
+### 変数置換 (`context/variable_replacer.py`)
 
-Dynamic prompt personalization:
+動的プロンプトパーソナライゼーション:
 
 ```python
 SUPPORTED_VARIABLES = {
-    "user_memory",      # Profile summary + strengths
-    "today_schedule",   # Today's time blocks
-    "pending_tasks",    # Incomplete tasks
-    "recent_context",   # Last 3 interactions
+    "user_memory",      # プロフィール要約 + 強み
+    "today_schedule",   # 今日のタイムブロック
+    "pending_tasks",    # 未完了タスク
+    "recent_context",   # 最近3件のやり取り
 }
 
-# Example prompt with variables
+# 変数付きプロンプト例
 system_prompt = """
 {user_memory}
 
@@ -384,7 +668,7 @@ system_prompt = """
 {pending_tasks}
 """
 
-# After replacement
+# 置換後
 system_prompt = """
 Yu様はKubernetesとGo開発に興味があります。
 強み: インフラ構築、問題解決
@@ -400,9 +684,9 @@ Yu様はKubernetesとGo開発に興味があります。
 """
 ```
 
-### A/B Testing (`context/ab_selector.py`)
+### A/Bテスト (`context/ab_selector.py`)
 
-Deterministic traffic allocation:
+決定論的トラフィック割り当て:
 
 ```python
 def select_context(
@@ -410,10 +694,10 @@ def select_context(
     experiment_id: str,
     contexts: list[AIContext]
 ) -> AIContext:
-    # SHA256 hash for deterministic bucket
+    # 決定論的バケット用にSHA256ハッシュ
     bucket = int(sha256(f"{user_id}:{experiment_id}").hexdigest()[:4], 16) % 100
 
-    # Find context by cumulative weight
+    # 累積重みでコンテキストを検索
     cumulative = 0
     for ctx in contexts:
         cumulative += ctx.traffic_weight
@@ -423,25 +707,25 @@ def select_context(
 
 ---
 
-## Database Queries
+## データベースクエリ
 
-### Connection Pool (`db/connection.py`)
+### コネクションプール (`db/connection.py`)
 
 ```python
-# Singleton pool (min_size=2, max_size=10)
+# シングルトンプール (min_size=2, max_size=10)
 async def get_pool() -> asyncpg.Pool
 
-# Context manager for connections
+# コネクション用コンテキストマネージャ
 async with get_connection() as conn:
     rows = await conn.fetch("SELECT ...")
 ```
 
-### Query Modules (`db/queries/`)
+### クエリモジュール (`db/queries/`)
 
 **goals.py:**
 ```python
 async def get_goals_and_milestones(user_id: UUID) -> list[dict]:
-    # Returns goals with nested milestones and task counts
+    # マイルストーンとタスク数をネストした目標を返す
     return [
         {
             "id": "...",
@@ -489,28 +773,28 @@ async def create_time_block(
 
 ---
 
-## Embeddings & Search
+## 埋め込みと検索
 
-### Embedding Service (`embeddings/service.py`)
+### 埋め込みサービス (`embeddings/service.py`)
 
-OpenAI embeddings wrapper:
+OpenAI埋め込みラッパー:
 
 ```python
 class EmbeddingService:
-    MODEL = "text-embedding-3-small"  # 1536 dimensions
+    MODEL = "text-embedding-3-small"  # 1536次元
 
     async def generate_embedding(text: str) -> list[float]
     async def generate_embeddings(texts: list[str]) -> list[list[float]]
 ```
 
-**Features:**
-- Lazy initialization
-- Text truncation (max 16000 chars)
-- Batch processing
+**機能:**
+- 遅延初期化
+- テキスト切り詰め (最大16000文字)
+- バッチ処理
 
-### Search Implementation
+### 検索実装
 
-**Documents Table:**
+**ドキュメントテーブル:**
 ```sql
 id UUID PRIMARY KEY
 user_id UUID
@@ -521,7 +805,7 @@ embedding vector(1536)    -- pgvector
 created_at TIMESTAMP
 ```
 
-**Semantic Search:**
+**セマンティック検索:**
 ```sql
 SELECT id, name, content_type,
        1 - (embedding <=> $2) as similarity
@@ -531,7 +815,7 @@ ORDER BY embedding <=> $2
 LIMIT $3
 ```
 
-**Keyword Search:**
+**キーワード検索:**
 ```sql
 SELECT id, name, content_type,
        ts_rank(to_tsvector('simple', content), query) as rank
@@ -541,7 +825,7 @@ WHERE user_id = $1
 ORDER BY rank DESC
 ```
 
-**Hybrid Search:**
+**ハイブリッド検索:**
 ```sql
 WITH semantic AS (...),
      keyword AS (...)
@@ -554,11 +838,78 @@ ORDER BY score DESC
 
 ---
 
-## Memory & Fact Extraction
+## メモリとファクト抽出
 
-### Fact Extractor (`extraction/fact_extractor.py`)
+### メモリ構築パイプライン
 
-Automatic extraction from conversations:
+```mermaid
+flowchart LR
+    subgraph "リアルタイム (チャットごと)"
+        Chat[ユーザーチャット]
+        Logger[InteractionLogger]
+        Extractor[FactExtractor]
+    end
+
+    subgraph "ストレージ"
+        Interactions[(ai_interactions)]
+        Facts[(user_facts)]
+        Memory[(user_memory)]
+    end
+
+    subgraph "バッチ (夜間)"
+        Summarizer[ProfileSummarizer]
+    end
+
+    subgraph "将来のチャット"
+        Variable["{user_memory}" 変数]
+        Prompt[システムプロンプト]
+    end
+
+    Chat --> Logger
+    Logger --> Interactions
+    Logger -.->|async| Extractor
+    Extractor --> Facts
+
+    Facts --> Summarizer
+    Summarizer --> Memory
+
+    Memory --> Variable
+    Variable --> Prompt
+    Prompt --> Chat
+```
+
+### ファクト抽出詳細
+
+```mermaid
+sequenceDiagram
+    participant Chat as POST /chat
+    participant Logger as InteractionLogger
+    participant Extractor as FactExtractor
+    participant Claude as Claude API
+    participant DB as PostgreSQL
+
+    Chat->>Logger: log(user_input, ai_output, ...)
+    Logger->>DB: INSERT INTO ai_interactions
+    DB-->>Logger: interaction_id
+    Logger-->>Chat: interaction_id
+
+    Note over Chat,DB: 非同期バックグラウンドタスク
+    Chat--)Extractor: extract_and_save(user_id, user_input, ai_output, interaction_id)
+
+    Extractor->>Claude: 抽出プロンプト + 会話
+    Claude-->>Extractor: ファクトのJSON配列
+
+    loop 各ファクトに対して
+        Extractor->>Extractor: fact_typeをバリデート
+        Extractor->>Extractor: confidence >= 0.5を確認
+        Extractor->>DB: 重複をチェック
+        Extractor->>DB: INSERT INTO user_facts
+    end
+```
+
+### ファクト抽出器 (`extraction/fact_extractor.py`)
+
+会話からの自動抽出:
 
 ```python
 class FactExtractor:
@@ -570,13 +921,13 @@ class FactExtractor:
         ai_output: str,
         interaction_id: str
     ) -> list[dict]:
-        # 1. Call Claude with extraction prompt
-        # 2. Parse JSON response
-        # 3. Validate and deduplicate
-        # 4. Save to user_facts table
+        # 1. 抽出プロンプトでClaudeを呼び出し
+        # 2. JSONレスポンスをパース
+        # 3. バリデーションと重複排除
+        # 4. user_factsテーブルに保存
 ```
 
-**Extraction Prompt:**
+**抽出プロンプト:**
 ```
 以下の会話からユーザーに関する事実を抽出してください。
 明示的に述べられた事実のみ抽出し、推測は避けてください。
@@ -590,7 +941,7 @@ JSON形式で出力:
 ]
 ```
 
-**Database Schema (`user_facts`):**
+**データベーススキーマ (`user_facts`):**
 ```sql
 id UUID PRIMARY KEY
 user_id UUID
@@ -598,14 +949,14 @@ fact_type VARCHAR(50)
 content TEXT
 source VARCHAR(50)      -- ai_extraction/conversation
 confidence FLOAT        -- 0.0-1.0
-expires_at TIMESTAMP    -- Optional expiration
+expires_at TIMESTAMP    -- オプション有効期限
 source_interaction_id UUID
 created_at TIMESTAMP
 ```
 
-### Interaction Logger (`logging/interaction_logger.py`)
+### インタラクションロガー (`logging/interaction_logger.py`)
 
-Records all AI conversations:
+全AI会話を記録:
 
 ```python
 async def log(
@@ -619,7 +970,7 @@ async def log(
     tokens_output: int | None = None,
     latency_ms: int | None = None,
     context_id: str | None = None
-) -> str:  # Returns interaction_id
+) -> str:  # interaction_idを返す
 
 async def add_feedback(
     interaction_id: str,
@@ -636,12 +987,12 @@ async def get_user_interactions(
 
 ---
 
-## API Endpoints
+## APIエンドポイント
 
-### Routes (`api/routes.py`)
+### ルート (`api/routes.py`)
 
-| Method | Path | Description |
-|--------|------|-------------|
+| メソッド | パス | 説明 |
+|---------|------|------|
 | GET | `/health` | ヘルスチェック |
 | POST | `/chat` | 非ストリーミングチャット |
 | POST | `/chat/stream` | ストリーミングチャット |
@@ -654,9 +1005,9 @@ async def get_user_interactions(
 | POST | `/ai/ask` | 質問応答 |
 | POST | `/interactions/{id}/feedback` | フィードバック送信 |
 
-### Authentication
+### 認証
 
-JWT token from `Authorization: Bearer <token>`:
+`Authorization: Bearer <token>`からJWTトークン:
 
 ```python
 def get_user_id_from_token(authorization: str) -> str:
@@ -665,17 +1016,17 @@ def get_user_id_from_token(authorization: str) -> str:
     return payload["sub"]  # user_id
 ```
 
-### Request/Response Examples
+### リクエスト/レスポンス例
 
 **POST /chat:**
 ```json
-// Request
+// リクエスト
 {
   "message": "明日の予定を作って",
   "session_id": "optional-session-id"
 }
 
-// Response
+// レスポンス
 {
   "message": "明日の予定を作成しました...",
   "session_id": "abc123",
@@ -689,13 +1040,13 @@ def get_user_id_from_token(authorization: str) -> str:
 
 **POST /ai/reviews/generate:**
 ```json
-// Request
+// リクエスト
 {
   "weekStart": "2026-01-20",
   "weekEnd": "2026-01-26"
 }
 
-// Response
+// レスポンス
 {
   "id": "review-uuid",
   "userId": "user-uuid",
@@ -711,11 +1062,11 @@ def get_user_id_from_token(authorization: str) -> str:
 
 ---
 
-## Batch Processing
+## バッチ処理
 
-### Profile Summarizer (`batch/profile_summarizer.py`)
+### プロフィール要約 (`batch/profile_summarizer.py`)
 
-Aggregates facts into user profiles:
+ファクトをユーザープロフィールに集約:
 
 ```python
 class ProfileSummarizer:
@@ -723,50 +1074,50 @@ class ProfileSummarizer:
         since: datetime | None = None,
         days: int = 1
     ):
-        # 1. Find users with new facts
-        # 2. For each user:
-        #    - Get existing profile
-        #    - Fetch top 50 facts (by confidence)
-        #    - Generate summary via Claude
-        #    - Extract strengths (skill type, confidence >= 0.7)
-        #    - Extract growth areas (goal/constraint types)
-        #    - Upsert user_memory record
+        # 1. 新しいファクトを持つユーザーを検索
+        # 2. 各ユーザーに対して:
+        #    - 既存プロフィールを取得
+        #    - 上位50件のファクト（confidence順）を取得
+        #    - Claudeで要約を生成
+        #    - 強みを抽出（skillタイプ、confidence >= 0.7）
+        #    - 成長領域を抽出（goal/constraintタイプ）
+        #    - user_memoryレコードをupsert
 ```
 
-**Database Schema (`user_memory`):**
+**データベーススキーマ (`user_memory`):**
 ```sql
 user_id UUID PRIMARY KEY
-profile_summary TEXT        -- 300 chars max
+profile_summary TEXT        -- 最大300文字
 preferences JSONB
-strengths TEXT[]           -- From skills
-growth_areas TEXT[]        -- From goals/constraints
+strengths TEXT[]           -- スキルから
+growth_areas TEXT[]        -- 目標/制約から
 last_updated TIMESTAMP
 ```
 
-### CLI Usage
+### CLI使用法
 
 ```bash
-# Summarize users with facts from last 1 day
+# 過去1日間のファクトを持つユーザーを要約
 python -m kensan_ai.batch.run_summarizer --days 1
 
-# Summarize since specific date
+# 特定日時以降を要約
 python -m kensan_ai.batch.run_summarizer --since 2026-01-01T00:00:00
 
-# Verbose mode
+# 詳細モード
 python -m kensan_ai.batch.run_summarizer --days 7 --verbose
 ```
 
 ---
 
-## Configuration
+## 設定
 
 ### Settings (`config.py`)
 
-Pydantic BaseSettings with environment variables:
+環境変数と本番バリデーション付きPydantic BaseSettings:
 
 ```python
 class Settings(BaseSettings):
-    # Database
+    # データベース
     DATABASE_URL: str | None = None
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
@@ -780,74 +1131,94 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 
-    # Storage
+    # ストレージ
     R2_ENDPOINT: str | None = None
     R2_ACCESS_KEY: str | None = None
     R2_SECRET_KEY: str | None = None
     R2_BUCKET: str | None = None
 
-    # Server
+    # サーバー
     SERVER_PORT: int = 8089
     SERVER_ENV: str = "development"
     HOST: str = "0.0.0.0"
 
-    # Agent
+    # エージェント
     DEFAULT_MAX_TURNS: int = 10
     DEFAULT_TEMPERATURE: float = 0.7
 
-    # Security
+    # セキュリティ
     JWT_SECRET: str = "dev-secret-key"
+
+    @model_validator(mode='after')
+    def validate_production(self) -> 'Settings':
+        """本番環境で必須設定をバリデート"""
+        if self.SERVER_ENV == 'production':
+            errors = []
+            if not self.ANTHROPIC_API_KEY or self.ANTHROPIC_API_KEY == 'dev-key':
+                errors.append("ANTHROPIC_API_KEY must be set in production")
+            if self.JWT_SECRET == 'dev-secret-key':
+                errors.append("JWT_SECRET must be changed in production")
+            if not self.DATABASE_URL and self.DB_PASSWORD == 'kensan':
+                errors.append("DB_PASSWORD must be changed in production")
+            if errors:
+                raise ValueError(f"Production validation failed: {', '.join(errors)}")
+        return self
 ```
 
-### Environment Variables
+**本番バリデーション:**
+- APIキーが開発用デフォルトでないことを確認
+- 安全でないJWTシークレットを防止
+- データベース認証情報をバリデート
+
+### 環境変数
 
 ```bash
-# Required
+# 必須
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Database
+# データベース
 DATABASE_URL=postgresql://user:pass@host:5432/db
-# OR individual components
+# または個別コンポーネント
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=kensan
 DB_PASSWORD=kensan
 DB_NAME=kensan
 
-# Optional
-OPENAI_API_KEY=sk-...          # For embeddings
-R2_ENDPOINT=https://...        # For file storage
+# オプション
+OPENAI_API_KEY=sk-...          # 埋め込み用
+R2_ENDPOINT=https://...        # ファイルストレージ用
 JWT_SECRET=your-secret-key
 ```
 
 ---
 
-## Key Patterns
+## 主要パターン
 
-### Tool Registration Pattern
+### ツール登録パターン
 
 ```python
-# 1. Define tool with decorator
+# 1. デコレータでツールを定義
 @tool(name="...", description="...", input_schema={...})
 async def my_tool(args: dict) -> dict:
     return {"result": "..."}
 
-# 2. Add to category list
+# 2. カテゴリリストに追加
 ALL_MY_TOOLS = [my_tool]
 
-# 3. Export from __init__.py
+# 3. __init__.pyからエクスポート
 from .my_tools import my_tool, ALL_MY_TOOLS
 
-# 4. Add to ALL_TOOLS aggregation
+# 4. ALL_TOOLS集約に追加
 ALL_TOOLS = [*ALL_DB_TOOLS, *ALL_MY_TOOLS, ...]
 ```
 
-### User ID Injection
+### User ID注入
 
-AgentRunner automatically injects `user_id`:
+AgentRunnerが自動的に`user_id`を注入:
 
 ```python
-# In AgentRunner.run():
+# AgentRunner.run()内:
 for tool_use in tool_uses:
     args = tool_use.input
     if self.user_id and "user_id" not in args:
@@ -855,18 +1226,18 @@ for tool_use in tool_uses:
     result = await execute_tool(tool_use.name, args)
 ```
 
-### Background Task Pattern
+### バックグラウンドタスクパターン
 
 ```python
-# Non-blocking fact extraction
+# ノンブロッキングファクト抽出
 @router.post("/chat")
 async def chat(request: ChatRequest):
     result = await runner.run(request.message, user_id)
 
-    # Log interaction
+    # インタラクションを記録
     interaction_id = await logger.log(...)
 
-    # Fire-and-forget fact extraction
+    # ファイアアンドフォーゲットでファクト抽出
     asyncio.create_task(
         extractor.extract_and_save(user_id, request.message, result.text, interaction_id)
     )
@@ -874,24 +1245,24 @@ async def chat(request: ChatRequest):
     return ChatResponse(message=result.text, ...)
 ```
 
-### Context Variable Pattern
+### コンテキスト変数パターン
 
 ```python
-# Define variable resolver
+# 変数リゾルバを定義
 async def resolve_user_memory(user_id: str) -> str:
     memory = await get_user_memory(user_id)
     if not memory:
         return "(ユーザー情報なし)"
     return f"{memory.profile_summary}\n強み: {', '.join(memory.strengths)}"
 
-# Register variable
+# 変数を登録
 VARIABLE_RESOLVERS = {
     "user_memory": resolve_user_memory,
     "today_schedule": resolve_today_schedule,
     ...
 }
 
-# Replace in prompt
+# プロンプト内で置換
 async def replace_variables(prompt: str, user_id: str) -> str:
     for var, resolver in VARIABLE_RESOLVERS.items():
         if f"{{{var}}}" in prompt:
@@ -902,108 +1273,156 @@ async def replace_variables(prompt: str, user_id: str) -> str:
 
 ---
 
-## Development
+## 開発
 
-### Running Locally
+### ローカル実行
 
 ```bash
 cd kensan-ai
 
-# Install dependencies
+# 依存関係をインストール
 pip install -e .
 
-# Run server
+# サーバーを起動
 uvicorn kensan_ai.main:app --reload --port 8089
 ```
 
 ### Docker
 
 ```bash
-# From project root
+# プロジェクトルートから
 docker compose up ai-service
 ```
 
-### Adding a New Tool
+### 新しいツールの追加
 
-1. Create function in appropriate file (`db_tools.py`, `memory_tools.py`, etc.)
-2. Decorate with `@tool(name, description, input_schema)`
-3. Add to `ALL_*_TOOLS` list
-4. Export from `tools/__init__.py`
-5. Include in `ALL_TOOLS` aggregation
+1. 適切なファイル（`db_tools.py`、`memory_tools.py`等）に関数を作成
+2. `@tool(name, description, input_schema)`でデコレート
+3. `ALL_*_TOOLS`リストに追加
+4. `tools/__init__.py`からエクスポート
+5. `ALL_TOOLS`集約に含める
 
-### Adding a New Situation
+### 新しい状況の追加
 
-1. Add enum to `Situation` in `context/detector.py`
-2. Add detection logic if time-based
-3. Create system prompt in `agents/`
-4. Add `ai_contexts` record in database
+1. `context/detector.py`の`Situation`にenumを追加
+2. 時刻ベースなら検出ロジックを追加
+3. `agents/`にシステムプロンプトを作成
+4. データベースに`ai_contexts`レコードを追加
 
-### Testing
+### テスト
 
 ```bash
-# Run tests
+# テストを実行
 pytest
 
-# With coverage
+# カバレッジ付き
 pytest --cov=kensan_ai
 
-# Specific test file
+# 特定のテストファイル
 pytest tests/test_tools.py -v
 ```
 
 ---
 
-## Data Flow Diagrams
+## データフロー図
 
-### Chat Flow
+### チャットフロー (Mermaid)
+
+```mermaid
+sequenceDiagram
+    participant Client as フロントエンド
+    participant API as POST /chat
+    participant Ctx as ContextResolver
+    participant Agent as AgentRunner
+    participant Claude as Claude API
+    participant Tools as Tool Registry
+    participant DB as PostgreSQL
+    participant Logger as InteractionLogger
+
+    Client->>API: {message, session_id?}
+    API->>API: JWTからuser_idを抽出
+
+    API->>Ctx: get_context(situation, user_id)
+    Ctx->>DB: SELECT FROM ai_contexts
+    Ctx->>Ctx: {変数}を置換
+    Ctx-->>API: AIContext
+
+    API->>Agent: run(message, user_id)
+
+    loop エージェントループ
+        Agent->>Claude: messages + tools
+        Claude-->>Agent: response
+
+        alt tool_use in response
+            Agent->>Agent: user_idを注入
+            Agent->>Tools: execute_tool(name, args)
+            Tools->>DB: クエリ
+            DB-->>Tools: 結果
+            Tools-->>Agent: tool_result
+            Agent->>Agent: メッセージに追加
+        else end_turn
+            Agent-->>API: AgentResult
+        end
+    end
+
+    API->>Logger: log(interaction)
+    Logger->>DB: INSERT ai_interactions
+    Logger--)Logger: async extract_facts()
+
+    API-->>Client: ChatResponse
+```
+
+### チャットフロー (テキスト)
 
 ```
 POST /chat
     ↓
-Extract user_id from JWT
+JWTからuser_idを抽出
     ↓
-Detect situation (time-based or explicit)
+状況を検出 (時刻ベースまたは明示)
     ↓
 ContextResolver.get_context()
-    ├─ Load ai_contexts from DB
-    └─ Replace {variables} in prompt
+    ├─ DBからai_contextsを読込
+    └─ プロンプト内の{変数}を置換
     ↓
 AgentRunner.run()
-    ├─ Call Claude with tools
-    ├─ Execute tool_use locally (inject user_id)
-    ├─ Append results, continue loop
-    └─ Return AgentResult
+    ├─ ツール付きでClaudeを呼び出し
+    ├─ tool_useをローカル実行 (user_id注入)
+    ├─ 結果を追加、ループ継続
+    └─ AgentResultを返却
     ↓
 InteractionLogger.log()
     ↓
 asyncio.create_task(FactExtractor.extract_and_save())
     ↓
-Return ChatResponse
+ChatResponseを返却
 ```
 
-### Memory Building Flow
+### メモリ構築フロー (テキスト)
 
 ```
-Chat interaction
+チャットインタラクション
     ↓
 InteractionLogger.log()
     ↓
-FactExtractor.extract_and_save() (background)
-    ├─ Claude extracts facts
-    ├─ Validate & deduplicate
-    └─ Save to user_facts
+FactExtractor.extract_and_save() (バックグラウンド)
+    ├─ Claudeがファクトを抽出
+    ├─ バリデーション & 重複排除
+    └─ user_factsに保存
     ↓
-Batch job (nightly): ProfileSummarizer
-    ├─ Find users with new facts
-    ├─ Generate profile summary via Claude
-    └─ Upsert user_memory
+バッチジョブ (夜間): ProfileSummarizer
+    ├─ 新しいファクトを持つユーザーを検索
+    ├─ Claudeでプロフィール要約を生成
+    └─ user_memoryをupsert
     ↓
-Future chats use {user_memory} variable
+将来のチャットで{user_memory}変数を使用
 ```
+
+注: Mermaid版のメモリ構築フローは [メモリ構築パイプライン](#メモリ構築パイプライン) セクションを参照。
 
 ---
 
-## Dependencies
+## 依存関係
 
 ```
 anthropic>=0.40.0

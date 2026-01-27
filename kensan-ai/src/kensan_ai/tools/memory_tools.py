@@ -2,21 +2,11 @@
 
 from datetime import datetime, timedelta
 from typing import Any
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from kensan_ai.tools.base import tool
 from kensan_ai.db.connection import get_connection
-
-
-def _parse_uuid(value: str | None) -> UUID | None:
-    """Parse a string to UUID, returning None if invalid or empty."""
-    if not value:
-        return None
-    try:
-        return UUID(value)
-    except ValueError:
-        return None
+from kensan_ai.lib.parsers import parse_uuid
 
 
 @tool(
@@ -34,7 +24,7 @@ def _parse_uuid(value: str | None) -> UUID | None:
 )
 async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
     """Get user's memory profile."""
-    user_id = _parse_uuid(args.get("user_id"))
+    user_id = parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
@@ -89,12 +79,13 @@ async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
     """Get facts about a user."""
-    user_id = _parse_uuid(args.get("user_id"))
+    user_id = parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
     fact_type = args.get("fact_type")
-    limit = args.get("limit", 20)
+    # Cap limit to prevent abuse (max 100)
+    limit = min(args.get("limit", 20), 100)
 
     async with get_connection() as conn:
         conditions = ["user_id = $1", "(expires_at IS NULL OR expires_at > NOW())"]
@@ -106,6 +97,10 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
             params.append(fact_type)
             param_idx += 1
 
+        # Add limit as a parameterized value
+        params.append(limit)
+        limit_param = f"${param_idx}"
+
         where_clause = " AND ".join(conditions)
 
         facts = await conn.fetch(
@@ -114,7 +109,7 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
             FROM user_facts
             WHERE {where_clause}
             ORDER BY confidence DESC, created_at DESC
-            LIMIT {limit}
+            LIMIT {limit_param}
             """,
             *params,
         )
@@ -167,7 +162,7 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
     """Add a new fact about a user."""
-    user_id = _parse_uuid(args.get("user_id"))
+    user_id = parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
@@ -233,11 +228,12 @@ async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def get_recent_interactions(args: dict[str, Any]) -> dict[str, Any]:
     """Get user's recent AI interactions."""
-    user_id = _parse_uuid(args.get("user_id"))
+    user_id = parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
-    limit = args.get("limit", 5)
+    # Cap limit to prevent abuse (max 100)
+    limit = min(args.get("limit", 5), 100)
     situation = args.get("situation")
 
     async with get_connection() as conn:
@@ -250,6 +246,10 @@ async def get_recent_interactions(args: dict[str, Any]) -> dict[str, Any]:
             params.append(situation)
             param_idx += 1
 
+        # Add limit as a parameterized value
+        params.append(limit)
+        limit_param = f"${param_idx}"
+
         where_clause = " AND ".join(conditions)
 
         interactions = await conn.fetch(
@@ -258,7 +258,7 @@ async def get_recent_interactions(args: dict[str, Any]) -> dict[str, Any]:
             FROM ai_interactions
             WHERE {where_clause}
             ORDER BY created_at DESC
-            LIMIT {limit}
+            LIMIT {limit_param}
             """,
             *params,
         )

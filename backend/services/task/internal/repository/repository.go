@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/task/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
+)
+
+// Repository-level errors
+var (
+	ErrTagAlreadyExists            = errors.New("tag with this name already exists")
+	ErrTodoCompletionAlreadyExists = errors.New("todo completion already exists for this date")
 )
 
 // PostgresRepository handles database operations for tasks, goals, milestones, and tags
@@ -30,7 +38,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // ListTasks returns all tasks for a user with optional filters
 func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filter task.TaskFilter) ([]task.Task, error) {
 	query := `
-		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1
 	`
@@ -74,6 +82,7 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var frequency *string
 		err := rows.Scan(
 			&t.ID,
 			&t.UserID,
@@ -83,11 +92,18 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 			&t.EstimatedMinutes,
 			&t.Completed,
 			&t.DueDate,
+			&frequency,
+			&t.DaysOfWeek,
+			&t.SortOrder,
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if frequency != nil {
+			f := task.TaskFrequency(*frequency)
+			t.Frequency = &f
 		}
 		tasks = append(tasks, t)
 	}
@@ -102,12 +118,13 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 // GetTaskByID returns a task by ID for a specific user
 func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID string) (*task.Task, error) {
 	query := `
-		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 		FROM tasks
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Task
+	var frequency *string
 	err := r.pool.QueryRow(ctx, query, taskID, userID).Scan(
 		&t.ID,
 		&t.UserID,
@@ -117,6 +134,9 @@ func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID str
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
+		&frequency,
+		&t.DaysOfWeek,
+		&t.SortOrder,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -125,6 +145,10 @@ func (r *PostgresRepository) GetTaskByID(ctx context.Context, userID, taskID str
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+	if frequency != nil {
+		f := task.TaskFrequency(*frequency)
+		t.Frequency = &f
 	}
 
 	return &t, nil
@@ -135,13 +159,20 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 	id := uuid.New().String()
 	now := time.Now()
 
+	var frequency *string
+	if input.Frequency != nil {
+		f := string(*input.Frequency)
+		frequency = &f
+	}
+
 	query := `
-		INSERT INTO tasks (id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		INSERT INTO tasks (id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 	`
 
 	var t task.Task
+	var freqOut *string
 	err := r.pool.QueryRow(ctx, query,
 		id,
 		userID,
@@ -151,6 +182,8 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 		input.EstimatedMinutes,
 		input.Completed,
 		input.DueDate,
+		frequency,
+		input.DaysOfWeek,
 		now,
 		now,
 	).Scan(
@@ -162,11 +195,18 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
+		&freqOut,
+		&t.DaysOfWeek,
+		&t.SortOrder,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+	if freqOut != nil {
+		f := task.TaskFrequency(*freqOut)
+		t.Frequency = &f
 	}
 
 	return &t, nil
@@ -214,6 +254,18 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		args = append(args, *input.DueDate)
 	}
 
+	if input.Frequency != nil {
+		argCount++
+		setClauses = append(setClauses, fmt.Sprintf("frequency = $%d", argCount))
+		args = append(args, string(*input.Frequency))
+	}
+
+	if input.DaysOfWeek != nil {
+		argCount++
+		setClauses = append(setClauses, fmt.Sprintf("days_of_week = $%d", argCount))
+		args = append(args, input.DaysOfWeek)
+	}
+
 	if len(setClauses) == 0 {
 		return r.GetTaskByID(ctx, userID, taskID)
 	}
@@ -231,10 +283,11 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		UPDATE tasks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var t task.Task
+	var frequency *string
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&t.ID,
 		&t.UserID,
@@ -244,6 +297,9 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
+		&frequency,
+		&t.DaysOfWeek,
+		&t.SortOrder,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -252,6 +308,10 @@ func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID stri
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+	if frequency != nil {
+		f := task.TaskFrequency(*frequency)
+		t.Frequency = &f
 	}
 
 	return &t, nil
@@ -275,7 +335,7 @@ func (r *PostgresRepository) DeleteTask(ctx context.Context, userID, taskID stri
 // GetChildTasks returns all child tasks for a given parent task
 func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTaskID string) ([]task.Task, error) {
 	query := `
-		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1 AND parent_task_id = $2
 		ORDER BY created_at DESC
@@ -290,6 +350,7 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var frequency *string
 		err := rows.Scan(
 			&t.ID,
 			&t.UserID,
@@ -299,11 +360,18 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 			&t.EstimatedMinutes,
 			&t.Completed,
 			&t.DueDate,
+			&frequency,
+			&t.DaysOfWeek,
+			&t.SortOrder,
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan child task: %w", err)
+		}
+		if frequency != nil {
+			f := task.TaskFrequency(*frequency)
+			t.Frequency = &f
 		}
 		tasks = append(tasks, t)
 	}
@@ -321,10 +389,11 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 		UPDATE tasks
 		SET completed = NOT completed, updated_at = $3
 		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 	`
 
 	var t task.Task
+	var frequency *string
 	err := r.pool.QueryRow(ctx, query, taskID, userID, time.Now()).Scan(
 		&t.ID,
 		&t.UserID,
@@ -334,6 +403,9 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 		&t.EstimatedMinutes,
 		&t.Completed,
 		&t.DueDate,
+		&frequency,
+		&t.DaysOfWeek,
+		&t.SortOrder,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -342,6 +414,10 @@ func (r *PostgresRepository) ToggleTaskComplete(ctx context.Context, userID, tas
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to toggle task complete: %w", err)
+	}
+	if frequency != nil {
+		f := task.TaskFrequency(*frequency)
+		t.Frequency = &f
 	}
 
 	return &t, nil
@@ -387,7 +463,7 @@ func (r *PostgresRepository) ReorderTasks(ctx context.Context, userID string, ta
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1 AND id IN (%s)
 		ORDER BY sort_order
@@ -402,12 +478,17 @@ func (r *PostgresRepository) ReorderTasks(ctx context.Context, userID string, ta
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var frequency *string
 		err := rows.Scan(
 			&t.ID, &t.UserID, &t.MilestoneID, &t.ParentTaskID, &t.Name,
-			&t.EstimatedMinutes, &t.Completed, &t.DueDate, &t.CreatedAt, &t.UpdatedAt,
+			&t.EstimatedMinutes, &t.Completed, &t.DueDate, &frequency, &t.DaysOfWeek, &t.SortOrder, &t.CreatedAt, &t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if frequency != nil {
+			f := task.TaskFrequency(*frequency)
+			t.Frequency = &f
 		}
 		tasks = append(tasks, t)
 	}
@@ -462,7 +543,7 @@ func (r *PostgresRepository) BulkCompleteTasks(ctx context.Context, userID strin
 		UPDATE tasks
 		SET completed = $1, updated_at = $2
 		WHERE user_id = $3 AND id IN (%s)
-		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, created_at, updated_at
+		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
 	`, strings.Join(placeholders, ","))
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -474,12 +555,17 @@ func (r *PostgresRepository) BulkCompleteTasks(ctx context.Context, userID strin
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
+		var frequency *string
 		err := rows.Scan(
 			&t.ID, &t.UserID, &t.MilestoneID, &t.ParentTaskID, &t.Name,
-			&t.EstimatedMinutes, &t.Completed, &t.DueDate, &t.CreatedAt, &t.UpdatedAt,
+			&t.EstimatedMinutes, &t.Completed, &t.DueDate, &frequency, &t.DaysOfWeek, &t.SortOrder, &t.CreatedAt, &t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if frequency != nil {
+			f := task.TaskFrequency(*frequency)
+			t.Frequency = &f
 		}
 		tasks = append(tasks, t)
 	}
@@ -885,6 +971,9 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 		&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
+		if sharedErrors.IsUniqueViolation(err) {
+			return nil, ErrTagAlreadyExists
+		}
 		return nil, fmt.Errorf("failed to create tag: %w", err)
 	}
 
@@ -1479,6 +1568,9 @@ func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, todoID, d
 	var c task.TodoCompletion
 	err := r.pool.QueryRow(ctx, query, id, todoID, date, now).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
 	if err != nil {
+		if sharedErrors.IsUniqueViolation(err) {
+			return nil, ErrTodoCompletionAlreadyExists
+		}
 		return nil, fmt.Errorf("failed to create todo completion: %w", err)
 	}
 

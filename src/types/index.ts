@@ -79,8 +79,6 @@ export interface TimeBlock {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
-  isRoutine: boolean
-  routineTaskId?: string
 }
 
 // ============================================
@@ -101,22 +99,6 @@ export interface TimeEntry {
   goalColor?: string
   tagIds?: string[]
   description?: string
-}
-
-// ============================================
-// RoutineTask (定期タスク) - 後方互換のため残す
-// ============================================
-export type RoutineFrequency = 'daily' | 'weekly' | 'monthly' | 'custom'
-
-/** @deprecated Use Todo instead */
-export interface RoutineTask {
-  id: string
-  name: string
-  frequency: RoutineFrequency
-  daysOfWeek?: number[] // 0-6 (日-土)
-  estimatedMinutes: number
-  tagIds?: string[]
-  enabled: boolean
 }
 
 // ============================================
@@ -250,43 +232,6 @@ export interface NoteSearchResult {
 }
 
 // ============================================
-// LearningRecord (学習記録) - 後方互換
-// ============================================
-/** @deprecated Use Note with type='learning' instead */
-export type RecordFormat = 'markdown' | 'drawio'
-
-/** @deprecated Use Note with type='learning' instead */
-export interface LearningRecord {
-  id: string
-  title: string
-  content: string
-  format: RecordFormat
-  milestoneId?: string
-  milestoneName?: string
-  goalId?: string
-  goalName?: string
-  goalColor?: string
-  tagIds?: string[]
-  relatedTimeEntryIds?: string[]
-  createdAt: Date
-  updatedAt: Date
-}
-
-// ============================================
-// DiaryEntry (日記) - 後方互換
-// ============================================
-/** @deprecated Use Note with type='diary' instead */
-export interface DiaryEntry {
-  id: string
-  date: string // YYYY-MM-DD
-  title: string
-  content: string
-  tags: string[] // 自由テキストタグ（Tagエンティティとは別）
-  createdAt: Date
-  updatedAt: Date
-}
-
-// ============================================
 // UserSettings (ユーザー設定)
 // ============================================
 export type Theme = 'light' | 'dark' | 'system'
@@ -374,50 +319,6 @@ export interface EntityMemo {
   pinned: boolean
   createdAt: Date
   updatedAt: Date
-}
-
-// ============================================
-// Daily Dashboard
-// ============================================
-
-// 今日のフォーカス
-export interface TodayFocus {
-  id: string
-  text: string
-  taskId?: string
-  completedAt?: Date
-  createdAt: Date
-}
-
-// ピン留め
-export interface PinnedReminder {
-  id: string
-  text: string
-  deadline?: string // YYYY-MM-DD
-  completed: boolean
-  sortOrder: number
-  createdAt: Date
-}
-
-// 付箋
-export type StickyNoteColor = 'yellow' | 'pink' | 'blue' | 'green' | 'orange' | 'purple'
-
-export interface StickyNote {
-  id: string
-  content: string
-  color: StickyNoteColor
-  sortOrder: number
-  createdAt: Date
-}
-
-// ストリーク
-export type StreakType = 'learning' | 'diary' | 'timeblock'
-
-export interface StreakData {
-  type: StreakType
-  label: string
-  currentStreak: number
-  longestStreak: number
 }
 
 // ============================================

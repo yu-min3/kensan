@@ -7,15 +7,17 @@ import (
 
 	"github.com/kensan/backend/services/diary/internal"
 	"github.com/kensan/backend/services/diary/internal/repository"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/validation"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrDiaryNotFound  = errors.New("diary entry not found")
-	ErrTitleRequired  = errors.New("title is required")
-	ErrDateRequired   = errors.New("date is required")
-	ErrInvalidDate    = errors.New("date must be in YYYY-MM-DD format")
-	ErrUnauthorized   = errors.New("not authorized to access this diary entry")
+	ErrDiaryNotFound = sharedErrors.ErrDiaryNotFound
+	ErrTitleRequired = sharedErrors.Required("title")
+	ErrDateRequired  = sharedErrors.Required("date")
+	ErrInvalidDate   = sharedErrors.ErrInvalidDate
+	ErrUnauthorized  = sharedErrors.ErrUnauthorized
 )
 
 // Service handles diary entry business logic

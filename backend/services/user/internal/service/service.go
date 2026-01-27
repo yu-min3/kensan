@@ -9,19 +9,21 @@ import (
 	"github.com/kensan/backend/services/user/internal"
 	"github.com/kensan/backend/services/user/internal/repository"
 	"github.com/kensan/backend/shared/auth"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrEmailRequired      = errors.New("email is required")
-	ErrPasswordRequired   = errors.New("password is required")
-	ErrNameRequired       = errors.New("name is required")
-	ErrInvalidEmail       = errors.New("invalid email format")
-	ErrPasswordTooShort   = errors.New("password must be at least 8 characters")
-	ErrInvalidTheme       = errors.New("theme must be light, dark, or system")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUserExists         = errors.New("user already exists")
+	ErrInvalidCredentials = sharedErrors.ErrInvalidCredentials
+	ErrEmailRequired      = sharedErrors.Required("email")
+	ErrPasswordRequired   = sharedErrors.Required("password")
+	ErrNameRequired       = sharedErrors.Required("name")
+	ErrInvalidEmail       = sharedErrors.ErrInvalidEmail
+	ErrPasswordTooShort   = sharedErrors.ErrPasswordTooShort
+	ErrInvalidTheme       = sharedErrors.ErrInvalidTheme
+	ErrUserNotFound       = sharedErrors.ErrUserNotFound
+	ErrUserExists         = sharedErrors.ErrUserExists
 )
 
 // bcrypt cost for password hashing

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/user/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 var (
@@ -86,15 +87,6 @@ func (r *PostgresRepository) GetByEmail(ctx context.Context, email string) (*use
 
 // Create creates a new user
 func (r *PostgresRepository) Create(ctx context.Context, u *user.User) error {
-	// Check if user already exists
-	existingUser, err := r.GetByEmail(ctx, u.Email)
-	if err != nil && !errors.Is(err, ErrUserNotFound) {
-		return err
-	}
-	if existingUser != nil {
-		return ErrUserExists
-	}
-
 	// Generate UUID if not set
 	if u.ID == "" {
 		u.ID = uuid.New().String()
@@ -109,7 +101,7 @@ func (r *PostgresRepository) Create(ctx context.Context, u *user.User) error {
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err = r.pool.Exec(ctx, query,
+	_, err := r.pool.Exec(ctx, query,
 		u.ID,
 		u.Email,
 		u.Name,
@@ -118,6 +110,10 @@ func (r *PostgresRepository) Create(ctx context.Context, u *user.User) error {
 		u.UpdatedAt,
 	)
 	if err != nil {
+		// Check for unique constraint violation (email already exists)
+		if sharedErrors.IsUniqueViolation(err) {
+			return ErrUserExists
+		}
 		return err
 	}
 

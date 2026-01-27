@@ -1,58 +1,58 @@
-# Frontend Architecture
+# フロントエンドアーキテクチャ
 
-React + TypeScript SPA for the Kensan personal productivity application.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Directory Structure](#directory-structure)
-3. [Component Hierarchy](#component-hierarchy)
-4. [State Management](#state-management)
-5. [API Client Layer](#api-client-layer)
-6. [Routing](#routing)
-7. [Type Definitions](#type-definitions)
-8. [Styling](#styling)
-9. [Key Patterns](#key-patterns)
-10. [Development](#development)
+Kensanパーソナル生産性アプリケーションのReact + TypeScript SPA。
 
 ---
 
-## Overview
+## 目次
 
-### Architecture Style
-- **React 18 SPA** with TypeScript strict mode
-- **Zustand** for global state management
-- **Layered architecture**: Components → Stores → API Services → Backend
-- **Timezone-aware**: All date/time operations convert between local and UTC
-
-### Tech Stack
-
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Framework | React | 18.3 |
-| Language | TypeScript | 5.6 |
-| Build Tool | Vite | 6.x |
-| State | Zustand | 5.x |
-| Routing | React Router | 7.x |
-| Styling | Tailwind CSS | 4.x |
-| UI Components | shadcn/ui | - |
-| Icons | Lucide React | 0.562 |
-| Editor | TipTap | 3.16 |
-| Charts | Recharts | 3.6 |
+1. [概要](#概要)
+2. [ディレクトリ構成](#ディレクトリ構成)
+3. [コンポーネント階層](#コンポーネント階層)
+4. [状態管理](#状態管理)
+5. [APIクライアント層](#apiクライアント層)
+6. [ルーティング](#ルーティング)
+7. [型定義](#型定義)
+8. [スタイリング](#スタイリング)
+9. [主要パターン](#主要パターン)
+10. [開発](#開発)
 
 ---
 
-## Directory Structure
+## 概要
+
+### アーキテクチャスタイル
+- **React 18 SPA** + TypeScript strictモード
+- **Zustand** によるグローバル状態管理
+- **レイヤードアーキテクチャ**: Components → Stores → API Services → Backend
+- **タイムゾーン対応**: 全ての日時操作はローカルとUTC間で変換
+
+### 技術スタック
+
+| コンポーネント | 技術 | バージョン |
+|--------------|------|----------|
+| フレームワーク | React | 18.3 |
+| 言語 | TypeScript | 5.6 |
+| ビルドツール | Vite | 6.x |
+| 状態管理 | Zustand | 5.x |
+| ルーティング | React Router | 7.x |
+| スタイリング | Tailwind CSS | 4.x |
+| UIコンポーネント | shadcn/ui | - |
+| アイコン | Lucide React | 0.562 |
+| エディタ | TipTap | 3.16 |
+| チャート | Recharts | 3.6 |
+
+---
+
+## ディレクトリ構成
 
 ```
 src/
-├── api/                          # HTTP client and API services
-│   ├── client.ts                 # HttpClient singleton
-│   ├── config.ts                 # Service URLs from environment
-│   ├── createApiService.ts       # Generic CRUD factory
-│   └── services/                 # Domain-specific APIs (12 files)
+├── api/                          # HTTPクライアントとAPIサービス
+│   ├── client.ts                 # HttpClientシングルトン
+│   ├── config.ts                 # 環境変数からのサービスURL
+│   ├── createApiService.ts       # 汎用CRUDファクトリ
+│   └── services/                 # ドメイン別API（12ファイル）
 │       ├── auth.ts, user.ts
 │       ├── tasks.ts              # Goals, Milestones, Tags, Tasks
 │       ├── timeblocks.ts         # TimeBlocks, TimeEntries
@@ -60,77 +60,168 @@ src/
 │       ├── records.ts, diaries.ts, memos.ts
 │       └── ai.ts, analytics.ts
 ├── components/
-│   ├── ui/                       # shadcn/ui primitives
+│   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
-│   ├── common/                   # Domain components
-│   ├── editor/                   # Markdown, Drawio editors
-│   ├── task/                     # Goal, Milestone, Task dialogs
-│   ├── daily/                    # Daily page sections
-│   └── note/                     # Note editor components
-├── pages/                        # Page components (10 files)
-├── stores/                       # Zustand stores (12 stores)
-├── hooks/                        # Custom React hooks
-├── lib/                          # Utilities (timezone, dateFormat, utils)
-├── mocks/                        # MSW handlers and mock data
-├── types/                        # TypeScript type definitions
-├── config/                       # App configuration
-├── App.tsx                       # Root router
-├── main.tsx                      # Entry point
-└── index.css                     # Global styles
+│   ├── common/                   # ドメインコンポーネント
+│   ├── editor/                   # Markdown, Drawioエディタ
+│   ├── task/                     # Goal, Milestone, Taskダイアログ
+│   ├── daily/                    # デイリーページセクション
+│   └── note/                     # ノートエディタコンポーネント
+├── pages/                        # ページコンポーネント（10ファイル）
+├── stores/                       # Zustandストア（12ストア）
+├── hooks/                        # カスタムReactフック
+├── lib/                          # ユーティリティ（timezone, dateFormat, utils）
+├── mocks/                        # MSWハンドラとモックデータ
+├── types/                        # TypeScript型定義
+├── config/                       # アプリ設定
+├── App.tsx                       # ルートルーター
+├── main.tsx                      # エントリーポイント
+└── index.css                     # グローバルスタイル
 ```
 
 ---
 
-## Component Hierarchy
+## コンポーネント階層
 
-### Three-Tier Structure
+### 全体図
 
-#### 1. UI Components (`components/ui/`)
-Primitive, stateless shadcn/ui components:
+```mermaid
+graph TB
+    subgraph "アプリシェル"
+        Router[React Router]
+        Layout[Layoutコンポーネント]
+    end
+
+    subgraph "レイアウトコンポーネント"
+        Header[Header]
+        Sidebar[Sidebar]
+        Main[メインコンテンツエリア]
+    end
+
+    subgraph "ページコンポーネント"
+        Daily[DailyPage]
+        Tasks[T01_TaskManagement]
+        Notes[N01_NoteList]
+        NoteEdit[N02_NoteEdit]
+        Analytics[A01_AnalyticsReport]
+        AIReview[A02_AIReview]
+        Settings[S01_Settings]
+    end
+
+    subgraph "共通コンポーネント"
+        Timeline[TimeBlockTimeline]
+        TaskCard[TaskCard]
+        TagBadge[TagBadge]
+        GoalBadge[GoalBadge]
+        TimerWidget[TimerWidget]
+        TimeBlockDialog[TimeBlockDialog]
+        TaskSelect[TaskSelect]
+        TagSelect[TagSelect]
+    end
+
+    subgraph "UIプリミティブ (shadcn/ui)"
+        Button[Button]
+        Card[Card]
+        Dialog[Dialog]
+        Input[Input]
+        Select[Select]
+        Checkbox[Checkbox]
+    end
+
+    Router --> Layout
+    Layout --> Header
+    Layout --> Sidebar
+    Layout --> Main
+
+    Main --> Daily
+    Main --> Tasks
+    Main --> Notes
+    Main --> NoteEdit
+    Main --> Analytics
+    Main --> AIReview
+    Main --> Settings
+
+    Header --> TimerWidget
+    Daily --> Timeline
+    Daily --> TaskCard
+    Tasks --> TaskCard
+    Tasks --> TimeBlockDialog
+    Timeline --> TimeBlockDialog
+
+    TaskCard --> TagBadge
+    TaskCard --> GoalBadge
+    TaskCard --> Checkbox
+    TimeBlockDialog --> TaskSelect
+    TimeBlockDialog --> TagSelect
+
+    Timeline --> Card
+    TaskCard --> Card
+    TimeBlockDialog --> Dialog
+    TaskSelect --> Select
+    TagSelect --> Select
+```
+
+### 3層構造
+
+#### 1. UIコンポーネント (`components/ui/`)
+
+プリミティブでステートレスなshadcn/uiコンポーネント:
 - Button, Input, Card, Dialog, Select, Checkbox
 - Tabs, Dropdown, Popover, Badge, Progress
 - Calendar, Textarea, ScrollArea, TimeRangeInput
 
-**Characteristics:**
-- No business logic
-- Fully controlled via props
-- Radix UI-based for accessibility
+**特徴:**
+- ビジネスロジックなし
+- propsによる完全制御
+- Radix UIベースでアクセシビリティ対応
 
-#### 2. Common Components (`components/common/`)
-Domain-aware, reusable components:
+#### 2. 共通コンポーネント (`components/common/`)
 
-| Component | Purpose |
-|-----------|---------|
-| `TaskCard` | Task display with checkbox, goal badge |
-| `TimeBlockTimeline` | Interactive timeline (drag/resize) |
+ドメイン知識を持つ再利用可能なコンポーネント:
+
+| コンポーネント | 目的 |
+|--------------|------|
+| `TaskCard` | チェックボックス、ゴールバッジ付きタスク表示 |
+| `TimeBlockTimeline` | インタラクティブタイムライン（ドラッグ/リサイズ） |
 | `TimeBlockDialog` | 予定/実績の共通追加・編集ダイアログ |
-| `TagBadge` | Colored tag display |
-| `GoalBadge` | Goal indicator with color |
-| `TimerWidget` | Active timer in header |
-| `StartTimerDialog` | Timer start form |
-| `FloatingMemoButton` | Quick memo FAB |
-| `TaskSelect` | Task dropdown |
-| `TagSelect` | Multi-select tags |
+| `TagBadge` | 色付きタグ表示 |
+| `GoalBadge` | 色付き目標インジケータ |
+| `TimerWidget` | ヘッダー内アクティブタイマー |
+| `StartTimerDialog` | タイマー開始フォーム |
+| `FloatingMemoButton` | クイックメモFAB |
+| `TaskSelect` | タスクドロップダウン |
+| `TagSelect` | 複数選択タグ |
 
-**TimeBlockDialog Features:**
+**TimeBlockDialogの機能:**
 - 予定（plan）/実績（entry）モード切替
 - デフォルトは「タスクから選択」
 - インラインでの新規タスク作成機能
 - 実績モード: 日付・説明フィールド追加
 - 目標未設定時の警告表示（達成率に含まれない旨）
 
-**TimeBlockTimeline Features:**
-- Drag to move (15-min snap)
-- Resize edges to adjust duration
-- Display planned vs actual
-- Preview during interactions
+**TimeBlockTimelineアーキテクチャ（SRPベースの分割）:**
+
+タイムラインは`components/common/timeline/`内の特化したサブコンポーネントで構成:
+
+| コンポーネント | 責務 |
+|--------------|------|
+| `TimeBlockTimeline.tsx` | グリッドとアイテムを統括するコンテナ |
+| `TimeBlockTimelineGrid.tsx` | 時間線と背景グリッドのレンダリング |
+| `TimeBlockItem.tsx` | 個別タイムブロック表示（目標スタイリング） |
+| `useTimeBlockDragResize.ts` | ドラッグ/リサイズインタラクションロジック |
+
+**機能:**
+- ドラッグで移動（15分スナップ）
+- エッジリサイズで時間調整
+- 予定と実績の表示
+- インタラクション中のプレビュー
 - 目標あり/なしの視覚的区別:
   - 目標あり: 左ボーダーに目標色（4px）+ 目標色の薄い背景
   - 目標なし: グレー点線ボーダー + muted背景 + 「その他」ラベル
 
-#### 3. Layout Components (`components/layout/`)
+#### 3. レイアウトコンポーネント (`components/layout/`)
 
-**Layout.tsx** (main wrapper):
+**Layout.tsx**（メインラッパー）:
 ```tsx
 <div className="h-screen flex flex-col">
   <Header />
@@ -145,41 +236,82 @@ Domain-aware, reusable components:
 ```
 
 **Header.tsx:**
-- Logo + brand name
+- ロゴ + ブランド名
 - TimerWidget
-- Theme toggle
-- User dropdown (profile, logout)
+- テーマ切替
+- ユーザードロップダウン（プロフィール、ログアウト）
 
 **Sidebar.tsx:**
-- Navigation items with icons
-- Active state highlighting
-- Phase 2 badges
+- アイコン付きナビゲーション項目
+- アクティブ状態のハイライト
+- Phase 2バッジ
 
 ---
 
-## State Management
+## 状態管理
 
-### Zustand Architecture
+### Zustandアーキテクチャ
 
+```mermaid
+flowchart TB
+    subgraph "Reactレイヤー"
+        Component[コンポーネント]
+        Hook[useStoreフック]
+    end
+
+    subgraph "Zustandストア"
+        State[(状態)]
+        Actions[アクション]
+        Getters[ゲッター/セレクター]
+    end
+
+    subgraph "APIレイヤー"
+        APIService[APIサービス]
+        HttpClient[HttpClient]
+    end
+
+    subgraph "バックエンド"
+        Service[Goサービス]
+        DB[(PostgreSQL)]
+    end
+
+    Component -->|subscribe| Hook
+    Hook -->|read| Getters
+    Hook -->|call| Actions
+    Getters -->|derive from| State
+
+    Actions -->|call| APIService
+    APIService -->|request| HttpClient
+    HttpClient -->|HTTP + JWT| Service
+    Service -->|query| DB
+    DB -->|rows| Service
+    Service -->|JSONレスポンス| HttpClient
+    HttpClient -->|.dataを抽出| APIService
+    APIService -->|transform| Actions
+    Actions -->|set| State
+    State -->|notify| Component
 ```
-Component
-    ↓ (calls action)
-Zustand Store
-    ↓ (calls API)
-API Service
-    ↓ (HTTP request)
-Backend
-    ↓ (response)
-API Service
-    ↓ (transforms)
-Zustand Store
-    ↓ (updates state)
-Component (re-renders)
+
+**テキストフロー:**
+```
+コンポーネント
+    ↓ (アクション呼び出し)
+Zustandストア
+    ↓ (API呼び出し)
+APIサービス
+    ↓ (HTTPリクエスト)
+バックエンド
+    ↓ (レスポンス)
+APIサービス
+    ↓ (変換)
+Zustandストア
+    ↓ (状態更新)
+コンポーネント (再レンダリング)
 ```
 
-### Store Factory (`createCrudStore.ts`)
+### ストアファクトリ (`createCrudStore.ts`)
 
-Generic CRUD store with standardized interface:
+標準化されたインターフェースを持つ汎用CRUDストア:
 
 ```typescript
 interface CrudStore<T> {
@@ -196,76 +328,126 @@ interface CrudStore<T> {
 }
 ```
 
-### Core Stores
+### コアストア
 
 #### useAuthStore
 ```typescript
-// State
+// 状態
 token: string | null
 user: User | null
 isAuthenticated: boolean
 
-// Actions
+// アクション
 login(email, password): Promise<void>
 register(email, password, name): Promise<void>
 logout(): void
 restoreSession(): void
 
-// Persisted to localStorage: 'kensan-auth'
+// localStorageに永続化: 'kensan-auth'
 ```
 
 #### useSettingsStore
 ```typescript
-// State
-timezone: string  // e.g., 'Asia/Tokyo'
+// 状態
+timezone: string  // 例: 'Asia/Tokyo'
 theme: 'light' | 'dark' | 'system'
 userName: string
 isConfigured: boolean
 
-// Actions
+// アクション
 setTimezone(tz): void
 setTheme(theme): void
 saveSettings(): Promise<void>
 fetchSettings(): Promise<void>
 
-// Persisted to localStorage: 'kensan-settings'
+// localStorageに永続化: 'kensan-settings'
+```
+
+#### ドメインストア（ISPベースの分離）
+
+タスク関連の状態は特化したドメインストアに分割:
+
+**useGoalStore** (`stores/useGoalStore.ts`)
+```typescript
+// 状態
+goals: Goal[]
+isLoading: boolean
+error: string | null
+
+// アクション
+fetchGoals(): Promise<void>
+addGoal(data): Promise<Goal>
+updateGoal(id, data): Promise<Goal>
+deleteGoal(id): Promise<void>
+getGoalById(id): Goal | undefined
+```
+
+**useMilestoneStore** (`stores/useMilestoneStore.ts`)
+```typescript
+// 状態
+milestones: Milestone[]
+
+// アクション
+fetchMilestones(): Promise<void>
+addMilestone(data): Promise<Milestone>
+updateMilestone(id, data): Promise<Milestone>
+deleteMilestone(id): Promise<void>
+getMilestonesByGoal(goalId): Milestone[]
+```
+
+**useTagStore** (`stores/useTagStore.ts`)
+```typescript
+// 状態
+tags: Tag[]
+
+// アクション
+fetchTags(): Promise<void>
+addTag(data): Promise<Tag>
+updateTag(id, data): Promise<Tag>
+deleteTag(id): Promise<void>
+```
+
+**useTaskManagerStore**（便利な統合フック）
+```typescript
+// 後方互換性のため全ストアアクションを再エクスポート
+export const useTaskManagerStore = () => ({
+    ...useGoalStore(),
+    ...useMilestoneStore(),
+    ...useTagStore(),
+    ...useTaskStore(),
+})
 ```
 
 #### useTaskStore
 ```typescript
-// State
-goals: Goal[]
-milestones: Milestone[]
-tags: Tag[]
+// 状態
 tasks: Task[]
 
-// Actions (for each entity)
-fetchGoals(), addGoal(), updateGoal(), deleteGoal()
-fetchMilestones(), addMilestone(), ...
-fetchTags(), addTag(), ...
-fetchTasks(), addTask(), updateTask(), deleteTask()
+// アクション
+fetchTasks(): Promise<void>
+addTask(data): Promise<Task>
+updateTask(id, data): Promise<Task>
+deleteTask(id): Promise<void>
 toggleTaskComplete(id): Promise<void>
 
-// Queries
-getGoalById(id): Goal | undefined
-getMilestonesByGoal(goalId): Milestone[]
+// クエリ
 getTasksByMilestone(milestoneId): Task[]
 getChildTasks(parentId): Task[]
 ```
 
 #### useTimeBlockStore
 ```typescript
-// State
+// 状態
 timeBlocks: TimeBlock[]
 timeEntries: TimeEntry[]
 
-// Timezone-aware actions
+// タイムゾーン対応アクション
 fetchTimeBlocksForLocalDate(date, timezone): Promise<void>
 fetchTimeEntriesForLocalDate(date, timezone): Promise<void>
 addTimeBlock(data, timezone): Promise<TimeBlock>
 updateTimeBlock(id, data, timezone): Promise<TimeBlock>
 
-// Queries
+// クエリ
 getTimeBlocksByDate(date): TimeBlock[]
 getTodayTimeBlocks(): TimeBlock[]
 getTodayTimeEntries(): TimeEntry[]
@@ -273,12 +455,12 @@ getTodayTimeEntries(): TimeEntry[]
 
 #### useNoteStore
 ```typescript
-// State
-items: NoteListItem[]           // Metadata only
-noteCache: Map<string, Note>    // Full content cache
+// 状態
+items: NoteListItem[]           // メタデータのみ
+noteCache: Map<string, Note>    // フルコンテンツキャッシュ
 searchResults: NoteSearchResult[]
 
-// Actions
+// アクション
 fetchNotes(filter?): Promise<void>
 fetchNote(id): Promise<Note>
 createNote(data): Promise<Note>
@@ -286,11 +468,11 @@ updateNote(id, data): Promise<Note>
 deleteNote(id): Promise<void>
 search(query, filter?): Promise<void>
 
-// Convenience
+// 便利メソッド
 createDiary(data): Promise<Note>
 createLearning(data): Promise<Note>
 
-// Queries
+// クエリ
 getById(id): NoteListItem | undefined
 getByType(type): NoteListItem[]
 getByGoal(goalId): NoteListItem[]
@@ -298,20 +480,20 @@ getByGoal(goalId): NoteListItem[]
 
 #### useTimerStore
 ```typescript
-// State
+// 状態
 currentTimer: RunningTimer | null
 isRunning: boolean
 
-// Actions
+// アクション
 startTimer(input): Promise<void>
 stopTimer(): Promise<TimeEntry>
 fetchCurrentTimer(): Promise<void>
 ```
 
-### Persistence Pattern
+### 永続化パターン
 
 ```typescript
-// Auth store with rehydration
+// リハイドレーション付き認証ストア
 persist(
   (set, get) => ({...}),
   {
@@ -332,11 +514,11 @@ persist(
 
 ---
 
-## API Client Layer
+## APIクライアント層
 
 ### HttpClient (`api/client.ts`)
 
-Singleton HTTP client with auth management:
+認証管理付きシングルトンHTTPクライアント:
 
 ```typescript
 class HttpClient {
@@ -354,15 +536,15 @@ class HttpClient {
 }
 ```
 
-**Features:**
-- Auto `Authorization: Bearer <token>` header
-- Response envelope unwrapping (`{data}` → `data`)
-- 401 detection → logout callback
-- Toast notifications on errors
+**機能:**
+- 自動`Authorization: Bearer <token>`ヘッダー
+- レスポンスエンベロープのアンラップ（`{data}` → `data`）
+- 401検出 → ログアウトコールバック
+- エラー時のToast通知
 
-### API Service Factory (`createApiService.ts`)
+### APIサービスファクトリ (`createApiService.ts`)
 
-Generic CRUD factory:
+汎用CRUDファクトリ:
 
 ```typescript
 const tasksApi = createApiService<TaskResponse, Task, CreateInput, UpdateInput>({
@@ -371,10 +553,10 @@ const tasksApi = createApiService<TaskResponse, Task, CreateInput, UpdateInput>(
   transform: transformTask,  // Response → Entity
 })
 
-// Returns: { list, get, create, update, delete }
+// 戻り値: { list, get, create, update, delete }
 ```
 
-**Extension pattern:**
+**拡張パターン:**
 ```typescript
 const tasksApi = extendApiService(baseTasksApi, (base) => ({
   toggleComplete(id: string): Promise<Task> {
@@ -386,7 +568,7 @@ const tasksApi = extendApiService(baseTasksApi, (base) => ({
 }))
 ```
 
-### Domain Services
+### ドメインサービス
 
 **tasks.ts** - Goals, Milestones, Tags, Tasks
 ```typescript
@@ -396,9 +578,9 @@ tagsApi.list(), ...
 tasksApi.list({milestoneId, completed}), tasksApi.toggleComplete(id), ...
 ```
 
-**timeblocks.ts** - Timezone-aware operations
+**timeblocks.ts** - タイムゾーン対応操作
 ```typescript
-// Converts local → UTC before sending
+// 送信前にローカル → UTC変換
 timeblocksApi.listByLocalDate(date, timezone): Promise<TimeBlock[]>
 timeblocksApi.createWithTimezone(input, timezone): Promise<TimeBlock>
 
@@ -406,7 +588,7 @@ timeentriesApi.listByLocalDate(date, timezone): Promise<TimeEntry[]>
 timeentriesApi.createWithTimezone(input, timezone): Promise<TimeEntry>
 ```
 
-**notes.ts** - Unified notes
+**notes.ts** - 統合ノート
 ```typescript
 notesApi.list({types, goalId, archived}): Promise<NoteListItem[]>
 notesApi.get(id): Promise<Note>
@@ -415,7 +597,7 @@ notesApi.search(query, filter): Promise<NoteSearchResult[]>
 notesApi.archive(id, archived): Promise<Note>
 ```
 
-### Configuration (`api/config.ts`)
+### 設定 (`api/config.ts`)
 
 ```typescript
 export const API_CONFIG = {
@@ -423,22 +605,22 @@ export const API_CONFIG = {
     user: import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:8081',
     task: import.meta.env.VITE_TASK_SERVICE_URL || 'http://localhost:8082',
     timeblock: import.meta.env.VITE_TIMEBLOCK_SERVICE_URL || 'http://localhost:8084',
-    // ... all service URLs
+    // ... 全サービスURL
   },
 }
 ```
 
 ---
 
-## Routing
+## ルーティング
 
-### Route Structure
+### ルート構成
 
 ```
-/login                     LoginPage (public)
-/settings                  S01_Settings (post-login setup)
+/login                     LoginPage（公開）
+/settings                  S01_Settings（ログイン後セットアップ）
 
-/ (authenticated + configured)
+/ (認証済み + 設定完了)
 ├── /                      S02_Dashboard
 ├── /daily                 DailyPage
 ├── /notes                 N01_NoteList
@@ -450,38 +632,38 @@ export const API_CONFIG = {
 └── /ai-review             A02_AIReview
 ```
 
-### Page Naming Convention
+### ページ命名規則
 
-| Prefix | Domain | Examples |
-|--------|--------|----------|
-| S | Settings/System | S01_Settings, S02_Dashboard |
-| D | Daily | DailyPage |
-| N | Notes | N01_NoteList, N02_NoteEdit |
-| T | Tasks | T01_TaskManagement |
-| R | Routines | R01_RoutineTaskManagement |
-| A | Analytics/AI | A01_AnalyticsReport, A02_AIReview |
+| プレフィックス | ドメイン | 例 |
+|--------------|---------|-----|
+| S | 設定/システム | S01_Settings, S02_Dashboard |
+| D | デイリー | DailyPage |
+| N | ノート | N01_NoteList, N02_NoteEdit |
+| T | タスク | T01_TaskManagement |
+| R | ルーティン | R01_RoutineTaskManagement |
+| A | 分析/AI | A01_AnalyticsReport, A02_AIReview |
 
-### Route Protection
+### ルート保護
 
 ```tsx
-// In App.tsx
+// App.tsx内
 <Route element={<RequireAuth />}>
   <Route element={<RequireConfigured />}>
     <Route element={<Layout />}>
-      {/* Protected routes */}
+      {/* 保護されたルート */}
     </Route>
   </Route>
 </Route>
 ```
 
-- Not authenticated → redirect to `/login`
-- Not configured → redirect to `/settings`
+- 未認証 → `/login`にリダイレクト
+- 未設定 → `/settings`にリダイレクト
 
 ---
 
-## Type Definitions
+## 型定義
 
-### Core Entities (`types/index.ts`)
+### コアエンティティ (`types/index.ts`)
 
 ```typescript
 interface Goal {
@@ -536,7 +718,7 @@ interface Note {
   format: 'markdown' | 'drawio'
   title?: string
   content: string
-  date?: string         // For diary type
+  date?: string         // diary type用
   goalId?: string
   goalName?: string
   goalColor?: string
@@ -549,7 +731,7 @@ interface Note {
 }
 ```
 
-### Enum Types
+### 列挙型
 
 ```typescript
 type MilestoneStatus = 'active' | 'completed' | 'archived'
@@ -559,26 +741,26 @@ type NoteFormat = 'markdown' | 'drawio'
 type Theme = 'light' | 'dark' | 'system'
 ```
 
-### Default Colors
+### デフォルトカラー
 
 ```typescript
 const DEFAULT_COLORS = [
-  '#0EA5E9',  // Sky blue (brand)
-  '#10B981',  // Emerald
-  '#F59E0B',  // Amber
-  '#EF4444',  // Red
-  '#8B5CF6',  // Violet
-  '#EC4899',  // Pink
-  '#06B6D4',  // Cyan
-  '#84CC16',  // Lime
+  '#0EA5E9',  // スカイブルー（ブランドカラー）
+  '#10B981',  // エメラルド
+  '#F59E0B',  // アンバー
+  '#EF4444',  // レッド
+  '#8B5CF6',  // バイオレット
+  '#EC4899',  // ピンク
+  '#06B6D4',  // シアン
+  '#84CC16',  // ライム
 ]
 ```
 
 ---
 
-## Styling
+## スタイリング
 
-### Tailwind CSS Configuration
+### Tailwind CSS設定
 
 ```javascript
 // tailwind.config.js
@@ -591,7 +773,7 @@ module.exports = {
         foreground: 'hsl(var(--foreground))',
         primary: 'hsl(var(--primary))',
         brand: 'hsl(var(--brand))',
-        // ... more semantic colors
+        // ... その他のセマンティックカラー
       },
     },
   },
@@ -599,14 +781,14 @@ module.exports = {
 }
 ```
 
-### CSS Variables (`index.css`)
+### CSS変数 (`index.css`)
 
 ```css
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --primary: 222.2 47.4% 11.2%;
-  --brand: 199 89% 48%;           /* Kensan Sky Blue */
+  --brand: 199 89% 48%;           /* Kensanスカイブルー */
   --timeblock-plan-bg: #f8fafc;
   --timeblock-actual-bg: #e2e8f0;
 }
@@ -620,7 +802,7 @@ module.exports = {
 }
 ```
 
-### Utility Helper
+### ユーティリティヘルパー
 
 ```typescript
 // lib/utils.ts
@@ -631,33 +813,115 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Usage
+// 使用例
 <div className={cn('base-class', conditional && 'optional-class')} />
 ```
 
 ---
 
-## Key Patterns
+## 主要パターン
 
-### Timezone Handling
+### ストア連携図
+
+複数のストアがどのように連携するかを示す図。
+
+```mermaid
+graph TB
+    subgraph "認証と初期化"
+        AuthStore[useAuthStore]
+        InitHook[useInitializeData]
+    end
+
+    subgraph "設定"
+        SettingsStore[useSettingsStore]
+    end
+
+    subgraph "ドメインストア"
+        GoalStore[useGoalStore]
+        MilestoneStore[useMilestoneStore]
+        TagStore[useTagStore]
+        TaskStore[useTaskStore]
+        TimeBlockStore[useTimeBlockStore]
+        NoteStore[useNoteStore]
+        MemoStore[useMemoStore]
+        TimerStore[useTimerStore]
+    end
+
+    subgraph "APIクライアント"
+        HttpClient[httpClient]
+    end
+
+    AuthStore -->|setAuthToken| HttpClient
+    AuthStore -->|isAuthenticated| InitHook
+
+    InitHook -->|fetchSettings| SettingsStore
+    InitHook -->|fetchGoals| GoalStore
+    InitHook -->|fetchMilestones| MilestoneStore
+    InitHook -->|fetchTags| TagStore
+    InitHook -->|fetchTasks| TaskStore
+    InitHook -->|fetchTimeBlocks| TimeBlockStore
+
+    SettingsStore -->|timezone| TimeBlockStore
+    SettingsStore -->|timezone| TimerStore
+
+    HttpClient -->|401 Unauthorized| AuthStore
+```
+
+### タイムゾーン変換フロー
+
+**シーケンス図: TimeBlock作成時のタイムゾーン変換**
+
+```mermaid
+sequenceDiagram
+    participant UI as コンポーネント
+    participant Store as useTimeBlockStore
+    participant Settings as useSettingsStore
+    participant API as timeblocksApi
+    participant BE as timeblock-service
+
+    UI->>Store: addTimeBlock({date: "2026-01-27", startTime: "09:00", endTime: "10:00"})
+    Store->>Settings: getState().timezone
+    Settings-->>Store: "Asia/Tokyo"
+    Store->>API: createWithTimezone(input, "Asia/Tokyo")
+
+    Note over API: ローカル → UTC変換
+    API->>API: localToUtcDateTime("2026-01-27", "09:00", "Asia/Tokyo")
+    Note over API: 結果: "2026-01-27T00:00:00Z"
+    API->>API: localToUtcDateTime("2026-01-27", "10:00", "Asia/Tokyo")
+    Note over API: 結果: "2026-01-27T01:00:00Z"
+
+    API->>BE: POST /timeblocks {date, startTime, endTime} (UTC)
+    BE->>BE: PostgreSQLに保存 (UTC)
+    BE-->>API: {id, date, startTime, endTime, ...} (UTC)
+
+    Note over API: UTC → ローカル変換
+    API->>API: utcToLocalDateTime(response, "Asia/Tokyo")
+    Note over API: 結果: date="2026-01-27", startTime="09:00"
+
+    API-->>Store: ローカル時刻のTimeBlock
+    Store->>Store: set({timeBlocks: [...state.timeBlocks, newBlock]})
+    Store-->>UI: 更新された状態で再レンダリング
+```
+
+**ユーティリティ関数:**
 
 ```typescript
 // lib/timezone.ts
 
-// Convert local date to UTC range for backend query
+// ローカル日付をバックエンドクエリ用のUTC範囲に変換
 localDateToUtcRange('2026-01-23', 'Asia/Tokyo')
 // → { startUtc: '2026-01-22T15:00:00.000Z', endUtc: '2026-01-23T15:00:00.000Z' }
 
-// Convert UTC response to local display
+// UTCレスポンスをローカル表示に変換
 utcToLocalDateTime(utcDate, utcTime, timezone)
 // → { date: '2026-01-23', time: '09:00' }
 
-// Convert local input to UTC for backend
+// ローカル入力をバックエンド用UTCに変換
 localToUtcDateTime('2026-01-23', '09:00', 'Asia/Tokyo')
 // → { date: '2026-01-23', time: '00:00' }
 ```
 
-### Store Initialization
+### ストア初期化
 
 ```typescript
 // hooks/useInitializeData.ts
@@ -685,7 +949,7 @@ export function useInitializeData() {
 }
 ```
 
-### Dialog State Pattern
+### ダイアログ状態パターン
 
 ```typescript
 // hooks/useDialogState.ts
@@ -699,30 +963,49 @@ export function useDialogState(initial = false) {
   return [open, handleOpenChange] as const
 }
 
-// Usage
+// 使用例
 const [dialogOpen, setDialogOpen] = useDialogState()
 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 ```
 
-### Error Handling
+### 配列ユーティリティ (`lib/arrayUtils.ts`)
+
+配列並び替え操作の再利用可能なユーティリティ:
 
 ```typescript
-// HttpClient catches errors and shows toast
+// インデックスによる並び替え（ドラッグ＆ドロップ）
+reorderByIndex<T>(array: T[], fromIndex: number, toIndex: number): T[]
+
+// IDリストを使用した並び替え（APIレスポンス）
+reorderByIds<T extends { id: string }>(items: T[], orderedIds: string[]): T[]
+
+// IDで単一アイテムを移動
+moveItemById<T extends { id: string }>(
+  items: T[],
+  itemId: string,
+  direction: 'up' | 'down'
+): T[]
+```
+
+### エラーハンドリング
+
+```typescript
+// HttpClientがエラーをキャッチしてToast表示
 try {
   const response = await fetch(url, options)
   if (!response.ok) {
-    toast.error('Error', { description: 'Request failed' })
+    toast.error('エラー', { description: 'リクエストが失敗しました' })
     throw new Error(...)
   }
   if (response.status === 401) {
-    toast.error('Session expired')
+    toast.error('セッションが期限切れです')
     this.onUnauthorizedCallback?.()
   }
 } catch (error) {
-  toast.error('Network error')
+  toast.error('ネットワークエラー')
 }
 
-// Store catches and sets error state
+// ストアがキャッチしてエラー状態を設定
 const store = create((set) => ({
   error: null,
   fetchData: async () => {
@@ -737,10 +1020,10 @@ const store = create((set) => ({
 }))
 ```
 
-### Component Composition
+### コンポーネント合成
 
 ```tsx
-// Page orchestrates stores and passes to sections
+// ページがストアを調整してセクションに渡す
 export function DailyPage() {
   const { getTodayTimeBlocks } = useTimeBlockStore()
   const { timezone } = useSettingsStore()
@@ -757,7 +1040,7 @@ export function DailyPage() {
   )
 }
 
-// Section handles display logic
+// セクションが表示ロジックを処理
 function TimeBlockSection({ blocks, onEdit }) {
   return (
     <Card>
@@ -770,7 +1053,7 @@ function TimeBlockSection({ blocks, onEdit }) {
 }
 ```
 
-### Goal-based Time Aggregation
+### 目標ベースの時間集計
 
 DailySummaryの達成率計算は**goal_idあり**のデータのみを対象とする:
 
@@ -796,19 +1079,19 @@ const otherActualMinutes = calculateMinutes(entriesWithoutGoal)
 
 ---
 
-## Development
+## 開発
 
-### Commands
+### コマンド
 
 ```bash
-npm run dev          # Vite dev server (localhost:5173)
-npm run dev:mock     # With MSW mocking
-npm run build        # TypeScript check + production build
+npm run dev          # Vite開発サーバー (localhost:5173)
+npm run dev:mock     # MSWモッキング有効
+npm run build        # TypeScriptチェック + プロダクションビルド
 npm run lint         # ESLint
-npm run preview      # Preview production build
+npm run preview      # プロダクションビルドのプレビュー
 ```
 
-### Environment Variables
+### 環境変数
 
 ```bash
 # .env
@@ -827,25 +1110,25 @@ VITE_ENABLE_MSW=false
 
 ### MSW (Mock Service Worker)
 
-Opt-in mocking for development:
+開発用オプトインモッキング:
 
 ```bash
 VITE_ENABLE_MSW=true npm run dev
 ```
 
-Handlers in `src/mocks/handlers/` mirror API services.
+ハンドラは`src/mocks/handlers/`にあり、APIサービスをミラーリング。
 
-### Adding a New Feature
+### 新機能の追加
 
-1. **Types**: Add interfaces to `types/index.ts`
-2. **API Service**: Create in `api/services/` using factory
-3. **Store**: Create in `stores/` using factory or custom
-4. **Components**: Add to appropriate `components/` subdirectory
-5. **Page**: Create in `pages/` with naming convention
-6. **Route**: Add to `App.tsx`
-7. **MSW Handler**: Add to `mocks/handlers/` for development
+1. **型**: `types/index.ts`にインターフェースを追加
+2. **APIサービス**: `api/services/`にファクトリを使用して作成
+3. **ストア**: `stores/`にファクトリまたはカスタムで作成
+4. **コンポーネント**: 適切な`components/`サブディレクトリに追加
+5. **ページ**: `pages/`に命名規則に従って作成
+6. **ルート**: `App.tsx`に追加
+7. **MSWハンドラ**: `mocks/handlers/`に開発用として追加
 
-### Path Aliases
+### パスエイリアス
 
 ```typescript
 // tsconfig.json
@@ -857,14 +1140,14 @@ Handlers in `src/mocks/handlers/` mirror API services.
   }
 }
 
-// Usage
+// 使用例
 import { Button } from '@/components/ui/button'
 import { useTaskStore } from '@/stores/useTaskStore'
 ```
 
 ---
 
-## Dependencies
+## 依存関係
 
 ```json
 {
@@ -873,7 +1156,7 @@ import { useTaskStore } from '@/stores/useTaskStore'
   "react-router-dom": "^7.1.1",
   "zustand": "^5.0.3",
   "tailwindcss": "^4.1.8",
-  "@radix-ui/react-*": "various",
+  "@radix-ui/react-*": "各種",
   "@tiptap/react": "^3.16.2",
   "react-drawio": "^1.0.0",
   "recharts": "^3.6.0",

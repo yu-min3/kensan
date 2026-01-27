@@ -45,10 +45,10 @@ export interface CrudStoreConfig<T, TCreateInput, TUpdateInput, TFilter> {
  *
  * @example
  * ```ts
- * const useDiaryStore = create<DiaryState>()(
+ * const useItemStore = create<ItemState>()(
  *   createCrudSlice({
- *     api: diariesApi,
- *     getId: (d) => d.id,
+ *     api: itemsApi,
+ *     getId: (item) => item.id,
  *   })
  * )
  * ```
@@ -131,14 +131,14 @@ export function createCrudSlice<
  *
  * @example
  * ```ts
- * interface DiaryExtensions {
- *   getByDate: (date: string) => DiaryEntry | undefined
+ * interface ItemExtensions {
+ *   getByDate: (date: string) => Item | undefined
  * }
  *
- * const useDiaryStore = createCrudStore<DiaryEntry, CreateInput, UpdateInput, DiaryFilter, DiaryExtensions>(
+ * const useItemStore = createCrudStore<Item, CreateInput, UpdateInput, ItemFilter, ItemExtensions>(
  *   {
- *     api: diariesApi,
- *     getId: (d) => d.id,
+ *     api: itemsApi,
+ *     getId: (item) => item.id,
  *   },
  *   (set, get, baseActions) => ({
  *     getByDate: (date) => get().items.find((e) => e.date === date),

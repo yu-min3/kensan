@@ -8,9 +8,6 @@ import type {
   Task,
   TimeBlock,
   TimeEntry,
-  RoutineTask,
-  LearningRecord,
-  DiaryEntry,
   Note,
   UserSettings,
   AIReviewReport,
@@ -267,7 +264,6 @@ export let timeBlocks: TimeBlock[] = [
     goalName: 'Golden Kubestronaut',
     goalColor: '#0EA5E9',
     tagIds: ['tag-input'],
-    isRoutine: false,
   },
   {
     id: 'tb2',
@@ -282,7 +278,6 @@ export let timeBlocks: TimeBlock[] = [
     goalName: 'OSS活動',
     goalColor: '#10B981',
     tagIds: ['tag-dev'],
-    isRoutine: false,
   },
   {
     id: 'tb3',
@@ -297,29 +292,6 @@ export let timeBlocks: TimeBlock[] = [
     goalName: 'アウトプット',
     goalColor: '#F59E0B',
     tagIds: ['tag-dev'],
-    isRoutine: false,
-  },
-  {
-    id: 'tb4',
-    date: today,
-    startTime: '16:30',
-    endTime: '16:45',
-    taskId: 'r1',
-    taskName: '技術ニュースチェック',
-    tagIds: ['tag-input'],
-    isRoutine: true,
-    routineTaskId: 'r1',
-  },
-  {
-    id: 'tb5',
-    date: today,
-    startTime: '17:00',
-    endTime: '17:30',
-    taskId: 'r2',
-    taskName: '英語学習',
-    tagIds: ['tag-input'],
-    isRoutine: true,
-    routineTaskId: 'r2',
   },
   // Tomorrow
   {
@@ -335,7 +307,6 @@ export let timeBlocks: TimeBlock[] = [
     goalName: 'Golden Kubestronaut',
     goalColor: '#0EA5E9',
     tagIds: ['tag-input'],
-    isRoutine: false,
   },
 ]
 
@@ -431,221 +402,6 @@ export let timeEntries: TimeEntry[] = [
     goalName: 'OSS活動',
     goalColor: '#10B981',
     tagIds: ['tag-dev'],
-  },
-]
-
-// ============================================
-// Routine tasks (定期タスク)
-// ============================================
-export let routineTasks: RoutineTask[] = [
-  {
-    id: 'r1',
-    name: '技術ニュースチェック',
-    frequency: 'daily',
-    estimatedMinutes: 15,
-    tagIds: ['tag-input'],
-    enabled: true,
-  },
-  {
-    id: 'r2',
-    name: '英語学習',
-    frequency: 'daily',
-    estimatedMinutes: 30,
-    tagIds: ['tag-input'],
-    enabled: true,
-  },
-  {
-    id: 'r3',
-    name: '筋トレ',
-    frequency: 'custom',
-    daysOfWeek: [1, 3, 5],
-    estimatedMinutes: 30,
-    tagIds: ['tag-exercise'],
-    enabled: true,
-  },
-  {
-    id: 'r4',
-    name: '週次振り返り',
-    frequency: 'weekly',
-    daysOfWeek: [0],
-    estimatedMinutes: 60,
-    tagIds: ['tag-review'],
-    enabled: true,
-  },
-]
-
-// ============================================
-// Learning records (学習記録)
-// ============================================
-export let learningRecords: LearningRecord[] = [
-  {
-    id: 'lr1',
-    title: 'Istio Traffic Management まとめ',
-    content: `# Istio Traffic Management
-
-## VirtualService
-
-VirtualServiceは、Istioにおけるトラフィックルーティングの中核となるリソースである。
-
-\`\`\`yaml
-apiVersion: networking.istio.io/v1beta1
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-  - reviews
-  http:
-  - match:
-    - headers:
-        end-user:
-          exact: jason
-    route:
-    - destination:
-        host: reviews
-        subset: v2
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
-\`\`\`
-
-## DestinationRule
-
-DestinationRuleは、トラフィックが特定のサービスに到達した後のポリシーを定義する。
-
-- サブセット定義
-- ロードバランシング設定
-- コネクションプール設定
-- 外れ値検出設定
-`,
-    format: 'markdown',
-    milestoneId: 'ms-ica',
-    milestoneName: 'ICA合格',
-    goalId: 'goal-gk',
-    goalName: 'Golden Kubestronaut',
-    goalColor: '#0EA5E9',
-    tagIds: ['tag-input'],
-    relatedTimeEntryIds: ['te1'],
-    createdAt: new Date(yesterday),
-    updatedAt: new Date(yesterday),
-  },
-  {
-    id: 'lr2',
-    title: 'Kensan アーキテクチャ図',
-    content: '[drawio content placeholder]',
-    format: 'drawio',
-    milestoneId: 'ms-kensan',
-    milestoneName: 'Kensan MVP',
-    goalId: 'goal-oss',
-    goalName: 'OSS活動',
-    goalColor: '#10B981',
-    tagIds: ['tag-dev'],
-    createdAt: subDays(new Date(), 2),
-    updatedAt: subDays(new Date(), 2),
-  },
-  {
-    id: 'lr3',
-    title: 'Cilium eBPF 動作原理',
-    content: `# Cilium eBPF 動作原理
-
-## eBPFとは
-
-eBPF (extended Berkeley Packet Filter) は、Linuxカーネル内でサンドボックス化されたプログラムを実行するための技術。
-
-## XDP (eXpress Data Path)
-
-- ネットワークドライバの直後でパケット処理
-- 高速なパケット処理を実現
-- ドロップ、転送、リダイレクト、通常処理への受け渡しが可能
-
-## TC (Traffic Control)
-
-- より高レベルなパケット処理
-- L7ポリシーの適用が可能
-`,
-    format: 'markdown',
-    milestoneId: 'ms-cca',
-    milestoneName: 'CCA合格',
-    goalId: 'goal-gk',
-    goalName: 'Golden Kubestronaut',
-    goalColor: '#0EA5E9',
-    tagIds: ['tag-input'],
-    createdAt: subDays(new Date(), 3),
-    updatedAt: subDays(new Date(), 3),
-  },
-  {
-    id: 'lr4',
-    title: 'Prometheus PromQL基礎',
-    content: `# Prometheus PromQL基礎
-
-## 基本的なクエリ
-
-### インスタントベクター
-\`\`\`
-http_requests_total{job="api-server"}
-\`\`\`
-
-### レンジベクター
-\`\`\`
-http_requests_total{job="api-server"}[5m]
-\`\`\`
-
-## 集約関数
-
-- sum() - 合計
-- avg() - 平均
-- rate() - 増加率
-- increase() - 増加量
-`,
-    format: 'markdown',
-    milestoneId: 'ms-pca',
-    milestoneName: 'PCA合格',
-    goalId: 'goal-gk',
-    goalName: 'Golden Kubestronaut',
-    goalColor: '#0EA5E9',
-    tagIds: ['tag-input'],
-    createdAt: subDays(new Date(), 5),
-    updatedAt: subDays(new Date(), 5),
-  },
-]
-
-// ============================================
-// Diary entries (日記)
-// ============================================
-export let diaryEntries: DiaryEntry[] = [
-  {
-    id: 'd1',
-    date: today,
-    title: '[MOCK] MSWテスト日記',
-    content: `# MSWモックデータ
-
-これはMSW（Mock Service Worker）のテストデータです。
-バックエンド通信時には表示されません。
-
-- make dev → このデータが表示される
-- make rebuild → DBのシードデータが表示される
-`,
-    tags: ['mock', 'テスト'],
-    createdAt: new Date(today),
-    updatedAt: new Date(today),
-  },
-  {
-    id: 'd2',
-    date: yesterday,
-    title: '[MOCK] モックデータの説明',
-    content: `# モックモードについて
-
-このデータが見えている場合、MSWモックモードで動作しています。
-
-実際のバックエンドと通信するには:
-\`\`\`
-make rebuild
-\`\`\`
-`,
-    tags: ['mock', '説明'],
-    createdAt: new Date(yesterday),
-    updatedAt: new Date(yesterday),
   },
 ]
 

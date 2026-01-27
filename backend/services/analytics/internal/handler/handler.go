@@ -9,6 +9,7 @@ import (
 	"github.com/kensan/backend/services/analytics/internal"
 	"github.com/kensan/backend/services/analytics/internal/service"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for analytics
@@ -45,6 +46,7 @@ func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_WEEK_START", "Invalid week_start format. Use YYYY-MM-DD")
 			return
 		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get weekly summary")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get weekly summary")
 		return
 	}

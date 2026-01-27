@@ -55,7 +55,10 @@
       "mcp__notion__notion-search",
       "mcp__notion__notion-fetch",
       "WebFetch(domain:zenn.dev)",
-      "Bash(xargs -I {} sh -c \"echo \"\"=== {} ===\"\" && cat \"\"{}\"\"\")"
+      "Bash(xargs -I {} sh -c \"echo \"\"=== {} ===\"\" && cat \"\"{}\"\"\")",
+      "Bash(pytest:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(xargs:*)"
     ]
   },
   "outputStyle": "default"

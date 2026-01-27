@@ -130,6 +130,24 @@ type UpdateTagInput struct {
 	Pinned *bool   `json:"pinned,omitempty"`
 }
 
+// TaskFrequency represents the frequency of a recurring task
+type TaskFrequency string
+
+const (
+	TaskFrequencyDaily  TaskFrequency = "daily"
+	TaskFrequencyWeekly TaskFrequency = "weekly"
+	TaskFrequencyCustom TaskFrequency = "custom"
+)
+
+// IsValid checks if the task frequency is valid
+func (f TaskFrequency) IsValid() bool {
+	switch f {
+	case TaskFrequencyDaily, TaskFrequencyWeekly, TaskFrequencyCustom:
+		return true
+	}
+	return false
+}
+
 // Task represents a task entity
 type Task struct {
 	ID               string         `json:"id"`
@@ -141,6 +159,9 @@ type Task struct {
 	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
 	Completed        bool           `json:"completed"`
 	DueDate          types.DateOnly `json:"dueDate,omitempty"`
+	Frequency        *TaskFrequency `json:"frequency,omitempty"`  // nil = one-off task
+	DaysOfWeek       []int          `json:"daysOfWeek,omitempty"` // 0=Sun, 1=Mon, ..., 6=Sat
+	SortOrder        int            `json:"sortOrder"`
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 }
@@ -154,6 +175,8 @@ type CreateTaskInput struct {
 	EstimatedMinutes *int           `json:"estimatedMinutes,omitempty"`
 	Completed        bool           `json:"completed"`
 	DueDate          types.DateOnly `json:"dueDate,omitempty"`
+	Frequency        *TaskFrequency `json:"frequency,omitempty"`
+	DaysOfWeek       []int          `json:"daysOfWeek,omitempty"`
 }
 
 // UpdateTaskInput represents the input for updating a task
@@ -165,6 +188,8 @@ type UpdateTaskInput struct {
 	EstimatedMinutes *int            `json:"estimatedMinutes,omitempty"`
 	Completed        *bool           `json:"completed,omitempty"`
 	DueDate          *types.DateOnly `json:"dueDate,omitempty"`
+	Frequency        *TaskFrequency  `json:"frequency,omitempty"`
+	DaysOfWeek       []int           `json:"daysOfWeek,omitempty"`
 }
 
 // TaskFilter represents filters for listing tasks

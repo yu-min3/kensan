@@ -2,12 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { LoginPage } from '@/pages/LoginPage'
 import { S01Settings } from '@/pages/S01_Settings'
-import { S02Dashboard } from '@/pages/S02_Dashboard'
 import { DailyPage } from '@/pages/DailyPage'
 import { N01NoteList } from '@/pages/N01_NoteList'
 import { N02NoteEdit } from '@/pages/N02_NoteEdit'
 import { T01TaskManagement } from '@/pages/T01_TaskManagement'
-import { R01RoutineTaskManagement } from '@/pages/R01_RoutineTaskManagement'
 import { A01AnalyticsReport } from '@/pages/A01_AnalyticsReport'
 import { A02AIReview } from '@/pages/A02_AIReview'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -68,13 +66,11 @@ function App() {
             )
           }
         >
-          <Route index element={<S02Dashboard />} />
-          <Route path="daily" element={<DailyPage />} />
+          <Route index element={<DailyPage />} />
           <Route path="notes" element={<N01NoteList />} />
           <Route path="notes/new" element={<N02NoteEdit />} />
           <Route path="notes/:id" element={<N02NoteEdit />} />
           <Route path="tasks" element={<T01TaskManagement />} />
-          <Route path="routines" element={<R01RoutineTaskManagement />} />
           <Route path="analytics" element={<A01AnalyticsReport />} />
           <Route path="ai-review" element={<A02AIReview />} />
           <Route path="settings" element={<S01Settings />} />

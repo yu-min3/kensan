@@ -78,66 +78,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # Routine Service
-  routine-service:
-    build:
-      context: .
-      dockerfile: services/routine/Dockerfile
-    container_name: kensan-routine-service
-    environment:
-      SERVER_PORT: 8085
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: kensan
-      DB_PASSWORD: kensan
-      DB_NAME: kensan
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-    ports:
-      - "8085:8085"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # Record Service
-  record-service:
-    build:
-      context: .
-      dockerfile: services/record/Dockerfile
-    container_name: kensan-record-service
-    environment:
-      SERVER_PORT: 8086
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: kensan
-      DB_PASSWORD: kensan
-      DB_NAME: kensan
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-    ports:
-      - "8086:8086"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # Diary Service
-  diary-service:
-    build:
-      context: .
-      dockerfile: services/diary/Dockerfile
-    container_name: kensan-diary-service
-    environment:
-      SERVER_PORT: 8087
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: kensan
-      DB_PASSWORD: kensan
-      DB_NAME: kensan
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
-    ports:
-      - "8087:8087"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   # Analytics Service
   analytics-service:
     build:

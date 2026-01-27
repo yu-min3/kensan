@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Awaitable
 from functools import wraps
 
+from kensan_ai.errors import ToolError
+
 
 @dataclass
 class ToolDefinition:
@@ -105,7 +107,7 @@ async def execute_tool(name: str, args: dict[str, Any]) -> Any:
         args: Arguments to pass to the tool
 
     Returns:
-        The tool's return value
+        The tool's return value, or an error dict if ToolError is raised
 
     Raises:
         ValueError: If the tool is not found
@@ -114,7 +116,11 @@ async def execute_tool(name: str, args: dict[str, Any]) -> Any:
     if tool_def is None:
         raise ValueError(f"Tool not found: {name}")
 
-    return await tool_def.handler(args)
+    try:
+        return await tool_def.handler(args)
+    except ToolError as e:
+        # Convert ToolError to a structured error response
+        return {"error": e.to_dict()}
 
 
 def format_tool_result(result: Any) -> str:

@@ -112,7 +112,6 @@ export function DailyPage() {
           goalId: activeDragData.goalId,
           goalName: activeDragData.goalName,
           goalColor: activeDragData.goalColor,
-          isRoutine: false,
         })
       }
     }

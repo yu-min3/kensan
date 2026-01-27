@@ -125,7 +125,6 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
       await addTimeBlock({
         ...blockData,
         date,
-        isRoutine: false,
       })
     }
 

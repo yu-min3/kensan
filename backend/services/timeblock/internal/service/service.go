@@ -2,23 +2,24 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/repository"
+	"github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/validation"
 )
 
+// Re-export shared errors for backward compatibility with handlers
 var (
-	ErrTimeBlockNotFound    = errors.New("time block not found")
-	ErrTimeEntryNotFound    = errors.New("time entry not found")
-	ErrRunningTimerNotFound = errors.New("no running timer found")
-	ErrTimerAlreadyRunning  = errors.New("timer is already running")
-	ErrInvalidInput         = errors.New("invalid input")
-	ErrInvalidDate          = errors.New("invalid date format (expected YYYY-MM-DD)")
-	ErrInvalidTime          = errors.New("invalid time format (expected HH:mm)")
+	ErrTimeBlockNotFound    = errors.ErrTimeBlockNotFound
+	ErrTimeEntryNotFound    = errors.ErrTimeEntryNotFound
+	ErrRunningTimerNotFound = errors.ErrTimerNotFound
+	ErrTimerAlreadyRunning  = repository.ErrTimerAlreadyRunning
+	ErrInvalidInput         = errors.ErrInvalidInput
+	ErrInvalidDate          = errors.ErrInvalidDate
+	ErrInvalidTime          = errors.ErrInvalidTime
 )
 
 // Service handles business logic for time blocks and time entries

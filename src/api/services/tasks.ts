@@ -178,6 +178,8 @@ interface TaskResponse {
   estimatedMinutes?: number
   completed: boolean
   dueDate?: string
+  frequency?: 'daily' | 'weekly' | 'custom'
+  daysOfWeek?: number[]
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -192,6 +194,8 @@ const transformTask = (t: TaskResponse): Task => ({
   estimatedMinutes: t.estimatedMinutes,
   completed: t.completed,
   dueDate: t.dueDate,
+  frequency: t.frequency,
+  daysOfWeek: t.daysOfWeek,
   sortOrder: t.sortOrder,
   createdAt: new Date(t.createdAt),
   updatedAt: new Date(t.updatedAt),
@@ -204,6 +208,8 @@ export interface CreateTaskInput {
   tagIds?: string[]
   estimatedMinutes?: number
   dueDate?: string
+  frequency?: 'daily' | 'weekly' | 'custom'
+  daysOfWeek?: number[]
 }
 
 export interface UpdateTaskInput {
@@ -214,6 +220,8 @@ export interface UpdateTaskInput {
   estimatedMinutes?: number
   dueDate?: string | null
   completed?: boolean
+  frequency?: 'daily' | 'weekly' | 'custom'
+  daysOfWeek?: number[]
 }
 
 export interface TaskFilter {

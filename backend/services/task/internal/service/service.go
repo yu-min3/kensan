@@ -2,23 +2,27 @@ package service
 
 import (
 	"context"
-	"errors"
 
-	"github.com/kensan/backend/services/task/internal"
+	task "github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/repository"
+	"github.com/kensan/backend/shared/errors"
 )
 
+// Re-export shared errors for backward compatibility with handlers
+// Handlers can use service.ErrTaskNotFound or import shared/errors directly
 var (
-	ErrTaskNotFound       = errors.New("task not found")
-	ErrGoalNotFound       = errors.New("goal not found")
-	ErrMilestoneNotFound  = errors.New("milestone not found")
-	ErrTagNotFound        = errors.New("tag not found")
-	ErrEntityMemoNotFound = errors.New("entity memo not found")
-	ErrTodoNotFound       = errors.New("todo not found")
-	ErrInvalidStatus      = errors.New("invalid milestone status")
-	ErrInvalidEntityType  = errors.New("invalid entity type")
-	ErrInvalidFrequency   = errors.New("invalid todo frequency")
-	ErrInvalidInput       = errors.New("invalid input")
+	ErrTaskNotFound                = errors.ErrTaskNotFound
+	ErrGoalNotFound                = errors.ErrGoalNotFound
+	ErrMilestoneNotFound           = errors.ErrMilestoneNotFound
+	ErrTagNotFound                 = errors.ErrTagNotFound
+	ErrTagAlreadyExists            = repository.ErrTagAlreadyExists
+	ErrEntityMemoNotFound          = errors.ErrEntityMemoNotFound
+	ErrTodoNotFound                = errors.ErrTodoNotFound
+	ErrTodoCompletionAlreadyExists = repository.ErrTodoCompletionAlreadyExists
+	ErrInvalidStatus               = errors.ErrInvalidStatus
+	ErrInvalidEntityType           = errors.ErrInvalidEntityType
+	ErrInvalidFrequency            = errors.ErrInvalidFrequency
+	ErrInvalidInput                = errors.ErrInvalidInput
 )
 
 // Service handles business logic for tasks, goals, milestones, and tags

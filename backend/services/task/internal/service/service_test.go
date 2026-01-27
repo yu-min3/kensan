@@ -222,6 +222,112 @@ func (m *MockRepository) SetTaskTags(ctx context.Context, taskID string, tagIDs 
 	return args.Error(0)
 }
 
+// EntityMemo Operations
+func (m *MockRepository) ListEntityMemos(ctx context.Context, userID string, filter task.EntityMemoFilter) ([]task.EntityMemo, error) {
+	args := m.Called(ctx, userID, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.EntityMemo), args.Error(1)
+}
+
+func (m *MockRepository) GetEntityMemoByID(ctx context.Context, userID, memoID string) (*task.EntityMemo, error) {
+	args := m.Called(ctx, userID, memoID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.EntityMemo), args.Error(1)
+}
+
+func (m *MockRepository) CreateEntityMemo(ctx context.Context, userID string, input task.CreateEntityMemoInput) (*task.EntityMemo, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.EntityMemo), args.Error(1)
+}
+
+func (m *MockRepository) UpdateEntityMemo(ctx context.Context, userID, memoID string, input task.UpdateEntityMemoInput) (*task.EntityMemo, error) {
+	args := m.Called(ctx, userID, memoID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.EntityMemo), args.Error(1)
+}
+
+func (m *MockRepository) DeleteEntityMemo(ctx context.Context, userID, memoID string) error {
+	args := m.Called(ctx, userID, memoID)
+	return args.Error(0)
+}
+
+// Todo Operations
+func (m *MockRepository) ListTodos(ctx context.Context, userID string, filter task.TodoFilter) ([]task.Todo, error) {
+	args := m.Called(ctx, userID, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Todo), args.Error(1)
+}
+
+func (m *MockRepository) ListTodosWithStatus(ctx context.Context, userID string, date string) ([]task.TodoWithStatus, error) {
+	args := m.Called(ctx, userID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.TodoWithStatus), args.Error(1)
+}
+
+func (m *MockRepository) GetTodoByID(ctx context.Context, userID, todoID string) (*task.Todo, error) {
+	args := m.Called(ctx, userID, todoID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Todo), args.Error(1)
+}
+
+func (m *MockRepository) CreateTodo(ctx context.Context, userID string, input task.CreateTodoInput) (*task.Todo, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Todo), args.Error(1)
+}
+
+func (m *MockRepository) UpdateTodo(ctx context.Context, userID, todoID string, input task.UpdateTodoInput) (*task.Todo, error) {
+	args := m.Called(ctx, userID, todoID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Todo), args.Error(1)
+}
+
+func (m *MockRepository) DeleteTodo(ctx context.Context, userID, todoID string) error {
+	args := m.Called(ctx, userID, todoID)
+	return args.Error(0)
+}
+
+// TodoCompletion Operations
+func (m *MockRepository) GetTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+	args := m.Called(ctx, todoID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.TodoCompletion), args.Error(1)
+}
+
+func (m *MockRepository) CreateTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+	args := m.Called(ctx, todoID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.TodoCompletion), args.Error(1)
+}
+
+func (m *MockRepository) DeleteTodoCompletion(ctx context.Context, todoID, date string) error {
+	args := m.Called(ctx, todoID, date)
+	return args.Error(0)
+}
+
 // ========== Task Tests ==========
 
 func TestListTasks_Success(t *testing.T) {
