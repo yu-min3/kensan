@@ -106,23 +106,28 @@ type MilestoneFilter struct {
 
 // Tag represents a tag entity
 type Tag struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	Name      string    `json:"name"`
-	Color     string    `json:"color"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	UserID     string    `json:"userId"`
+	Name       string    `json:"name"`
+	Color      string    `json:"color"`
+	Pinned     bool      `json:"pinned"`
+	UsageCount int       `json:"usageCount"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // CreateTagInput represents the input for creating a tag
 type CreateTagInput struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Name   string `json:"name"`
+	Color  string `json:"color"`
+	Pinned *bool  `json:"pinned,omitempty"`
 }
 
 // UpdateTagInput represents the input for updating a tag
 type UpdateTagInput struct {
-	Name  *string `json:"name,omitempty"`
-	Color *string `json:"color,omitempty"`
+	Name   *string `json:"name,omitempty"`
+	Color  *string `json:"color,omitempty"`
+	Pinned *bool   `json:"pinned,omitempty"`
 }
 
 // Task represents a task entity

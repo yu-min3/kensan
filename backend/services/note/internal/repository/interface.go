@@ -60,4 +60,18 @@ type Repository interface {
 
 	// UpdateIndexStatus updates the index status of a note
 	UpdateIndexStatus(ctx context.Context, noteID string, status note.IndexStatus) error
+
+	// ========== NoteMetadata Operations ==========
+
+	// ListMetadata retrieves all metadata for a note
+	ListMetadata(ctx context.Context, noteID string) ([]*note.NoteMetadataItem, error)
+
+	// SetMetadata sets a metadata key-value pair (upsert)
+	SetMetadata(ctx context.Context, noteID, key string, value *string) error
+
+	// DeleteMetadata deletes a metadata key
+	DeleteMetadata(ctx context.Context, noteID, key string) error
+
+	// BulkSetMetadata replaces all metadata for a note
+	BulkSetMetadata(ctx context.Context, noteID string, metadata []note.SetNoteMetadataInput) error
 }

@@ -154,7 +154,7 @@ export function A01AnalyticsReport() {
               <BarChart data={dailyStudyHours}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="day" fontSize={12} />
-                <YAxis fontSize={12} unit="h" />
+                <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} unit="h" />
                 <Tooltip formatter={(value) => [`${value}時間`, '学習時間']} />
                 <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -217,7 +217,7 @@ export function A01AnalyticsReport() {
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={milestoneData} layout="vertical">
-                <XAxis type="number" fontSize={12} unit="h" />
+                <XAxis type="number" domain={[0, 'auto']} fontSize={12} unit="h" />
                 <YAxis type="category" dataKey="name" fontSize={12} width={100} />
                 <Tooltip formatter={(value) => [`${value}時間`, '']} />
                 <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[0, 4, 4, 0]} />

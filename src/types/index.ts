@@ -34,12 +34,17 @@ export interface Tag {
   id: string
   name: string
   color: string // Hex color
+  pinned: boolean
+  usageCount: number
   createdAt: Date
+  updatedAt: Date
 }
 
 // ============================================
 // Task (タスク)
 // ============================================
+export type TaskFrequency = 'daily' | 'weekly' | 'custom'
+
 export interface Task {
   id: string
   name: string
@@ -50,6 +55,9 @@ export interface Task {
   completed: boolean
   dueDate?: string // YYYY-MM-DD
   sortOrder: number // 並び順（小さいほど上）
+  // 定期タスク設定
+  frequency?: TaskFrequency // undefined = 単発タスク
+  daysOfWeek?: number[] // 0=日, 1=月, ..., 6=土 (frequencyがcustomの時)
   createdAt: Date
   updatedAt: Date
 }
@@ -151,6 +159,18 @@ export interface TodoCompletion {
 export type NoteType = 'diary' | 'learning'
 export type NoteFormat = 'markdown' | 'drawio'
 
+// ============================================
+// NoteMetadata (ノートメタデータ)
+// ============================================
+export interface NoteMetadataItem {
+  id: string
+  noteId: string
+  key: string
+  value?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 // コンテンツタイプ（複数コンテンツ対応）
 export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code'
 export type StorageProvider = 'minio' | 'r2' | 's3' | 'local'
@@ -183,7 +203,7 @@ export interface Note {
   content: string // 後方互換性のため残す
   format: NoteFormat // 後方互換性のため残す
   contents?: NoteContent[] // 複数コンテンツ
-  date?: string // YYYY-MM-DD, diaryでは必須
+  date?: string // YYYY-MM-DD, diary/learningでは必須
   taskId?: string // 関連タスク
   milestoneId?: string
   milestoneName?: string
@@ -191,6 +211,7 @@ export interface Note {
   goalName?: string
   goalColor?: string
   tagIds?: string[] // note_tagsテーブル経由
+  metadata?: NoteMetadataItem[] // note_metadataテーブル経由
   relatedTimeEntryIds?: string[]
   fileUrl?: string // drawioの場合のファイルURL（後方互換）
   indexStatus?: IndexStatus

@@ -47,9 +47,9 @@ function App() {
           }
         />
 
-        {/* 設定画面（認証後、初期設定前） */}
+        {/* 設定画面（認証後、初期設定前 - サイドバーなし） */}
         <Route
-          path="/settings"
+          path="/settings/initial"
           element={
             isAuthenticated ? <S01Settings /> : <Navigate to="/login" replace />
           }
@@ -62,7 +62,7 @@ function App() {
             !isAuthenticated ? (
               <Navigate to="/login" replace />
             ) : !isConfigured ? (
-              <Navigate to="/settings" replace />
+              <Navigate to="/settings/initial" replace />
             ) : (
               <Layout />
             )
@@ -70,9 +70,6 @@ function App() {
         >
           <Route index element={<S02Dashboard />} />
           <Route path="daily" element={<DailyPage />} />
-          {/* 後方互換のため旧ルートもリダイレクト */}
-          <Route path="morning" element={<Navigate to="/daily" replace />} />
-          <Route path="evening" element={<Navigate to="/daily" replace />} />
           <Route path="notes" element={<N01NoteList />} />
           <Route path="notes/new" element={<N02NoteEdit />} />
           <Route path="notes/:id" element={<N02NoteEdit />} />
@@ -80,6 +77,7 @@ function App() {
           <Route path="routines" element={<R01RoutineTaskManagement />} />
           <Route path="analytics" element={<A01AnalyticsReport />} />
           <Route path="ai-review" element={<A02AIReview />} />
+          <Route path="settings" element={<S01Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

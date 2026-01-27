@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { GoalBadge } from './GoalBadge'
 import { cn } from '@/lib/utils'
-import { Edit, Trash2, Play } from 'lucide-react'
+import { Edit, Trash2, Play, Plus, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDroppable } from '@dnd-kit/core'
 
@@ -37,7 +37,16 @@ interface TimeBlockTimelineProps {
   isTimerRunning?: boolean
   // 実行中タイマー（仮想エントリとして表示）
   runningTimer?: RunningTimerData | null
+  // ズーム機能
+  scale?: number
+  onScaleChange?: (scale: number) => void
 }
+
+// ズーム設定
+const BASE_HOUR_HEIGHT = 48
+const MIN_SCALE = 0.5
+const MAX_SCALE = 2.0
+const SCALE_STEP = 0.1
 
 type ResizeEdge = 'top' | 'bottom'
 
@@ -98,13 +107,36 @@ export function TimeBlockTimeline({
   dragOverY = null,
   isTimerRunning = false,
   runningTimer = null,
+  scale: propScale,
+  onScaleChange,
 }: TimeBlockTimelineProps) {
   const [resizeState, setResizeState] = useState<ResizeState | null>(null)
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewTime, setPreviewTime] = useState<{ startTime: string; endTime: string } | null>(null)
   const [currentTime, setCurrentTime] = useState<Date>(new Date())
+  const [internalScale, setInternalScale] = useState(1.0)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+
+  // スケール管理（propsがあればprops優先、なければ内部state）
+  const scale = propScale ?? internalScale
+  const setScale = onScaleChange ?? setInternalScale
+  const hourHeight = BASE_HOUR_HEIGHT * scale
+
+  // マウスホイールでズーム（Ctrl+ホイール）
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP
+        const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale + delta))
+        if (newScale !== scale) {
+          setScale(newScale)
+        }
+      }
+    },
+    [scale, setScale]
+  )
 
   // 現在時刻を更新（タイマー実行中は1秒ごと、それ以外は1分ごと）
   useEffect(() => {
@@ -179,7 +211,7 @@ export function TimeBlockTimeline({
   // 常にスクロール可能（表示エリアの高さを固定）
   // 12時間分の高さを表示エリアとして確保（6:00〜18:00相当）
   const visibleHours = 12
-  const maxHeight = `${visibleHours * 48}px`
+  const maxHeight = `${visibleHours * hourHeight}px`
 
   // Convert Y position to minutes
   const yToMinutes = useCallback(
@@ -365,12 +397,11 @@ export function TimeBlockTimeline({
   // 初期スクロール位置を8:00に設定
   useEffect(() => {
     if (scrollContainerRef.current && startHour < 8) {
-      const hourHeight = 48 // px per hour
       const scrollToHour = 8
       const scrollPosition = (scrollToHour - startHour) * hourHeight
       scrollContainerRef.current.scrollTop = scrollPosition
     }
-  }, [startHour])
+  }, [startHour, hourHeight])
 
   // Get display times for a block (use preview if resizing or dragging)
   const getDisplayTimes = (block: TimeBlock) => {
@@ -381,17 +412,52 @@ export function TimeBlockTimeline({
   }
 
   return (
-    <div
-      ref={scrollContainerRef}
-      className="relative flex overflow-y-auto"
-      style={{ maxHeight }}
-    >
+    <div className="relative">
+      {/* ズームコントロール（スクロール外に配置で常時表示） */}
+      <div className="absolute top-2 right-2 z-30 flex items-center gap-0.5 bg-background/95 border rounded-md shadow-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => setScale(Math.max(MIN_SCALE, scale - SCALE_STEP))}
+          disabled={scale <= MIN_SCALE}
+          title="縮小"
+        >
+          <Minus className="h-3 w-3" />
+        </Button>
+        <button
+          className="px-1.5 text-xs text-muted-foreground hover:text-foreground min-w-[40px] text-center"
+          onClick={() => setScale(1.0)}
+          title="リセット (100%)"
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => setScale(Math.min(MAX_SCALE, scale + SCALE_STEP))}
+          disabled={scale >= MAX_SCALE}
+          title="拡大"
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* スクロールコンテナ */}
+      <div
+        ref={scrollContainerRef}
+        className="relative flex overflow-y-auto"
+        style={{ maxHeight }}
+        onWheel={handleWheel}
+      >
       {/* 時間軸 */}
       <div className="w-16 flex-shrink-0">
         {hours.map((hour) => (
           <div
             key={hour}
-            className="h-12 border-t text-xs text-muted-foreground flex items-start pt-1 pr-2 justify-end"
+            className="border-t text-xs text-muted-foreground flex items-start pt-1 pr-2 justify-end"
+            style={{ height: `${hourHeight}px` }}
           >
             {hour === 24 ? '0:00' : `${hour}:00`}
           </div>
@@ -402,13 +468,15 @@ export function TimeBlockTimeline({
       <div
         ref={setRefs}
         data-timeline-container
+        data-start-hour={startHour}
+        data-end-hour={endHour}
         className={cn(
           'flex-1 relative border-l',
           isDraggingTask && 'ring-2 ring-primary/30 ring-inset bg-primary/5',
           isOver && 'ring-primary/50 bg-primary/10',
           onEmptyDoubleClick && 'cursor-pointer'
         )}
-        style={{ height: `${hours.length * 48}px` }}
+        style={{ height: `${hours.length * hourHeight}px` }}
         onDoubleClick={(e) => {
           if (!onEmptyDoubleClick || !containerRef.current) return
 
@@ -787,14 +855,15 @@ export function TimeBlockTimeline({
                 <div
                   className="absolute left-1 right-1 rounded-md border-2 border-dashed border-primary bg-primary/10"
                   style={{
-                    height: `${(60 / totalMinutes) * 100 * (hours.length * 48) / 100}px`,
-                    minHeight: '48px',
+                    height: `${hourHeight}px`,
+                    minHeight: `${hourHeight}px`,
                   }}
                 />
               </div>
             )
           })()
         )}
+      </div>
       </div>
     </div>
   )

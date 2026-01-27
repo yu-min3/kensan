@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Goal, Milestone, Tag, Task } from '@/types'
+import type { Goal, Milestone, Tag, Task, TaskFrequency } from '@/types'
 import { goalsApi, milestonesApi, tagsApi, tasksApi } from '@/api/services/tasks'
 
 interface TaskState {
@@ -24,12 +24,12 @@ interface TaskState {
   deleteMilestone: (id: string) => Promise<void>
 
   // Tag操作
-  addTag: (tag: { name: string; color: string }) => Promise<void>
+  addTag: (tag: { name: string; color: string; pinned?: boolean }) => Promise<Tag>
   updateTag: (id: string, updates: Partial<Tag>) => Promise<void>
   deleteTag: (id: string) => Promise<void>
 
   // Task操作
-  addTask: (task: { name: string; milestoneId?: string; parentTaskId?: string; tagIds?: string[]; estimatedMinutes?: number; dueDate?: string }) => Promise<void>
+  addTask: (task: { name: string; milestoneId?: string; parentTaskId?: string; tagIds?: string[]; estimatedMinutes?: number; dueDate?: string; frequency?: TaskFrequency; daysOfWeek?: number[] }) => Promise<void>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   toggleTaskComplete: (id: string) => Promise<void>
@@ -152,8 +152,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const newTag = await tagsApi.create(tag)
       set((state) => ({ tags: [...state.tags, newTag] }))
+      return newTag
     } catch (error) {
       set({ error: (error as Error).message })
+      throw error
     }
   },
 

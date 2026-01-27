@@ -40,7 +40,7 @@ export function N02NoteEdit() {
     deleteNote,
     archiveNote,
   } = useNoteStore()
-  const { goals, milestones, tasks, tags, getMilestoneById, getGoalById } = useTaskStore()
+  const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskStore()
 
   const isNew = !id
   const initialType = (searchParams.get('type') as NoteType) || 'diary'
@@ -51,7 +51,7 @@ export function N02NoteEdit() {
     title: '',
     content: '',
     format: 'markdown',
-    date: initialType === 'diary' ? format(new Date(), 'yyyy-MM-dd') : undefined,
+    date: (initialType === 'diary' || initialType === 'learning') ? format(new Date(), 'yyyy-MM-dd') : undefined,
     taskId: undefined,
     milestoneId: undefined,
     goalId: undefined,
@@ -173,8 +173,8 @@ export function N02NoteEdit() {
     // Title is always required
     if (!editorValue.title?.trim()) return false
 
-    // Date is required for diary
-    if (editorValue.type === 'diary' && !editorValue.date) return false
+    // Date is required for diary and learning
+    if ((editorValue.type === 'diary' || editorValue.type === 'learning') && !editorValue.date) return false
 
     return true
   }
@@ -264,6 +264,7 @@ export function N02NoteEdit() {
             milestones={milestones}
             tasks={tasks}
             tags={tags}
+            onCreateTag={(name, color) => addTag({ name, color })}
             showTypeSelector={isNew}
             showMetadata={true}
           />

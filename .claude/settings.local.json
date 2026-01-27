@@ -58,5 +58,5 @@
       "Bash(xargs -I {} sh -c \"echo \"\"=== {} ===\"\" && cat \"\"{}\"\"\")"
     ]
   },
-  "outputStyle": "Learning"
+  "outputStyle": "default"
 }

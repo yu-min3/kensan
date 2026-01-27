@@ -32,6 +32,9 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { GanttChartWidget } from '@/components/task/GanttChartWidget'
+import { RecurringTaskWidget } from '@/components/task/RecurringTaskWidget'
+import { PageMemo } from '@/components/common/PageMemo'
 import {
   DndContext,
   closestCenter,
@@ -54,6 +57,8 @@ const initialTaskFormData: TaskFormData = {
   milestoneId: '',
   parentTaskId: undefined,
   tagIds: [],
+  frequency: undefined,
+  daysOfWeek: undefined,
 }
 
 const initialTagFormData: TagFormData = {
@@ -557,6 +562,8 @@ export function T01TaskManagement() {
       milestoneId: task.milestoneId || '',
       parentTaskId: task.parentTaskId,
       tagIds: task.tagIds || [],
+      frequency: task.frequency,
+      daysOfWeek: task.daysOfWeek,
     })
   }
 
@@ -567,6 +574,8 @@ export function T01TaskManagement() {
         milestoneId: data.milestoneId || undefined,
         parentTaskId: data.parentTaskId,
         tagIds: data.tagIds,
+        frequency: data.frequency,
+        daysOfWeek: data.daysOfWeek,
       })
     } else {
       await addTask({
@@ -574,6 +583,8 @@ export function T01TaskManagement() {
         milestoneId: data.milestoneId || undefined,
         parentTaskId: data.parentTaskId,
         tagIds: data.tagIds,
+        frequency: data.frequency,
+        daysOfWeek: data.daysOfWeek,
       })
     }
   }
@@ -641,8 +652,21 @@ export function T01TaskManagement() {
         </div>
       </div>
 
+      {/* ガントチャート + 定期タスク達成率 + メモ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <GanttChartWidget goals={goals} milestones={milestones} tasks={tasks} className="lg:col-span-2" />
+        <div className="space-y-4">
+          <RecurringTaskWidget goals={goals} milestones={milestones} tasks={tasks} />
+          <PageMemo
+            pageId="task-management"
+            title="タスク管理メモ"
+            placeholder="タスクの優先度、検討事項、メモなど..."
+          />
+        </div>
+      </div>
+
       {/* 3カラムレイアウト */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-180px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-280px)]">
         {/* カラム1: 目標 */}
         <Card className="flex flex-col">
           <CardHeader className="py-3 px-4 border-b flex-shrink-0">

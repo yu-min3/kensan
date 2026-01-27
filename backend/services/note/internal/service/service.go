@@ -75,6 +75,15 @@ func (s *Service) Create(ctx context.Context, userID string, input *note.CreateN
 		return nil, err
 	}
 
+	// Convert metadata input to metadata items
+	var metadataItems []note.NoteMetadataItem
+	if len(input.Metadata) > 0 {
+		metadataItems = make([]note.NoteMetadataItem, len(input.Metadata))
+		for i, m := range input.Metadata {
+			metadataItems[i] = note.NoteMetadataItem{Key: m.Key, Value: m.Value}
+		}
+	}
+
 	// Create note
 	n := &note.Note{
 		UserID:              userID,
@@ -90,6 +99,7 @@ func (s *Service) Create(ctx context.Context, userID string, input *note.CreateN
 		GoalName:            input.GoalName,
 		GoalColor:           input.GoalColor,
 		TagIDs:              input.TagIDs,
+		Metadata:            metadataItems,
 		RelatedTimeEntryIDs: input.RelatedTimeEntryIDs,
 		FileURL:             input.FileURL,
 		Archived:            false,
@@ -160,6 +170,13 @@ func (s *Service) Update(ctx context.Context, userID, noteID string, input *note
 	}
 	if input.TagIDs != nil {
 		n.TagIDs = input.TagIDs
+	}
+	if input.Metadata != nil {
+		metadataItems := make([]note.NoteMetadataItem, len(input.Metadata))
+		for i, m := range input.Metadata {
+			metadataItems[i] = note.NoteMetadataItem{Key: m.Key, Value: m.Value}
+		}
+		n.Metadata = metadataItems
 	}
 	if input.RelatedTimeEntryIDs != nil {
 		n.RelatedTimeEntryIDs = input.RelatedTimeEntryIDs
@@ -243,8 +260,8 @@ func (s *Service) validateCreateInput(input *note.CreateNoteInput) error {
 		return ErrInvalidFormat
 	}
 
-	// Validate date (required for diary)
-	if input.Type == note.NoteTypeDiary {
+	// Validate date (required for diary and learning)
+	if input.Type == note.NoteTypeDiary || input.Type == note.NoteTypeLearning {
 		if !input.Date.Valid {
 			return ErrDateRequired
 		}

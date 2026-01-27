@@ -11,7 +11,8 @@ import {
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
 import { DrawioEditor } from '@/components/editor/DrawioEditor'
 import { Badge } from '@/components/ui/badge'
-import { X, FileText, Shapes, Calendar, Target, Milestone, ListTodo, Tag } from 'lucide-react'
+import { TagInput } from '@/components/common/TagInput'
+import { FileText, Shapes, Calendar, Target, Milestone, ListTodo } from 'lucide-react'
 import type { NoteType, NoteFormat, Goal, Milestone as MilestoneType, Task, Tag as TagType } from '@/types'
 import { format } from 'date-fns'
 
@@ -35,6 +36,8 @@ interface NoteEditorProps {
   milestones?: MilestoneType[]
   tasks?: Task[]
   tags?: TagType[]
+  // Tag creation callback
+  onCreateTag?: (name: string, color: string) => Promise<TagType>
   // Mode
   showTypeSelector?: boolean
   showMetadata?: boolean
@@ -48,6 +51,7 @@ export function NoteEditor({
   milestones = [],
   tasks = [],
   tags = [],
+  onCreateTag,
   showTypeSelector = false,
   showMetadata = true,
   placeholder,
@@ -86,12 +90,28 @@ export function NoteEditor({
     })
   }
 
-  const handleTagToggle = (tagId: string) => {
-    const currentTags = value.tagIds || []
-    const newTags = currentTags.includes(tagId)
-      ? currentTags.filter((id) => id !== tagId)
-      : [...currentTags, tagId]
-    handleChange({ tagIds: newTags })
+  const handleTagsChange = (tagIds: string[]) => {
+    handleChange({ tagIds })
+  }
+
+  // Helper functions to get display names for select values
+  const getGoalDisplayName = (goalId: string | undefined): string | undefined => {
+    if (!goalId || goalId === '_none') return undefined
+    const goal = goals.find((g) => g.id === goalId)
+    // Return goal name if found, otherwise return undefined (not the ID)
+    return goal?.name
+  }
+
+  const getMilestoneDisplayName = (milestoneId: string | undefined): string | undefined => {
+    if (!milestoneId || milestoneId === '_none') return undefined
+    const milestone = filteredMilestones.find((m) => m.id === milestoneId)
+    return milestone?.name
+  }
+
+  const getTaskDisplayName = (taskId: string | undefined): string | undefined => {
+    if (!taskId || taskId === '_none') return undefined
+    const task = filteredTasks.find((t) => t.id === taskId)
+    return task?.name
   }
 
   const handleFormatChange = (format: NoteFormat) => {
@@ -132,8 +152,8 @@ export function NoteEditor({
         </div>
       )}
 
-      {/* Date (for diary type) */}
-      {value.type === 'diary' && (
+      {/* Date (required for diary and learning types) */}
+      {(value.type === 'diary' || value.type === 'learning') && (
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
@@ -222,7 +242,9 @@ export function NoteEditor({
                 onValueChange={(v) => handleGoalChange(v === '_none' ? undefined : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="目標を選択" />
+                  <span className="truncate">
+                    {getGoalDisplayName(value.goalId) || '目標を選択'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">なし</SelectItem>
@@ -256,7 +278,9 @@ export function NoteEditor({
                 onValueChange={(v) => handleMilestoneChange(v === '_none' ? undefined : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="マイルストーンを選択" />
+                  <span className="truncate">
+                    {getMilestoneDisplayName(value.milestoneId) || 'マイルストーンを選択'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">なし</SelectItem>
@@ -284,7 +308,9 @@ export function NoteEditor({
                 onValueChange={(v) => handleChange({ taskId: v === '_none' ? undefined : v })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="タスクを選択" />
+                  <span className="truncate">
+                    {getTaskDisplayName(value.taskId) || 'タスクを選択'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">なし</SelectItem>
@@ -301,36 +327,13 @@ export function NoteEditor({
             </div>
           )}
 
-          {/* Tag selector */}
-          {tags.length > 0 && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                タグ
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => {
-                  const isSelected = value.tagIds?.includes(tag.id)
-                  return (
-                    <Badge
-                      key={tag.id}
-                      variant={isSelected ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      style={
-                        isSelected
-                          ? { backgroundColor: tag.color, borderColor: tag.color }
-                          : { borderColor: tag.color, color: tag.color }
-                      }
-                      onClick={() => handleTagToggle(tag.id)}
-                    >
-                      {tag.name}
-                      {isSelected && <X className="h-3 w-3 ml-1" />}
-                    </Badge>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+          {/* Tag selector with autocomplete */}
+          <TagInput
+            tags={tags}
+            selectedTagIds={value.tagIds || []}
+            onChange={handleTagsChange}
+            onCreateTag={onCreateTag}
+          />
         </div>
       )}
     </div>

@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button'
 import { DailySummary } from '@/components/daily/DailySummary'
 import { TimeBlockSection } from '@/components/daily/TimeBlockSection'
 import { TaskListWidget, type TaskDragData } from '@/components/daily/TaskListWidget'
-import { TodoBar } from '@/components/daily/TodoBar'
-import { DashboardBar } from '@/components/daily/DailyDashboard'
+import { PageMemo } from '@/components/common/PageMemo'
 import { calculateTimeFromY } from '@/components/common/TimeBlockTimeline'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
@@ -96,7 +95,10 @@ export function DailyPage() {
       const timelineElement = document.querySelector('[data-timeline-container]')
       if (timelineElement) {
         const rect = timelineElement.getBoundingClientRect()
-        const { startTime, endTime } = calculateTimeFromY(dragOverY, rect, 8, 19, 15)
+        // TimeBlockTimelineの実際の表示範囲を読み取る（動的に変わるため）
+        const actualStartHour = parseInt(timelineElement.getAttribute('data-start-hour') || '6', 10)
+        const actualEndHour = parseInt(timelineElement.getAttribute('data-end-hour') || '24', 10)
+        const { startTime, endTime } = calculateTimeFromY(dragOverY, rect, actualStartHour, actualEndHour, 15)
 
         // タイムブロックを作成（選択中の日付を使用）
         await addTimeBlock({
@@ -149,36 +151,29 @@ export function DailyPage() {
           <DailySummary mode="compact" />
         </div>
 
-        {/* ダッシュボード（コンパクトバー） */}
-        <section>
-          <DashboardBar />
-        </section>
-
-        {/* 作業 */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">作業</h2>
-
-          {/* 今日のタスク（横長バー） */}
-          <TodoBar date={selectedDateIso} />
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* タイムブロック */}
-            <div className="lg:col-span-2">
-              <TimeBlockSection
-                showAddButtons={true}
-                isDraggingTask={isDraggingTask}
-                dragOverY={dragOverY}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-              />
-            </div>
-
-            {/* 右サイド: タスクリスト */}
-            <div className="hidden lg:block">
-              <TaskListWidget />
-            </div>
+        {/* メモ + 作業 */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* タイムブロック */}
+          <div className="lg:col-span-2 space-y-4">
+            <PageMemo
+              pageId="daily"
+              title="今日のメモ"
+              placeholder="今日の予定、気づき、やることなど..."
+            />
+            <TimeBlockSection
+              showAddButtons={true}
+              isDraggingTask={isDraggingTask}
+              dragOverY={dragOverY}
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+            />
           </div>
-        </section>
+
+          {/* 右サイド: タスクリスト */}
+          <div className="hidden lg:block">
+            <TaskListWidget />
+          </div>
+        </div>
 
         {/* 記録 */}
         <section className="space-y-4">

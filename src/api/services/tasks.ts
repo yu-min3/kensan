@@ -126,24 +126,32 @@ interface TagResponse {
   id: string
   name: string
   color: string
+  pinned: boolean
+  usageCount: number
   createdAt: string
+  updatedAt: string
 }
 
 const transformTag = (t: TagResponse): Tag => ({
   id: t.id,
   name: t.name,
   color: t.color,
+  pinned: t.pinned,
+  usageCount: t.usageCount,
   createdAt: new Date(t.createdAt),
+  updatedAt: new Date(t.updatedAt),
 })
 
 export interface CreateTagInput {
   name: string
   color: string
+  pinned?: boolean
 }
 
 export interface UpdateTagInput {
   name?: string
   color?: string
+  pinned?: boolean
 }
 
 export const tagsApi = createApiService<

@@ -817,13 +817,13 @@ func (r *PostgresRepository) DeleteMilestone(ctx context.Context, userID, milest
 
 // ========== Tag Operations ==========
 
-// ListTags returns all tags for a user
+// ListTags returns all tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, created_at
+		SELECT id, user_id, name, color, pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE user_id = $1
-		ORDER BY name ASC
+		ORDER BY pinned DESC, usage_count DESC, name ASC
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID)
@@ -835,7 +835,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 	var tags []task.Tag
 	for rows.Next() {
 		var t task.Tag
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.CreatedAt)
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
@@ -848,13 +848,13 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 // GetTagByID returns a tag by ID
 func (r *PostgresRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, created_at
+		SELECT id, user_id, name, color, pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Tag
-	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.CreatedAt)
+	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -869,16 +869,20 @@ func (r *PostgresRepository) GetTagByID(ctx context.Context, userID, tagID strin
 func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
 	id := uuid.New().String()
 	now := time.Now()
+	pinned := false
+	if input.Pinned != nil {
+		pinned = *input.Pinned
+	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, name, color, created_at
+		INSERT INTO tags (id, user_id, name, color, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, 0, $6, $6)
+		RETURNING id, user_id, name, color, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &t.CreatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tag: %w", err)
@@ -890,7 +894,7 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 // UpdateTag updates an existing tag
 func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
 	var setClauses []string
-	var args []interface{}
+	var args []any
 	argCount := 0
 
 	if input.Name != nil {
@@ -902,6 +906,11 @@ func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string
 		argCount++
 		setClauses = append(setClauses, fmt.Sprintf("color = $%d", argCount))
 		args = append(args, *input.Color)
+	}
+	if input.Pinned != nil {
+		argCount++
+		setClauses = append(setClauses, fmt.Sprintf("pinned = $%d", argCount))
+		args = append(args, *input.Pinned)
 	}
 
 	if len(setClauses) == 0 {
@@ -915,11 +924,11 @@ func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string
 
 	query := fmt.Sprintf(`
 		UPDATE tags SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, color, created_at
+		RETURNING id, user_id, name, color, pinned, usage_count, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var t task.Tag
-	err := r.pool.QueryRow(ctx, query, args...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.CreatedAt)
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

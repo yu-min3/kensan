@@ -298,7 +298,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrInvalidFormat):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format must be markdown or drawio"}})
 	case errors.Is(err, service.ErrDateRequired):
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "date", Message: "Date is required for diary notes"}})
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "date", Message: "Date is required for diary and learning notes"}})
 	case errors.Is(err, service.ErrQueryRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "q", Message: "Query is required for search"}})
 	case errors.Is(err, service.ErrContentNotFound):

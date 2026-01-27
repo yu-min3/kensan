@@ -25,7 +25,7 @@ enableMocking().then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-right" theme="dark" />
     </StrictMode>,
   )
 })

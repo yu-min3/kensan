@@ -110,7 +110,8 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 func (s *Service) getGoalSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.GoalSummary, error) {
 	goalMinutes, err := s.repo.GetMinutesByGoal(ctx, userID, startDate, endDate)
 	if err != nil {
-		return []analytics.GoalSummary{}, nil
+		// Return error instead of silently returning empty slice
+		return nil, err
 	}
 
 	result := make([]analytics.GoalSummary, 0, len(goalMinutes))
@@ -129,8 +130,8 @@ func (s *Service) getGoalSummaries(ctx context.Context, userID, startDate, endDa
 func (s *Service) getTagSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.TagSummary, error) {
 	tagMinutes, err := s.repo.GetMinutesByTag(ctx, userID, startDate, endDate)
 	if err != nil {
-		// Return empty slice on error (tags are optional)
-		return []analytics.TagSummary{}, nil
+		// Return error instead of silently returning empty slice
+		return nil, err
 	}
 
 	result := make([]analytics.TagSummary, 0, len(tagMinutes))
@@ -149,8 +150,8 @@ func (s *Service) getTagSummaries(ctx context.Context, userID, startDate, endDat
 func (s *Service) getMilestoneSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.MilestoneSummary, error) {
 	milestoneMinutes, err := s.repo.GetMinutesByMilestone(ctx, userID, startDate, endDate)
 	if err != nil {
-		// Return empty slice on error (milestones are optional)
-		return []analytics.MilestoneSummary{}, nil
+		// Return error instead of silently returning empty slice
+		return nil, err
 	}
 
 	result := make([]analytics.MilestoneSummary, 0, len(milestoneMinutes))

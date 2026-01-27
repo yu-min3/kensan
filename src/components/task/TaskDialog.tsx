@@ -6,13 +6,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { TagSelect } from '@/components/common/TagSelect'
 import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
-import type { Goal, Milestone, Tag, Task } from '@/types'
+import type { Goal, Milestone, Tag, Task, TaskFrequency } from '@/types'
+import { Checkbox } from '@/components/ui/checkbox'
 
 export interface TaskFormData {
   name: string
   milestoneId: string
   parentTaskId?: string
   tagIds: string[]
+  frequency?: TaskFrequency
+  daysOfWeek?: number[]
 }
 
 interface TaskDialogProps {
@@ -123,6 +126,59 @@ export function TaskDialog({ dialog, goals, milestones, tags, tasks, onSave }: T
                 placeholder="タグを追加"
               />
             </div>
+          </div>
+
+          {/* 繰り返し設定 */}
+          <div>
+            <Label>繰り返し（任意）</Label>
+            <Select
+              value={dialog.data.frequency || ''}
+              onValueChange={(v) => {
+                const freq = v as TaskFrequency | ''
+                dialog.setField('frequency', freq || undefined)
+                // daily/weeklyの場合はdaysOfWeekをクリア
+                if (freq === 'daily' || freq === 'weekly' || !freq) {
+                  dialog.setField('daysOfWeek', undefined)
+                }
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="繰り返しなし" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">繰り返しなし</SelectItem>
+                <SelectItem value="daily">毎日</SelectItem>
+                <SelectItem value="weekly">毎週（平日のみ）</SelectItem>
+                <SelectItem value="custom">カスタム（曜日指定）</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* カスタム曜日選択 */}
+            {dialog.data.frequency === 'custom' && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => {
+                  const isSelected = dialog.data.daysOfWeek?.includes(index) ?? false
+                  return (
+                    <label
+                      key={index}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          const current = dialog.data.daysOfWeek || []
+                          const next = checked
+                            ? [...current, index].sort((a, b) => a - b)
+                            : current.filter((d) => d !== index)
+                          dialog.setField('daysOfWeek', next.length > 0 ? next : undefined)
+                        }}
+                      />
+                      <span className="text-sm">{day}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {parentTask && (

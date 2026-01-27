@@ -119,11 +119,11 @@ export let milestones: Milestone[] = [
 // Tags (タグ) - 集計用
 // ============================================
 export let tags: Tag[] = [
-  { id: 'tag-dev', name: '開発', color: '#8B5CF6', createdAt: subDays(new Date(), 90) },
-  { id: 'tag-input', name: 'Input', color: '#06B6D4', createdAt: subDays(new Date(), 90) },
-  { id: 'tag-exercise', name: '運動', color: '#EF4444', createdAt: subDays(new Date(), 90) },
-  { id: 'tag-reading', name: '読書', color: '#84CC16', createdAt: subDays(new Date(), 90) },
-  { id: 'tag-review', name: '振り返り', color: '#EC4899', createdAt: subDays(new Date(), 90) },
+  { id: 'tag-dev', name: '開発', color: '#8B5CF6', pinned: true, usageCount: 45, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 1) },
+  { id: 'tag-input', name: 'Input', color: '#06B6D4', pinned: true, usageCount: 32, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 2) },
+  { id: 'tag-exercise', name: '運動', color: '#EF4444', pinned: false, usageCount: 18, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 5) },
+  { id: 'tag-reading', name: '読書', color: '#84CC16', pinned: false, usageCount: 12, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 3) },
+  { id: 'tag-review', name: '振り返り', color: '#EC4899', pinned: true, usageCount: 8, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 7) },
 ]
 
 // ============================================

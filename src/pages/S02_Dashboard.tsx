@@ -11,7 +11,6 @@ import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import { formatDateJa, formatDurationShort, formatMonthDay } from '@/lib/dateFormat'
 import {
   Sun,
-  Moon,
   Clock,
   Target,
   BookOpen,
@@ -63,20 +62,6 @@ export function S02Dashboard() {
             おかえりなさい、{userName}さん
           </h1>
           <p className="text-sm text-slate-400 dark:text-slate-500 font-light">{today}</p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/morning">
-            <Button variant="outline" className="gap-2">
-              <Sun className="h-4 w-4" />
-              朝の画面
-            </Button>
-          </Link>
-          <Link to="/evening">
-            <Button variant="outline" className="gap-2">
-              <Moon className="h-4 w-4" />
-              夜の画面
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -204,7 +189,7 @@ export function S02Dashboard() {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyStudyHours}>
                 <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis fontSize={12} tickLine={false} axisLine={false} unit="h" />
+                <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} tickLine={false} axisLine={false} unit="h" />
                 <Tooltip
                   formatter={(value) => [`${value}時間`, '学習時間']}
                   labelFormatter={(label) => `${label}曜日`}

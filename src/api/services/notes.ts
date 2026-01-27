@@ -2,11 +2,20 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService, buildQueryParams } from '../createApiService'
-import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider } from '@/types'
+import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem } from '@/types'
 
 // ============================================
 // API Response Types
 // ============================================
+interface NoteMetadataItemResponse {
+  id: string
+  noteId: string
+  key: string
+  value?: string
+  createdAt: string
+  updatedAt: string
+}
+
 interface NoteResponse {
   id: string
   userId: string
@@ -22,6 +31,7 @@ interface NoteResponse {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
+  metadata?: NoteMetadataItemResponse[]
   relatedTimeEntryIds?: string[]
   fileUrl?: string
   archived: boolean
@@ -58,6 +68,15 @@ interface NoteSearchResultResponse {
 // ============================================
 // Transform Functions
 // ============================================
+const transformNoteMetadataItem = (m: NoteMetadataItemResponse): NoteMetadataItem => ({
+  id: m.id,
+  noteId: m.noteId,
+  key: m.key,
+  value: m.value,
+  createdAt: new Date(m.createdAt),
+  updatedAt: new Date(m.updatedAt),
+})
+
 const transformNote = (n: NoteResponse): Note => ({
   id: n.id,
   userId: n.userId,
@@ -73,6 +92,7 @@ const transformNote = (n: NoteResponse): Note => ({
   goalName: n.goalName,
   goalColor: n.goalColor,
   tagIds: n.tagIds,
+  metadata: n.metadata?.map(transformNoteMetadataItem),
   relatedTimeEntryIds: n.relatedTimeEntryIds,
   fileUrl: n.fileUrl,
   archived: n.archived,
@@ -158,12 +178,17 @@ const transformNoteContent = (c: NoteContentResponse): NoteContent => ({
 // ============================================
 // Input Types
 // ============================================
+export interface SetNoteMetadataInput {
+  key: string
+  value?: string
+}
+
 export interface CreateNoteInput {
   type: NoteType
   title?: string
   content: string
   format: NoteFormat
-  date?: string // YYYY-MM-DD, required for diary
+  date?: string // YYYY-MM-DD, required for diary and learning
   taskId?: string
   milestoneId?: string
   milestoneName?: string
@@ -171,6 +196,7 @@ export interface CreateNoteInput {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
+  metadata?: SetNoteMetadataInput[]
   relatedTimeEntryIds?: string[]
   fileUrl?: string
 }
@@ -187,6 +213,7 @@ export interface UpdateNoteInput {
   goalName?: string | null
   goalColor?: string | null
   tagIds?: string[]
+  metadata?: SetNoteMetadataInput[]
   relatedTimeEntryIds?: string[]
   fileUrl?: string | null
   archived?: boolean
@@ -513,4 +540,4 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
 // ============================================
 // Export types for external use
 // ============================================
-export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider }
+export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem }

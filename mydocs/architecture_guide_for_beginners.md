@@ -2,7 +2,7 @@
 
 このドキュメントでは、Kensanサービスの仕組みを図を使ってわかりやすく説明します。
 
-**最終更新: 2026-01-24**
+**最終更新: 2026-01-27**
 
 ---
 
@@ -173,14 +173,15 @@ graph TB
         subgraph "components/ - 部品"
             UI["ui/ - 基本部品<br/>（Button, Dialog等 18個）"]
             Layout["layout/ - レイアウト<br/>（Header, Sidebar）"]
-            Common["common/ - 共通部品<br/>（TaskCard, TimerWidget等 11個）"]
-            Daily["daily/ - 日次部品<br/>（DailySummary等 4個）"]
-            Task["task/ - タスク部品<br/>（ダイアログ 4個）"]
+            Common["common/ - 共通部品<br/>（TaskCard, TimerWidget, PageMemo等 13個）"]
+            Daily["daily/ - 日次部品<br/>（DailySummary, TaskListWidget等 11個）"]
+            Task["task/ - タスク部品<br/>（ダイアログ, GanttChart等 6個）"]
+            Editor["editor/ - エディタ部品<br/>（Markdown, Drawio 4個）"]
             Note["note/ - ノート部品"]
         end
 
         subgraph "stores/ - 状態管理"
-            ST["12個のZustandストア"]
+            ST["13個のZustandストア"]
         end
 
         subgraph "api/ - API連携"
@@ -206,18 +207,28 @@ components/
 │   ├── Header.tsx      # ヘッダー
 │   ├── Sidebar.tsx     # サイドバー
 │   └── Layout.tsx      # 全体レイアウト
-├── common/             # ドメイン共通（11個）
+├── common/             # ドメイン共通（13個）
 │   ├── TaskCard.tsx    # タスクカード
 │   ├── TimerWidget.tsx # タイマー
 │   ├── GoalBadge.tsx   # 目標バッジ
+│   ├── PageMemo.tsx    # ページ固有メモ（NEW）
+│   ├── TimeBlockTimeline.tsx  # タイムライン（ズーム機能付き）
 │   └── ...
-├── daily/              # 日次（4個）
-│   ├── DailySummary.tsx
-│   └── TimeBlockSection.tsx
-├── task/               # タスクダイアログ（4個）
+├── daily/              # 日次（11個）
+│   ├── DailySummary.tsx    # 日次サマリー
+│   ├── TimeBlockSection.tsx # タイムブロック管理
+│   ├── TaskListWidget.tsx  # タスクリスト（カード表示）
+│   └── DailyDashboard/     # ダッシュボード部品（5個）
+├── task/               # タスク（6個）
 │   ├── GoalDialog.tsx
 │   ├── MilestoneDialog.tsx
-│   └── TaskDialog.tsx
+│   ├── TaskDialog.tsx
+│   ├── TagDialog.tsx
+│   ├── GanttChartWidget.tsx # ガントチャート
+│   └── RecurringTaskWidget.tsx
+├── editor/             # エディタ（4個）
+│   ├── MarkdownEditor.tsx
+│   └── DrawioEditor.tsx
 └── note/               # ノート（1個）
     └── NoteEditor.tsx
 ```
@@ -228,7 +239,7 @@ components/
 
 ```mermaid
 graph TB
-    subgraph "12個のZustandストア"
+    subgraph "13個のZustandストア"
         Auth["useAuthStore<br/>認証状態"]
         Settings["useSettingsStore<br/>ユーザー設定"]
         Task["useTaskStore<br/>目標・タスク"]
@@ -238,6 +249,7 @@ graph TB
         Routine["useRoutineStore<br/>定期タスク"]
         Memo["useMemoStore<br/>メモ"]
         Analytics["useAnalyticsStore<br/>分析データ"]
+        Dashboard["useDashboardStore<br/>ダッシュボード"]
         Legacy1["useLearningRecordStore<br/>（レガシー）"]
         Legacy2["useDiaryStore<br/>（レガシー）"]
     end
@@ -256,6 +268,32 @@ graph TB
 | `useTimeBlockStore` | 時間 | タイムブロック、時間記録（timezone対応） |
 | `useTimerStore` | タイマー | 作業タイマーの開始・停止 |
 | `useNoteStore` | ノート | 日記・学習記録の統合管理 |
+
+### 3.6 主要コンポーネントの特徴
+
+#### PageMemo（ページ固有メモ）
+各ページに配置できる常時表示メモ。localStorageに自動保存され、ページごとに独立したメモを管理できます。
+
+```typescript
+<PageMemo
+  pageId="daily"
+  title="今日のメモ"
+  placeholder="今日の予定、気づき..."
+/>
+```
+
+#### TaskListWidget（タスクリスト）
+カード形式でタスクを表示。マイルストーンの期限に応じた緊急度インジケーター付き：
+- 🔴 危険（3日以内）
+- 🟡 注意（7日以内）
+- 🟢 余裕あり
+- ⚪ 期限なし
+
+#### TimeBlockTimeline（タイムライン）
+時間ブロックを視覚的に表示。ズームコントロール機能付き：
+- `[−]` / `[+]` ボタンで拡大縮小
+- パーセント表示クリックで100%にリセット
+- Ctrl+ホイールでも操作可能
 
 ---
 
@@ -733,8 +771,8 @@ graph LR
 | カテゴリ | 数 |
 |---------|-----|
 | ページ | 10 |
-| コンポーネント | 47 |
-| Zustandストア | 12 |
+| コンポーネント | 56 |
+| Zustandストア | 13 |
 | APIサービス | 12 |
 | バックエンドサービス | 9 |
 | データベーステーブル | 14+ |

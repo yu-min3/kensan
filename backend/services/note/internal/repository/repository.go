@@ -56,6 +56,13 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*note.Note
 	}
 	n.TagIDs = tagIDs
 
+	// Get metadata
+	metadataItems, err := r.ListMetadata(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	n.Metadata = convertMetadataToValue(metadataItems)
+
 	return n, nil
 }
 
@@ -83,6 +90,13 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 		return nil, err
 	}
 	n.TagIDs = tagIDs
+
+	// Get metadata
+	metadataItems, err := r.ListMetadata(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	n.Metadata = convertMetadataToValue(metadataItems)
 
 	return n, nil
 }
@@ -247,6 +261,17 @@ func (r *PostgresRepository) Create(ctx context.Context, n *note.Note) error {
 		}
 	}
 
+	// Insert metadata
+	if len(n.Metadata) > 0 {
+		metadataInputs := make([]note.SetNoteMetadataInput, len(n.Metadata))
+		for i, m := range n.Metadata {
+			metadataInputs[i] = note.SetNoteMetadataInput{Key: m.Key, Value: m.Value}
+		}
+		if err := r.BulkSetMetadata(ctx, n.ID, metadataInputs); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -290,6 +315,17 @@ func (r *PostgresRepository) Update(ctx context.Context, n *note.Note) error {
 	// Update tag associations
 	if err := r.UpdateTags(ctx, n.ID, n.TagIDs); err != nil {
 		return err
+	}
+
+	// Update metadata
+	if len(n.Metadata) > 0 {
+		metadataInputs := make([]note.SetNoteMetadataInput, len(n.Metadata))
+		for i, m := range n.Metadata {
+			metadataInputs[i] = note.SetNoteMetadataInput{Key: m.Key, Value: m.Value}
+		}
+		if err := r.BulkSetMetadata(ctx, n.ID, metadataInputs); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -575,6 +611,18 @@ func (r *PostgresRepository) scanNoteListItemWithScore(rows pgx.Rows) (*note.Not
 	return &item, score, nil
 }
 
+// convertMetadataToValue converts []*NoteMetadataItem to []NoteMetadataItem
+func convertMetadataToValue(items []*note.NoteMetadataItem) []note.NoteMetadataItem {
+	if items == nil {
+		return nil
+	}
+	result := make([]note.NoteMetadataItem, len(items))
+	for i, item := range items {
+		result[i] = *item
+	}
+	return result
+}
+
 // ========== NoteContent Operations ==========
 
 // ListContents retrieves all contents for a note
@@ -802,4 +850,115 @@ func (r *PostgresRepository) scanNoteContent(row pgx.Row) (*note.NoteContent, er
 	}
 
 	return &content, nil
+}
+
+// ========== NoteMetadata Operations ==========
+
+// ListMetadata retrieves all metadata for a note
+func (r *PostgresRepository) ListMetadata(ctx context.Context, noteID string) ([]*note.NoteMetadataItem, error) {
+	query := `
+		SELECT id, note_id, key, value, created_at, updated_at
+		FROM note_metadata
+		WHERE note_id = $1
+		ORDER BY key
+	`
+
+	rows, err := r.pool.Query(ctx, query, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list metadata: %w", err)
+	}
+	defer rows.Close()
+
+	var items []*note.NoteMetadataItem
+	for rows.Next() {
+		item, err := r.scanNoteMetadataItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating metadata: %w", err)
+	}
+
+	return items, nil
+}
+
+// SetMetadata sets a metadata key-value pair (upsert)
+func (r *PostgresRepository) SetMetadata(ctx context.Context, noteID, key string, value *string) error {
+	query := `
+		INSERT INTO note_metadata (note_id, key, value, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (note_id, key) DO UPDATE SET value = $3, updated_at = NOW()
+	`
+
+	_, err := r.pool.Exec(ctx, query, noteID, key, value)
+	if err != nil {
+		return fmt.Errorf("failed to set metadata: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteMetadata deletes a metadata key
+func (r *PostgresRepository) DeleteMetadata(ctx context.Context, noteID, key string) error {
+	query := `DELETE FROM note_metadata WHERE note_id = $1 AND key = $2`
+	_, err := r.pool.Exec(ctx, query, noteID, key)
+	if err != nil {
+		return fmt.Errorf("failed to delete metadata: %w", err)
+	}
+
+	return nil
+}
+
+// BulkSetMetadata replaces all metadata for a note
+func (r *PostgresRepository) BulkSetMetadata(ctx context.Context, noteID string, metadata []note.SetNoteMetadataInput) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete all existing metadata for the note
+	_, err = tx.Exec(ctx, `DELETE FROM note_metadata WHERE note_id = $1`, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing metadata: %w", err)
+	}
+
+	// Insert new metadata
+	for _, m := range metadata {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO note_metadata (note_id, key, value, created_at, updated_at)
+			VALUES ($1, $2, $3, NOW(), NOW())
+		`, noteID, m.Key, m.Value)
+		if err != nil {
+			return fmt.Errorf("failed to insert metadata: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// scanNoteMetadataItem scans a row into a NoteMetadataItem struct
+func (r *PostgresRepository) scanNoteMetadataItem(row pgx.Row) (*note.NoteMetadataItem, error) {
+	var item note.NoteMetadataItem
+
+	err := row.Scan(
+		&item.ID,
+		&item.NoteID,
+		&item.Key,
+		&item.Value,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan metadata item: %w", err)
+	}
+
+	return &item, nil
 }
