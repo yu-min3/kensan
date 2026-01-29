@@ -260,7 +260,7 @@ export function TimeBlockDialog({
                       <SelectContent>
                         <SelectItem value="">なし</SelectItem>
                         {goals
-                          .filter(g => !g.isArchived)
+                          .filter(g => g.status !== 'archived')
                           .map(goal => {
                             const goalMilestones = milestones.filter(
                               m => m.goalId === goal.id && m.status === 'active'
@@ -468,7 +468,7 @@ function MilestoneSelector({
         <SelectContent>
           <SelectItem value="">なし</SelectItem>
           {goals
-            .filter(g => !g.isArchived)
+            .filter(g => g.status !== 'archived')
             .map(goal => {
               const goalMilestones = milestones.filter(
                 m => m.goalId === goal.id && m.status === 'active'
@@ -518,14 +518,11 @@ function GroupedTaskList({
   goals,
   milestones,
 }: GroupedTaskListProps) {
-  // 未完了で親タスクでないタスクのみ
-  const activeTasks = tasks.filter((t) => !t.completed && !t.parentTaskId)
-
-  // 目標なしタスク
-  const noGoalTasks = activeTasks.filter((t) => !t.milestoneId)
+  // 未完了で親タスクでないタスク（マイルストーンに紐づくもののみ）
+  const activeTasks = tasks.filter((t) => !t.completed && !t.parentTaskId && t.milestoneId)
 
   // 目標別にグループ化
-  const activeGoals = goals.filter((g) => !g.isArchived)
+  const activeGoals = goals.filter((g) => g.status !== 'archived')
 
   return (
     <>
@@ -578,19 +575,6 @@ function GroupedTaskList({
         )
       })}
 
-      {/* 目標なしタスク */}
-      {noGoalTasks.length > 0 && (
-        <div>
-          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0">
-            目標なし
-          </div>
-          {noGoalTasks.map((task) => (
-            <SelectItem key={task.id} value={task.id} label={task.name}>
-              {task.name}
-            </SelectItem>
-          ))}
-        </div>
-      )}
     </>
   )
 }

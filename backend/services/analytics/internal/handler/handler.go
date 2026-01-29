@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/analytics/internal"
 	"github.com/kensan/backend/services/analytics/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
 	"github.com/rs/zerolog/log"
 )
@@ -25,11 +26,45 @@ func NewHandler(service *service.Service) *Handler {
 // RegisterRoutes registers the analytics routes
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/analytics", func(r chi.Router) {
+		r.Get("/summary", h.GetSummary)
 		r.Get("/summary/weekly", h.GetWeeklySummary)
 		r.Get("/summary/monthly", h.GetMonthlySummary)
 		r.Get("/trends", h.GetTrends)
 		r.Get("/daily-study-hours", h.GetDailyStudyHours)
 	})
+}
+
+// GetSummary handles GET /analytics/summary?start_date=...&end_date=...
+func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	filter := analytics.SummaryFilter{
+		StartDate: r.URL.Query().Get("start_date"),
+		EndDate:   r.URL.Query().Get("end_date"),
+	}
+
+	summary, err := h.service.GetSummaryByDateRange(r.Context(), userID, filter)
+	if err != nil {
+		if errors.Is(err, service.ErrMissingDateRange) {
+			middleware.Error(w, r, http.StatusBadRequest, "MISSING_DATE_RANGE", "start_date and end_date are required")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidDateRange) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE_RANGE", "Invalid date format. Use YYYY-MM-DD")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get summary")
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get summary")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, summary)
 }
 
 // GetWeeklySummary handles GET /analytics/summary/weekly
@@ -44,6 +79,12 @@ func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidWeekStart) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_WEEK_START", "Invalid week_start format. Use YYYY-MM-DD")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get weekly summary")
@@ -90,6 +131,12 @@ func (h *Handler) GetMonthlySummary(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_YEAR", "Invalid year value")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get monthly summary")
 		return
 	}
@@ -125,6 +172,12 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_COUNT", "Count must be a positive integer")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get trends")
 		return
 	}
@@ -136,9 +189,12 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
-	filter := analytics.DailyStudyHoursFilter{}
+	filter := analytics.DailyStudyHoursFilter{
+		StartDate: r.URL.Query().Get("start_date"),
+		EndDate:   r.URL.Query().Get("end_date"),
+	}
 
-	// Parse days
+	// Parse days (only used if start_date/end_date not provided)
 	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
 		days, err := strconv.Atoi(daysStr)
 		if err != nil {
@@ -150,6 +206,16 @@ func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 
 	hours, err := h.service.GetDailyStudyHours(r.Context(), userID, filter)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidDateRange) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE_RANGE", "Invalid date format. Use YYYY-MM-DD")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get daily study hours")
 		return
 	}

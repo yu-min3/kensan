@@ -12,11 +12,13 @@ import (
 
 // Analytics-specific validation errors wrapping shared error base
 var (
-	ErrInvalidWeekStart = fmt.Errorf("invalid week start date: %w", errors.ErrInvalidInput)
-	ErrInvalidMonth     = fmt.Errorf("invalid month: %w", errors.ErrInvalidInput)
-	ErrInvalidYear      = fmt.Errorf("invalid year: %w", errors.ErrInvalidInput)
-	ErrInvalidPeriod    = fmt.Errorf("invalid trend period: %w", errors.ErrInvalidInput)
-	ErrInvalidCount     = fmt.Errorf("invalid count: %w", errors.ErrInvalidInput)
+	ErrInvalidWeekStart  = fmt.Errorf("invalid week start date: %w", errors.ErrInvalidInput)
+	ErrInvalidMonth      = fmt.Errorf("invalid month: %w", errors.ErrInvalidInput)
+	ErrInvalidYear       = fmt.Errorf("invalid year: %w", errors.ErrInvalidInput)
+	ErrInvalidPeriod     = fmt.Errorf("invalid trend period: %w", errors.ErrInvalidInput)
+	ErrInvalidCount      = fmt.Errorf("invalid count: %w", errors.ErrInvalidInput)
+	ErrInvalidDateRange  = fmt.Errorf("invalid date range: %w", errors.ErrInvalidInput)
+	ErrMissingDateRange  = fmt.Errorf("start_date and end_date are required: %w", errors.ErrInvalidInput)
 )
 
 // Service handles business logic for analytics
@@ -325,20 +327,112 @@ func (s *Service) GetTrends(ctx context.Context, userID string, filter analytics
 	return dataPoints, nil
 }
 
-// GetDailyStudyHours returns daily study hours for chart display
-func (s *Service) GetDailyStudyHours(ctx context.Context, userID string, filter analytics.DailyStudyHoursFilter) ([]analytics.DailyStudyHour, error) {
-	days := filter.Days
-	if days <= 0 {
-		days = 7
-	}
-	if days > 30 {
-		days = 30
+// GetSummaryByDateRange returns a summary for a custom date range
+func (s *Service) GetSummaryByDateRange(ctx context.Context, userID string, filter analytics.SummaryFilter) (*analytics.WeeklySummary, error) {
+	if filter.StartDate == "" || filter.EndDate == "" {
+		return nil, ErrMissingDateRange
 	}
 
-	// Calculate date range (past N days including today)
-	now := time.Now()
-	endDate := now
-	startDate := now.AddDate(0, 0, -(days - 1))
+	// Validate date format
+	startTime, err := time.Parse("2006-01-02", filter.StartDate)
+	if err != nil {
+		return nil, ErrInvalidDateRange
+	}
+	endTime, err := time.Parse("2006-01-02", filter.EndDate)
+	if err != nil {
+		return nil, ErrInvalidDateRange
+	}
+	if startTime.After(endTime) {
+		return nil, ErrInvalidDateRange
+	}
+
+	startDate := filter.StartDate
+	endDate := filter.EndDate
+
+	// Get total minutes
+	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by goal
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by tag
+	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by milestone
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get completed tasks count
+	completedTasks, err := s.repo.GetCompletedTasksCount(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get planned vs actual
+	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	return &analytics.WeeklySummary{
+		WeekStart:      startDate,
+		WeekEnd:        endDate,
+		TotalMinutes:   totalMinutes,
+		ByGoal:         byGoal,
+		ByTag:          byTag,
+		ByMilestone:    byMilestone,
+		CompletedTasks: completedTasks,
+		PlannedVsActual: analytics.PlannedVsActual{
+			Planned: plannedMinutes,
+			Actual:  totalMinutes,
+		},
+	}, nil
+}
+
+// GetDailyStudyHours returns daily study hours for chart display
+func (s *Service) GetDailyStudyHours(ctx context.Context, userID string, filter analytics.DailyStudyHoursFilter) ([]analytics.DailyStudyHour, error) {
+	var startDate, endDate time.Time
+
+	// If start_date and end_date are provided, use them
+	if filter.StartDate != "" && filter.EndDate != "" {
+		var err error
+		startDate, err = time.Parse("2006-01-02", filter.StartDate)
+		if err != nil {
+			return nil, ErrInvalidDateRange
+		}
+		endDate, err = time.Parse("2006-01-02", filter.EndDate)
+		if err != nil {
+			return nil, ErrInvalidDateRange
+		}
+		if startDate.After(endDate) {
+			return nil, ErrInvalidDateRange
+		}
+	} else {
+		// Fall back to days parameter
+		days := filter.Days
+		if days <= 0 {
+			days = 7
+		}
+		if days > 30 {
+			days = 30
+		}
+
+		// Calculate date range (past N days including today)
+		now := time.Now()
+		endDate = now
+		startDate = now.AddDate(0, 0, -(days - 1))
+	}
 
 	startDateStr := startDate.Format("2006-01-02")
 	endDateStr := endDate.Format("2006-01-02")

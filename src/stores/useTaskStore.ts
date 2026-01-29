@@ -165,12 +165,14 @@ interface TaskState {
   addGoal: (goal: { name: string; description?: string; color: string }) => Promise<void>
   updateGoal: (id: string, updates: Partial<Goal>) => Promise<void>
   deleteGoal: (id: string) => Promise<void>
+  reorderGoals: (goalIds: string[]) => Promise<void>
 
   // Milestone操作
   addMilestone: (milestone: {
     goalId: string
     name: string
     description?: string
+    startDate?: string
     targetDate?: string
   }) => Promise<void>
   updateMilestone: (id: string, updates: Partial<Milestone>) => Promise<void>
@@ -237,6 +239,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         tagsApi.list(),
         tasksApi.list(),
       ])
+      // Sort goals by sortOrder
+      goals.sort((a, b) => a.sortOrder - b.sortOrder)
       set({ goals, milestones, tags, tasks, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
@@ -270,6 +274,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       set((state) => ({
         goals: state.goals.filter((g) => g.id !== id),
         milestones: state.milestones.filter((m) => m.goalId !== id),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  reorderGoals: async (goalIds) => {
+    try {
+      const updatedGoals = await goalsApi.reorder(goalIds)
+      set((state) => ({
+        goals: state.goals.map((g) => {
+          const updated = updatedGoals.find((u) => u.id === g.id)
+          return updated || g
+        }).sort((a, b) => a.sortOrder - b.sortOrder),
       }))
     } catch (error) {
       set({ error: (error as Error).message })

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
 	"github.com/rs/zerolog/log"
 )
@@ -84,6 +85,13 @@ func (h *Handler) handleServiceError(w http.ResponseWriter, r *http.Request, err
 		return true
 	}
 
+	// Database schema errors
+	if sharedErrors.IsDatabaseSchema(err) {
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in task-service")
+		middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		return true
+	}
+
 	// Default: internal error
 	log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in task-service")
 	if defaultMsg == "" {
@@ -99,6 +107,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/goals", func(r chi.Router) {
 		r.Get("/", h.ListGoals)
 		r.Post("/", h.CreateGoal)
+		r.Post("/reorder", h.ReorderGoals)
 		r.Get("/{goalId}", h.GetGoal)
 		r.Put("/{goalId}", h.UpdateGoal)
 		r.Delete("/{goalId}", h.DeleteGoal)
@@ -113,13 +122,19 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Delete("/{milestoneId}", h.DeleteMilestone)
 	})
 
-	// Tag routes
+	// Tag routes (task-type tags)
 	r.Route("/tags", func(r chi.Router) {
 		r.Get("/", h.ListTags)
 		r.Post("/", h.CreateTag)
 		r.Get("/{tagId}", h.GetTag)
 		r.Put("/{tagId}", h.UpdateTag)
 		r.Delete("/{tagId}", h.DeleteTag)
+	})
+
+	// Note tag routes (note-type tags)
+	r.Route("/note-tags", func(r chi.Router) {
+		r.Get("/", h.ListNoteTags)
+		r.Post("/", h.CreateNoteTag)
 	})
 
 	// Task routes
@@ -369,10 +384,11 @@ func (h *Handler) ListGoals(w http.ResponseWriter, r *http.Request) {
 
 	filter := task.GoalFilter{}
 
-	// Parse archived filter
-	if archived := r.URL.Query().Get("archived"); archived != "" {
-		if b, err := strconv.ParseBool(archived); err == nil {
-			filter.IsArchived = &b
+	// Parse status filter
+	if status := r.URL.Query().Get("status"); status != "" {
+		s := task.GoalStatus(status)
+		if s.IsValid() {
+			filter.Status = &s
 		}
 	}
 
@@ -451,6 +467,32 @@ func (h *Handler) DeleteGoal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ReorderGoals handles POST /goals/reorder
+func (h *Handler) ReorderGoals(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input struct {
+		GoalIDs []string `json:"goalIds"`
+	}
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if len(input.GoalIDs) == 0 {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "goalIds", Message: "Goal IDs are required"},
+		})
+		return
+	}
+
+	goals, err := h.service.ReorderGoals(r.Context(), userID, input.GoalIDs)
+	if h.handleServiceError(w, r, err, "Failed to reorder goals") {
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, goals)
 }
 
 // ========== Milestone Handlers ==========
@@ -592,13 +634,26 @@ func (h *Handler) DeleteMilestone(w http.ResponseWriter, r *http.Request) {
 
 // ========== Tag Handlers ==========
 
-// ListTags handles GET /tags
+// ListTags handles GET /tags (task-type tags)
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	tags, err := h.service.ListTags(r.Context(), userID)
 	if err != nil {
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list tags")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, tags)
+}
+
+// ListNoteTags handles GET /note-tags (note-type tags)
+func (h *Handler) ListNoteTags(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	tags, err := h.service.ListNoteTags(r.Context(), userID)
+	if err != nil {
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list note tags")
 		return
 	}
 
@@ -646,6 +701,35 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create tag")
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusCreated, tag)
+}
+
+// CreateNoteTag handles POST /note-tags (note-type tag)
+func (h *Handler) CreateNoteTag(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var input task.CreateTagInput
+	if !middleware.DecodeJSONBody(w, r, &input) {
+		return
+	}
+
+	if input.Name == "" {
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{
+			{Field: "name", Message: "Name is required"},
+		})
+		return
+	}
+
+	tag, err := h.service.CreateNoteTag(r.Context(), userID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidInput) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
+			return
+		}
+		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create note tag")
 		return
 	}
 

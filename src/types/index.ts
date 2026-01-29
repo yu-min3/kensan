@@ -1,12 +1,15 @@
 // ============================================
 // Goal (目標)
 // ============================================
+export type GoalStatus = 'active' | 'completed' | 'archived'
+
 export interface Goal {
   id: string
   name: string
   description?: string
   color: string // Hex color, e.g., "#0EA5E9"
-  isArchived: boolean
+  status: GoalStatus
+  sortOrder: number
   createdAt: Date
   updatedAt: Date
 }
@@ -21,6 +24,7 @@ export interface Milestone {
   goalId: string // 親Goal
   name: string
   description?: string
+  startDate?: string // YYYY-MM-DD, 開始日
   targetDate?: string // YYYY-MM-DD, 期限
   status: MilestoneStatus
   createdAt: Date
@@ -30,10 +34,13 @@ export interface Milestone {
 // ============================================
 // Tag (タグ) - 集計用の自由タグ
 // ============================================
+export type TagType = 'task' | 'note'
+
 export interface Tag {
   id: string
   name: string
   color: string // Hex color
+  type: TagType
   pinned: boolean
   usageCount: number
   createdAt: Date

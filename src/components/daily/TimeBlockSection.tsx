@@ -16,6 +16,7 @@ import { formatDateIso, formatDateShortJa } from '@/lib/dateFormat'
 import type { Goal, Milestone, Task, TimeBlock, TimeEntry } from '@/types'
 import type { TaskInputMode } from '@/hooks/useTimeBlockDialog'
 import type { TaskDragData } from './TaskListWidget'
+import { WidgetError } from '@/components/common/WidgetError'
 import {
   Clock,
   Plus,
@@ -115,6 +116,7 @@ export function TimeBlockSection({
   const {
     timeBlocks,
     timeEntries,
+    error: timeBlockError,
     fetchTimeBlocksForLocalDate,
     fetchTimeEntriesForLocalDate,
     updateTimeBlock,
@@ -122,6 +124,7 @@ export function TimeBlockSection({
     deleteTimeEntry,
     addTimeEntry,
   } = useTimeBlockStore()
+  const { error: taskError } = useTaskStore()
 
   // 日付状態: propsがあればpropsを使用、なければ内部状態を使用（後方互換性）
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date>(new Date())
@@ -258,9 +261,7 @@ export function TimeBlockSection({
   }
 
   const handleEntryDelete = async (entryId: string) => {
-    if (window.confirm('この実績を削除しますか？')) {
-      await deleteTimeEntry(entryId)
-    }
+    await deleteTimeEntry(entryId)
   }
 
   const handleBlockClick = (block: TimeBlock) => {
@@ -359,6 +360,19 @@ export function TimeBlockSection({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* エラー表示 */}
+          {(timeBlockError || taskError) && (
+            <WidgetError
+              message={timeBlockError || taskError || undefined}
+              onRetry={() => {
+                const tz = timezone || 'Asia/Tokyo'
+                fetchTimeBlocksForLocalDate(selectedDateIso, tz)
+                fetchTimeEntriesForLocalDate(selectedDateIso, tz)
+              }}
+              compact
+            />
+          )}
+
           {/* 期限が選択日のタスク */}
           <DueTasksPanel
             date={selectedDateIso}
@@ -367,7 +381,7 @@ export function TimeBlockSection({
             getGoalById={getGoalById}
           />
 
-          <div data-timeline-container>
+          <div>
             <TimeBlockTimeline
               timeBlocks={filteredBlocks}
               timeEntries={filteredEntries}

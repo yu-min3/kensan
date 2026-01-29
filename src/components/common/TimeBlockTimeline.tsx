@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { GoalBadge } from './GoalBadge'
+import { ConfirmPopover } from './ConfirmPopover'
 import { cn } from '@/lib/utils'
 import { Edit, Trash2, Plus, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -380,17 +381,21 @@ export function TimeBlockTimeline({
                             </Button>
                           )}
                           {onEntryDelete && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onEntryDelete(entry.id)
-                              }}
+                            <ConfirmPopover
+                              message="この実績を削除しますか？"
+                              confirmLabel="削除"
+                              onConfirm={() => onEntryDelete(entry.id)}
+                              variant="destructive"
                             >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </ConfirmPopover>
                           )}
                         </div>
                       )}

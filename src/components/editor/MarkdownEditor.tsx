@@ -6,6 +6,7 @@ import Link from '@tiptap/extension-link'
 import { Markdown } from 'tiptap-markdown'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { InputPopover } from '@/components/common/InputPopover'
 import {
   Bold,
   Italic,
@@ -97,11 +98,8 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
     return null
   }
 
-  const addLink = () => {
-    const url = window.prompt('URLを入力:')
-    if (url) {
-      editor.chain().focus().setLink({ href: url }).run()
-    }
+  const addLink = (url: string) => {
+    editor.chain().focus().setLink({ href: url }).run()
   }
 
   return (
@@ -181,12 +179,20 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
           title="水平線"
         />
         <div className="w-px h-4 bg-border mx-1" />
-        <ToolbarButton
-          onClick={addLink}
-          icon={LinkIcon}
-          title="リンク"
-          isActive={editor.isActive('link')}
-        />
+        <InputPopover
+          label="URLを入力"
+          placeholder="https://example.com"
+          confirmLabel="挿入"
+          onConfirm={addLink}
+          inputType="url"
+        >
+          <ToolbarButton
+            onClick={() => {}}
+            icon={LinkIcon}
+            title="リンク"
+            isActive={editor.isActive('link')}
+          />
+        </InputPopover>
         <div className="w-px h-4 bg-border mx-1" />
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}

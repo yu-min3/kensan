@@ -131,4 +131,32 @@ export const analyticsApi = {
       endpoint
     )
   },
+
+  async getSummary(startDate: string, endDate: string): Promise<WeeklySummary> {
+    const params = new URLSearchParams()
+    params.set('start_date', startDate)
+    params.set('end_date', endDate)
+
+    const query = params.toString()
+    const endpoint = `/analytics/summary?${query}`
+
+    return httpClient.get<WeeklySummaryResponse>(
+      API_CONFIG.baseUrls.analytics,
+      endpoint
+    )
+  },
+
+  async getDailyStudyHoursByRange(startDate: string, endDate: string): Promise<DailyStudyHour[]> {
+    const params = new URLSearchParams()
+    params.set('start_date', startDate)
+    params.set('end_date', endDate)
+
+    const query = params.toString()
+    const endpoint = `/analytics/daily-study-hours?${query}`
+
+    return httpClient.get<DailyStudyHour[]>(
+      API_CONFIG.baseUrls.analytics,
+      endpoint
+    )
+  },
 }

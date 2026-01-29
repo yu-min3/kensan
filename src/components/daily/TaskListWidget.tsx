@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { GoalBadge } from '@/components/common/GoalBadge'
+import { WidgetError } from '@/components/common/WidgetError'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useDraggable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
@@ -235,7 +236,7 @@ interface TaskWithMeta {
 }
 
 export function TaskListWidget() {
-  const { goals, tasks, milestones, getTasksByMilestone, getMilestonesByGoal } = useTaskStore()
+  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
   const taskData = useMemo(() => {
@@ -262,19 +263,6 @@ export function TaskListWidget() {
           })
         }
       }
-    }
-
-    // マイルストーンなしのタスク
-    const standaloneTasks = tasks.filter(
-      (t) => !t.milestoneId && !t.parentTaskId && !t.completed
-    )
-    for (const task of standaloneTasks) {
-      data.push({
-        task,
-        daysUntil: null,
-        isScheduledToday: isScheduledForToday(task),
-        frequencyLabel: getFrequencyLabel(task),
-      })
     }
 
     // ソート:
@@ -317,6 +305,11 @@ export function TaskListWidget() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 p-0 overflow-hidden">
+        {error ? (
+          <div className="p-4">
+            <WidgetError message={error} onRetry={fetchAll} />
+          </div>
+        ) : (
         <ScrollArea className="h-full">
           <div className="p-2 space-y-2">
             {taskData.length === 0 ? (
@@ -339,6 +332,7 @@ export function TaskListWidget() {
             )}
           </div>
         </ScrollArea>
+        )}
       </CardContent>
     </Card>
   )

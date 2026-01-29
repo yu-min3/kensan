@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { useTodos } from '@/hooks/useTodos'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { cn } from '@/lib/utils'
@@ -98,9 +99,7 @@ export function TodoWidget({ date, className }: TodoWidgetProps) {
   }
 
   const handleDelete = async (todoId: string) => {
-    if (window.confirm('このTodoを削除しますか？')) {
-      await deleteTodo(todoId)
-    }
+    await deleteTodo(todoId)
   }
 
   const handleStartTimer = async (todo: TodoWithStatus) => {
@@ -353,15 +352,21 @@ function TodoItem({ todo, onToggle, onDelete, onStartTimer, isTimerRunning }: To
             <Play className="h-3 w-3 text-primary" />
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={onDelete}
-          title="削除"
+        <ConfirmPopover
+          message="このTodoを削除しますか？"
+          confirmLabel="削除"
+          onConfirm={onDelete}
+          variant="destructive"
         >
-          <Trash2 className="h-3 w-3 text-muted-foreground" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            title="削除"
+          >
+            <Trash2 className="h-3 w-3 text-muted-foreground" />
+          </Button>
+        </ConfirmPopover>
       </div>
     </div>
   )

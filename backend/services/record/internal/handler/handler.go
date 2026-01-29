@@ -7,7 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/record/internal"
 	"github.com/kensan/backend/services/record/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for learning record operations
@@ -204,6 +206,10 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "format", Message: "Format must be markdown or drawio"}})
 	case errors.Is(err, service.ErrQueryRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "query", Message: "Query is required for semantic search"}})
+	// Database schema errors
+	case sharedErrors.IsDatabaseSchema(err):
+		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in record-service")
+		middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 	default:
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}

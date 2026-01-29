@@ -2,7 +2,7 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { Goal, Milestone, MilestoneStatus, Tag, Task, EntityMemo, EntityType, Todo, TodoWithStatus, TodoFrequency } from '@/types'
+import type { Goal, GoalStatus, Milestone, MilestoneStatus, Tag, Task, EntityMemo, EntityType, Todo, TodoWithStatus, TodoFrequency } from '@/types'
 
 // ============================================
 // Goal API
@@ -12,7 +12,8 @@ interface GoalResponse {
   name: string
   description?: string
   color: string
-  isArchived: boolean
+  status: GoalStatus
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }
@@ -22,7 +23,8 @@ const transformGoal = (g: GoalResponse): Goal => ({
   name: g.name,
   description: g.description,
   color: g.color,
-  isArchived: g.isArchived,
+  status: g.status,
+  sortOrder: g.sortOrder,
   createdAt: new Date(g.createdAt),
   updatedAt: new Date(g.updatedAt),
 })
@@ -37,14 +39,14 @@ export interface UpdateGoalInput {
   name?: string
   description?: string
   color?: string
-  isArchived?: boolean
+  status?: GoalStatus
 }
 
 export interface GoalFilter {
-  archived?: boolean
+  status?: GoalStatus
 }
 
-export const goalsApi = createApiService<
+const baseGoalsApi = createApiService<
   GoalResponse,
   Goal,
   CreateGoalInput,
@@ -56,6 +58,17 @@ export const goalsApi = createApiService<
   transform: transformGoal,
 })
 
+export const goalsApi = extendApiService(baseGoalsApi, () => ({
+  async reorder(goalIds: string[]): Promise<Goal[]> {
+    const response = await httpClient.post<GoalResponse[]>(
+      API_CONFIG.baseUrls.task,
+      '/goals/reorder',
+      { goalIds }
+    )
+    return response.map(transformGoal)
+  },
+}))
+
 // ============================================
 // Milestone API
 // ============================================
@@ -64,6 +77,7 @@ interface MilestoneResponse {
   goalId: string
   name: string
   description?: string
+  startDate?: string
   targetDate?: string
   status: MilestoneStatus
   createdAt: string
@@ -75,6 +89,7 @@ const transformMilestone = (m: MilestoneResponse): Milestone => ({
   goalId: m.goalId,
   name: m.name,
   description: m.description,
+  startDate: m.startDate,
   targetDate: m.targetDate,
   status: m.status,
   createdAt: new Date(m.createdAt),
@@ -85,12 +100,14 @@ export interface CreateMilestoneInput {
   goalId: string
   name: string
   description?: string
+  startDate?: string
   targetDate?: string
 }
 
 export interface UpdateMilestoneInput {
   name?: string
   description?: string
+  startDate?: string
   targetDate?: string
   status?: MilestoneStatus
 }
@@ -126,6 +143,7 @@ interface TagResponse {
   id: string
   name: string
   color: string
+  type: 'task' | 'note'
   pinned: boolean
   usageCount: number
   createdAt: string
@@ -136,6 +154,7 @@ const transformTag = (t: TagResponse): Tag => ({
   id: t.id,
   name: t.name,
   color: t.color,
+  type: t.type,
   pinned: t.pinned,
   usageCount: t.usageCount,
   createdAt: new Date(t.createdAt),

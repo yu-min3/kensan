@@ -112,5 +112,13 @@ type DailyStudyHour struct {
 
 // DailyStudyHoursFilter represents filters for daily study hours
 type DailyStudyHoursFilter struct {
-	Days int
+	Days      int
+	StartDate string // YYYY-MM-DD format (optional, takes precedence over Days)
+	EndDate   string // YYYY-MM-DD format (optional, takes precedence over Days)
+}
+
+// SummaryFilter represents filters for getting summary by date range
+type SummaryFilter struct {
+	StartDate string // YYYY-MM-DD format (required)
+	EndDate   string // YYYY-MM-DD format (required)
 }

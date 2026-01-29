@@ -57,7 +57,7 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
   // マイルストーンを目標ごとにグループ化し、進捗を計算
   const milestonesWithProgress = useMemo(() => {
     return milestones
-      .filter(m => m.status !== 'archived' && m.targetDate)
+      .filter(m => m.status !== 'archived' && (m.targetDate || m.startDate))
       .map(m => {
         const goal = goals.find(g => g.id === m.goalId)
         if (!goal) return null
@@ -163,8 +163,9 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
 
                 {/* マイルストーン行 */}
                 {groupMilestones.map(milestone => {
-                  const endPercent = dateToPercent(milestone.targetDate!)
-                  const isPast = new Date(milestone.targetDate!) < today
+                  const startPercent = milestone.startDate ? dateToPercent(milestone.startDate) : 0
+                  const endPercent = milestone.targetDate ? dateToPercent(milestone.targetDate) : todayPercent
+                  const isPast = milestone.targetDate ? new Date(milestone.targetDate) < today : false
                   const isCompleted = milestone.status === 'completed'
 
                   return (
@@ -200,7 +201,7 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
                           style={{ left: `${todayPercent}%` }}
                         />
 
-                        {/* 進捗バー（開始〜今日または期限まで） */}
+                        {/* 進捗バー（開始日〜今日または期限まで） */}
                         <div
                           className={cn(
                             "absolute top-1 bottom-1 rounded transition-all",
@@ -211,8 +212,8 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
                                 : "bg-primary/70"
                           )}
                           style={{
-                            left: '0%',
-                            width: `${Math.min(endPercent, todayPercent) * (milestone.progress / 100)}%`,
+                            left: `${startPercent}%`,
+                            width: `${Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
                           }}
                         />
 
@@ -227,23 +228,38 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
                                 : "bg-primary/20"
                           )}
                           style={{
-                            left: `${Math.min(endPercent, todayPercent) * (milestone.progress / 100)}%`,
-                            width: `${endPercent - Math.min(endPercent, todayPercent) * (milestone.progress / 100)}%`,
+                            left: `${startPercent + Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
+                            width: `${Math.max(0, endPercent - startPercent - Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100))}%`,
                           }}
                         />
 
-                        {/* 期限マーカー */}
-                        <div
-                          className={cn(
-                            "absolute top-0 bottom-0 w-1 rounded-full",
-                            isCompleted
-                              ? "bg-green-600"
-                              : isPast
-                                ? "bg-red-500"
+                        {/* 開始日マーカー（startDateがある場合） */}
+                        {milestone.startDate && (
+                          <div
+                            className={cn(
+                              "absolute top-0 bottom-0 w-1 rounded-full opacity-50",
+                              isCompleted
+                                ? "bg-green-600"
                                 : "bg-primary"
-                          )}
-                          style={{ left: `calc(${endPercent}% - 2px)` }}
-                        />
+                            )}
+                            style={{ left: `calc(${startPercent}% - 2px)` }}
+                          />
+                        )}
+
+                        {/* 期限マーカー（targetDateがある場合） */}
+                        {milestone.targetDate && (
+                          <div
+                            className={cn(
+                              "absolute top-0 bottom-0 w-1 rounded-full",
+                              isCompleted
+                                ? "bg-green-600"
+                                : isPast
+                                  ? "bg-red-500"
+                                  : "bg-primary"
+                            )}
+                            style={{ left: `calc(${endPercent}% - 2px)` }}
+                          />
+                        )}
 
                       </div>
                     </div>

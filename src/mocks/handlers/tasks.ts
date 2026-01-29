@@ -11,7 +11,8 @@ const toGoalResponse = (g: (typeof goals)[0]) => ({
   name: g.name,
   description: g.description,
   color: g.color,
-  isArchived: g.isArchived,
+  status: g.status,
+  sortOrder: g.sortOrder,
   createdAt: g.createdAt.toISOString(),
   updatedAt: g.updatedAt.toISOString(),
 })
@@ -64,7 +65,7 @@ const goalHandlers = createMockCrudHandlers(
   },
   {
     filters: [
-      { paramName: 'archived', fieldName: 'isArchived', type: 'boolean' },
+      { paramName: 'status', fieldName: 'status', type: 'equals' },
     ],
   }
 )

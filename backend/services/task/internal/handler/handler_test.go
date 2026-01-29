@@ -606,11 +606,11 @@ func TestDeleteTag_Handler(t *testing.T) {
 
 func TestGoal_JSONSerialization(t *testing.T) {
 	goal := task.Goal{
-		ID:         "g1",
-		UserID:     "u1",
-		Name:       "Test Goal",
-		Color:      "#FF0000",
-		IsArchived: false,
+		ID:     "g1",
+		UserID: "u1",
+		Name:   "Test Goal",
+		Color:  "#FF0000",
+		Status: task.GoalStatusActive,
 	}
 
 	data, err := json.Marshal(goal)

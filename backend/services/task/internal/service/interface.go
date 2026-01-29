@@ -13,6 +13,7 @@ type GoalService interface {
 	CreateGoal(ctx context.Context, userID string, input task.CreateGoalInput) (*task.Goal, error)
 	UpdateGoal(ctx context.Context, userID, goalID string, input task.UpdateGoalInput) (*task.Goal, error)
 	DeleteGoal(ctx context.Context, userID, goalID string) error
+	ReorderGoals(ctx context.Context, userID string, goalIDs []string) ([]task.Goal, error)
 }
 
 // MilestoneService defines the interface for milestone-related operations
@@ -27,8 +28,10 @@ type MilestoneService interface {
 // TagService defines the interface for tag-related operations
 type TagService interface {
 	ListTags(ctx context.Context, userID string) ([]task.Tag, error)
+	ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error)
 	GetTag(ctx context.Context, userID, tagID string) (*task.Tag, error)
 	CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error)
+	CreateNoteTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error)
 	UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error)
 	DeleteTag(ctx context.Context, userID, tagID string) error
 }

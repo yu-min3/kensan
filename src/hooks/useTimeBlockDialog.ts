@@ -141,11 +141,8 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
   ])
 
   const deleteBlock = useCallback(async (id: string) => {
-    if (window.confirm('このタイムブロックを削除しますか？')) {
-      await deleteTimeBlock(id)
-      return true
-    }
-    return false
+    await deleteTimeBlock(id)
+    return true
   }, [deleteTimeBlock])
 
   return {

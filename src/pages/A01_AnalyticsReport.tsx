@@ -10,6 +10,7 @@ import { GoalBadge } from '@/components/common/GoalBadge'
 import { formatDurationShort, formatMonthDay } from '@/lib/dateFormat'
 import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
 import { useNoteStore } from '@/stores/useNoteStore'
+import { WidgetError } from '@/components/common/WidgetError'
 import {
   BarChart3,
   Clock,
@@ -80,17 +81,20 @@ export function A01AnalyticsReport() {
   const [customRange, setCustomRange] = useState<DateRange | undefined>()
   const [calendarOpen, setCalendarOpen] = useState(false)
 
-  const { weeklySummary, dailyStudyHours, isLoading, fetchDashboardData } = useAnalyticsStore()
+  const { weeklySummary, dailyStudyHours, isLoading, error, fetchDashboardData } = useAnalyticsStore()
   const { getByType } = useNoteStore()
   const learningRecords = getByType('learning')
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
 
   const dateRange = useMemo(() => {
     return getDateRangeForPeriod(period, customRange)
   }, [period, customRange])
+
+  useEffect(() => {
+    const { start, end } = dateRange
+    const startStr = start.toISOString().split('T')[0]
+    const endStr = end.toISOString().split('T')[0]
+    fetchDashboardData(startStr, endStr)
+  }, [fetchDashboardData, dateRange])
 
   // Filter daily study hours based on selected period
   const filteredDailyHours = useMemo(() => {
@@ -142,10 +146,24 @@ export function A01AnalyticsReport() {
     }
   }
 
-  if (isLoading || !weeklySummary) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error || !weeklySummary) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <WidgetError
+          message={error || 'データを取得できませんでした'}
+          onRetry={() => {
+            const { start, end } = dateRange
+            fetchDashboardData(start.toISOString().split('T')[0], end.toISOString().split('T')[0])
+          }}
+        />
       </div>
     )
   }

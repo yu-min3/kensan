@@ -145,7 +145,7 @@ export function N01NoteList() {
           <SelectContent>
             <SelectItem value="all">すべての目標</SelectItem>
             {goals
-              .filter((g) => !g.isArchived)
+              .filter((g) => g.status !== 'archived')
               .map((goal) => (
                 <SelectItem key={goal.id} value={goal.id}>
                   <div className="flex items-center gap-2">

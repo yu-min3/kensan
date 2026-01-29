@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/routine/internal"
 	"github.com/kensan/backend/services/routine/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 // Handler handles HTTP requests for routine tasks
@@ -55,6 +57,12 @@ func (h *Handler) ListRoutines(w http.ResponseWriter, r *http.Request) {
 
 	routines, err := h.service.ListRoutines(r.Context(), userID, filter)
 	if err != nil {
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in routine-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list routine tasks")
 		return
 	}
@@ -98,6 +106,12 @@ func (h *Handler) CreateRoutine(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in routine-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create routine task")
 		return
 	}
@@ -129,6 +143,12 @@ func (h *Handler) UpdateRoutine(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in routine-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update routine task")
 		return
 	}
@@ -147,6 +167,12 @@ func (h *Handler) ToggleRoutineEnabled(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "ROUTINE_NOT_FOUND", "Routine task not found")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in routine-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to toggle routine enabled")
 		return
 	}
@@ -163,6 +189,12 @@ func (h *Handler) DeleteRoutine(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrRoutineNotFound) {
 			middleware.Error(w, r, http.StatusNotFound, "ROUTINE_NOT_FOUND", "Routine task not found")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in routine-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete routine task")

@@ -538,6 +538,58 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
 }))
 
 // ============================================
+// Note Tags API (note-type tags)
+// ============================================
+import type { Tag, TagType } from '@/types'
+
+interface NoteTagResponse {
+  id: string
+  name: string
+  color: string
+  type: TagType
+  pinned: boolean
+  usageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+const transformNoteTag = (t: NoteTagResponse): Tag => ({
+  id: t.id,
+  name: t.name,
+  color: t.color,
+  type: t.type,
+  pinned: t.pinned,
+  usageCount: t.usageCount,
+  createdAt: new Date(t.createdAt),
+  updatedAt: new Date(t.updatedAt),
+})
+
+export interface CreateNoteTagInput {
+  name: string
+  color: string
+  pinned?: boolean
+}
+
+export const noteTagsApi = {
+  async list(): Promise<Tag[]> {
+    const response = await httpClient.get<NoteTagResponse[]>(
+      API_CONFIG.baseUrls.task,
+      '/note-tags'
+    )
+    return response.map(transformNoteTag)
+  },
+
+  async create(input: CreateNoteTagInput): Promise<Tag> {
+    const response = await httpClient.post<NoteTagResponse>(
+      API_CONFIG.baseUrls.task,
+      '/note-tags',
+      input
+    )
+    return transformNoteTag(response)
+  },
+}
+
+// ============================================
 // Export types for external use
 // ============================================
 export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem }

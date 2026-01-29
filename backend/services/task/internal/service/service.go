@@ -323,6 +323,15 @@ func (s *Service) DeleteGoal(ctx context.Context, userID, goalID string) error {
 	return s.repo.DeleteGoal(ctx, userID, goalID)
 }
 
+// ReorderGoals updates the sort order of goals
+func (s *Service) ReorderGoals(ctx context.Context, userID string, goalIDs []string) ([]task.Goal, error) {
+	if len(goalIDs) == 0 {
+		return []task.Goal{}, nil
+	}
+
+	return s.repo.ReorderGoals(ctx, userID, goalIDs)
+}
+
 // ========== Milestone Operations ==========
 
 // ListMilestones returns all milestones for a user
@@ -424,9 +433,21 @@ func (s *Service) DeleteMilestone(ctx context.Context, userID, milestoneID strin
 
 // ========== Tag Operations ==========
 
-// ListTags returns all tags for a user
+// ListTags returns all task-type tags for a user
 func (s *Service) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	tags, err := s.repo.ListTags(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		return []task.Tag{}, nil
+	}
+	return tags, nil
+}
+
+// ListNoteTags returns all note-type tags for a user
+func (s *Service) ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error) {
+	tags, err := s.repo.ListNoteTags(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +469,7 @@ func (s *Service) GetTag(ctx context.Context, userID, tagID string) (*task.Tag, 
 	return tag, nil
 }
 
-// CreateTag creates a new tag
+// CreateTag creates a new task-type tag
 func (s *Service) CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
 	if input.Name == "" {
 		return nil, ErrInvalidInput
@@ -457,6 +478,17 @@ func (s *Service) CreateTag(ctx context.Context, userID string, input task.Creat
 		input.Color = "#6B7280" // default color
 	}
 	return s.repo.CreateTag(ctx, userID, input)
+}
+
+// CreateNoteTag creates a new note-type tag
+func (s *Service) CreateNoteTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
+	if input.Name == "" {
+		return nil, ErrInvalidInput
+	}
+	if input.Color == "" {
+		input.Color = "#6B7280" // default color
+	}
+	return s.repo.CreateNoteTag(ctx, userID, input)
 }
 
 // UpdateTag updates an existing tag

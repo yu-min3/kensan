@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TagBadge } from '@/components/common/TagBadge'
+import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { TaskDialog, type TaskFormData } from '@/components/task/TaskDialog'
 import { GoalDialog, type GoalFormData } from '@/components/task/GoalDialog'
 import { MilestoneDialog, type MilestoneFormData } from '@/components/task/MilestoneDialog'
@@ -51,6 +52,134 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+
+// Sortable Goal Item component for drag & drop
+interface SortableGoalItemProps {
+  goal: Goal
+  isSelected: boolean
+  progress: { completed: number; total: number; percentage: number }
+  milestoneCount: number
+  onSelect: (id: string) => void
+  onEdit: (goal: Goal) => void
+  onDelete: (id: string) => void
+  onComplete: (id: string) => void
+}
+
+function SortableGoalItem({
+  goal,
+  isSelected,
+  progress,
+  milestoneCount,
+  onSelect,
+  onEdit,
+  onDelete,
+  onComplete,
+}: SortableGoalItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: goal.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const isCompleted = goal.status === 'completed'
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        className={cn(
+          'p-3 rounded-lg cursor-pointer transition-colors group',
+          isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50',
+          isDragging && 'opacity-50 bg-muted',
+          isCompleted && 'opacity-60'
+        )}
+        onClick={() => onSelect(goal.id)}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={e => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+          {isCompleted ? (
+            <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+          ) : (
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: goal.color }} />
+          )}
+          <span className={cn(
+            'font-medium text-sm flex-1',
+            isSelected && 'text-primary',
+            isCompleted && 'line-through'
+          )}>
+            {goal.name}
+          </span>
+          <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+            {!isCompleted && (
+              <ConfirmPopover
+                message="この目標を完了しますか？"
+                confirmLabel="完了"
+                onConfirm={() => onComplete(goal.id)}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-green-600"
+                  onClick={e => e.stopPropagation()}
+                  title="完了"
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                </Button>
+              </ConfirmPopover>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={e => {
+                e.stopPropagation()
+                onEdit(goal)
+              }}
+            >
+              <Edit className="h-3 w-3" />
+            </Button>
+            <ConfirmPopover
+              message="この目標と配下のマイルストーン・タスクを削除しますか？"
+              confirmLabel="削除"
+              onConfirm={() => onDelete(goal.id)}
+              variant="destructive"
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={e => e.stopPropagation()}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </ConfirmPopover>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Progress value={progress.percentage} className="h-1.5 flex-1" />
+          <span className="text-xs text-muted-foreground w-16 text-right">
+            {progress.completed}/{progress.total}
+          </span>
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">{milestoneCount} マイルストーン</div>
+      </div>
+    </div>
+  )
+}
 
 const initialTaskFormData: TaskFormData = {
   name: '',
@@ -190,14 +319,20 @@ function SortableTaskItem({
           >
             <Edit className="h-3 w-3" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={() => onDelete(task.id)}
+          <ConfirmPopover
+            message="このタスクを削除しますか？"
+            confirmLabel="削除"
+            onConfirm={() => onDelete(task.id)}
+            variant="destructive"
           >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </ConfirmPopover>
         </div>
       </div>
       {children}
@@ -215,6 +350,7 @@ const initialMilestoneFormData: MilestoneFormData = {
   name: '',
   description: '',
   goalId: '',
+  startDate: '',
   targetDate: '',
   status: 'active',
 }
@@ -244,6 +380,7 @@ export function T01TaskManagement() {
     updateTask,
     deleteTask,
     reorderTasks,
+    reorderGoals,
     bulkDeleteTasks,
     bulkCompleteTasks,
   } = useTaskStore()
@@ -286,7 +423,7 @@ export function T01TaskManagement() {
   // 初期選択: 最初の目標を選択（目標なしタスク選択中は除く）
   useEffect(() => {
     if (!selectedGoalId && !isStandaloneSelected && goals.length > 0) {
-      const firstGoal = goals.find(g => !g.isArchived)
+      const firstGoal = goals.find(g => g.status !== 'archived')
       if (firstGoal) {
         setSelectedGoalId(firstGoal.id)
       }
@@ -306,14 +443,26 @@ export function T01TaskManagement() {
   }, [selectedGoalId, getMilestonesByGoal, selectedMilestoneId, isStandaloneSelected])
 
   // フィルタリングされた目標
-  const filteredGoals = goals.filter(g => !g.isArchived)
+  const filteredGoals = goals.filter(g => {
+    if (g.status === 'archived') return false
+    if (hideCompleted && g.status === 'completed') return false
+    return true
+  })
 
-  // 選択された目標のマイルストーン
+  // 選択された目標のマイルストーン（期限順にソート）
   const selectedGoalMilestones = (selectedGoalId && !isStandaloneSelected)
-    ? getMilestonesByGoal(selectedGoalId).filter(m => {
-        if (hideCompleted && m.status === 'completed') return false
-        return m.status !== 'archived'
-      })
+    ? getMilestonesByGoal(selectedGoalId)
+        .filter(m => {
+          if (hideCompleted && m.status === 'completed') return false
+          return m.status !== 'archived'
+        })
+        .sort((a, b) => {
+          // targetDateがnullの場合は後ろに
+          if (!a.targetDate && !b.targetDate) return 0
+          if (!a.targetDate) return 1
+          if (!b.targetDate) return -1
+          return a.targetDate.localeCompare(b.targetDate)
+        })
     : []
 
   // 選択されたマイルストーンのタスク
@@ -370,7 +519,6 @@ export function T01TaskManagement() {
   // Bulk operation handlers
   const handleBulkDelete = async () => {
     if (selectedTaskIds.size === 0) return
-    if (!window.confirm(`${selectedTaskIds.size}件のタスクを削除しますか？`)) return
     await bulkDeleteTasks(Array.from(selectedTaskIds))
     setSelectedTaskIds(new Set())
   }
@@ -381,7 +529,7 @@ export function T01TaskManagement() {
     setSelectedTaskIds(new Set())
   }
 
-  // Drag end handler
+  // Drag end handler for tasks
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
@@ -398,6 +546,25 @@ export function T01TaskManagement() {
 
         // Update backend
         await reorderTasks(newOrder.map(t => t.id))
+      }
+    }
+  }
+
+  // Drag end handler for goals
+  const handleGoalDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const filteredGoals = goals.filter(g => g.status !== 'archived')
+      const oldIndex = filteredGoals.findIndex(g => g.id === active.id)
+      const newIndex = filteredGoals.findIndex(g => g.id === over.id)
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = [...filteredGoals]
+        const [removed] = newOrder.splice(oldIndex, 1)
+        newOrder.splice(newIndex, 0, removed)
+
+        await reorderGoals(newOrder.map(g => g.id))
       }
     }
   }
@@ -464,6 +631,7 @@ export function T01TaskManagement() {
       name: goal.name,
       description: goal.description || '',
       color: goal.color,
+      status: goal.status,
     })
   }
 
@@ -473,6 +641,7 @@ export function T01TaskManagement() {
         name: data.name,
         description: data.description || undefined,
         color: data.color,
+        status: data.status,
       })
     } else {
       await addGoal({
@@ -484,13 +653,15 @@ export function T01TaskManagement() {
   }
 
   const handleDeleteGoal = async (id: string) => {
-    if (window.confirm('この目標と配下のマイルストーン・タスクを削除しますか？')) {
-      await deleteGoal(id)
-      if (selectedGoalId === id) {
-        setSelectedGoalId(null)
-        setSelectedMilestoneId(null)
-      }
+    await deleteGoal(id)
+    if (selectedGoalId === id) {
+      setSelectedGoalId(null)
+      setSelectedMilestoneId(null)
     }
+  }
+
+  const handleCompleteGoal = async (goalId: string) => {
+    await updateGoal(goalId, { status: 'completed' })
   }
 
   // Milestone Handlers
@@ -505,6 +676,7 @@ export function T01TaskManagement() {
       name: milestone.name,
       description: milestone.description || '',
       goalId: milestone.goalId,
+      startDate: milestone.startDate || '',
       targetDate: milestone.targetDate || '',
       status: milestone.status,
     })
@@ -516,6 +688,7 @@ export function T01TaskManagement() {
         name: data.name,
         description: data.description || undefined,
         goalId: data.goalId,
+        startDate: data.startDate || undefined,
         targetDate: data.targetDate || undefined,
         status: data.status,
       })
@@ -524,28 +697,30 @@ export function T01TaskManagement() {
         name: data.name,
         description: data.description || undefined,
         goalId: data.goalId,
+        startDate: data.startDate || undefined,
         targetDate: data.targetDate || undefined,
       })
     }
   }
 
   const handleDeleteMilestone = async (id: string) => {
-    if (window.confirm('このマイルストーンと配下のタスクを削除しますか？')) {
-      await deleteMilestone(id)
-      if (selectedMilestoneId === id) {
-        setSelectedMilestoneId(null)
-      }
+    await deleteMilestone(id)
+    if (selectedMilestoneId === id) {
+      setSelectedMilestoneId(null)
     }
   }
 
   const handleCompleteMilestone = async (milestoneId: string) => {
+    await updateMilestone(milestoneId, { status: 'completed' })
+  }
+
+  // ConfirmPopover用: 未完了タスクの有無を確認メッセージに含める
+  const getMilestoneCompleteMessage = (milestoneId: string) => {
     const progress = calculateMilestoneProgress(milestoneId)
     if (progress.total > 0 && progress.completed < progress.total) {
-      if (!window.confirm('未完了のタスクがあります。マイルストーンを完了しますか？')) {
-        return
-      }
+      return `未完了のタスクが${progress.total - progress.completed}件あります。完了しますか？`
     }
-    await updateMilestone(milestoneId, { status: 'completed' })
+    return 'マイルストーンを完了しますか？'
   }
 
   // Task Handlers
@@ -612,15 +787,11 @@ export function T01TaskManagement() {
   }
 
   const handleDeleteTag = async (id: string) => {
-    if (window.confirm('このタグを削除しますか？')) {
-      await deleteTag(id)
-    }
+    await deleteTag(id)
   }
 
   const handleDeleteTask = async (id: string) => {
-    if (window.confirm('このタスクを削除しますか？')) {
-      await deleteTask(id)
-    }
+    await deleteTask(id)
   }
 
   // 選択された目標・マイルストーン
@@ -680,60 +851,36 @@ export function T01TaskManagement() {
           </CardHeader>
           <ScrollArea className="flex-1">
             <CardContent className="p-2 space-y-1">
-              {filteredGoals.map(goal => {
-                const progress = calculateGoalProgress(goal.id)
-                const isSelected = selectedGoalId === goal.id
-                const milestoneCount = getMilestonesByGoal(goal.id).filter(m => m.status !== 'archived').length
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleGoalDragEnd}
+              >
+                <SortableContext
+                  items={filteredGoals.map(g => g.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {filteredGoals.map(goal => {
+                    const progress = calculateGoalProgress(goal.id)
+                    const isSelected = selectedGoalId === goal.id
+                    const milestoneCount = getMilestonesByGoal(goal.id).filter(m => m.status !== 'archived').length
 
-                return (
-                  <div
-                    key={goal.id}
-                    className={cn(
-                      'p-3 rounded-lg cursor-pointer transition-colors group',
-                      isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'
-                    )}
-                    onClick={() => setSelectedGoalId(goal.id)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: goal.color }} />
-                      <span className={cn('font-medium text-sm flex-1', isSelected && 'text-primary')}>
-                        {goal.name}
-                      </span>
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={e => {
-                            e.stopPropagation()
-                            openEditGoalDialog(goal)
-                          }}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={e => {
-                            e.stopPropagation()
-                            handleDeleteGoal(goal.id)
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Progress value={progress.percentage} className="h-1.5 flex-1" />
-                      <span className="text-xs text-muted-foreground w-16 text-right">
-                        {progress.completed}/{progress.total}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{milestoneCount} マイルストーン</div>
-                  </div>
-                )
-              })}
+                    return (
+                      <SortableGoalItem
+                        key={goal.id}
+                        goal={goal}
+                        isSelected={isSelected}
+                        progress={progress}
+                        milestoneCount={milestoneCount}
+                        onSelect={setSelectedGoalId}
+                        onEdit={openEditGoalDialog}
+                        onDelete={handleDeleteGoal}
+                        onComplete={handleCompleteGoal}
+                      />
+                    )
+                  })}
+                </SortableContext>
+              </DndContext>
 
               {filteredGoals.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground text-sm">
@@ -793,12 +940,18 @@ export function T01TaskManagement() {
                           >
                             <Edit className="h-2.5 w-2.5" />
                           </button>
-                          <button
-                            onClick={() => handleDeleteTag(tag.id)}
-                            className="w-4 h-4 bg-background border rounded-full flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground"
+                          <ConfirmPopover
+                            message="このタグを削除しますか？"
+                            confirmLabel="削除"
+                            onConfirm={() => handleDeleteTag(tag.id)}
+                            variant="destructive"
                           >
-                            <Trash2 className="h-2.5 w-2.5" />
-                          </button>
+                            <button
+                              className="w-4 h-4 bg-background border rounded-full flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          </ConfirmPopover>
                         </div>
                       </div>
                     ))
@@ -868,18 +1021,21 @@ export function T01TaskManagement() {
                           </span>
                           <div className="opacity-0 group-hover:opacity-100 flex gap-1">
                             {!isCompleted && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-green-600"
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  handleCompleteMilestone(milestone.id)
-                                }}
-                                title="完了"
+                              <ConfirmPopover
+                                message={getMilestoneCompleteMessage(milestone.id)}
+                                confirmLabel="完了"
+                                onConfirm={() => handleCompleteMilestone(milestone.id)}
                               >
-                                <CheckCircle2 className="h-3 w-3" />
-                              </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-green-600"
+                                  onClick={e => e.stopPropagation()}
+                                  title="完了"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                </Button>
+                              </ConfirmPopover>
                             )}
                             <Button
                               variant="ghost"
@@ -892,21 +1048,31 @@ export function T01TaskManagement() {
                             >
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={e => {
-                                e.stopPropagation()
-                                handleDeleteMilestone(milestone.id)
-                              }}
+                            <ConfirmPopover
+                              message="このマイルストーンと配下のタスクを削除しますか？"
+                              confirmLabel="削除"
+                              onConfirm={() => handleDeleteMilestone(milestone.id)}
+                              variant="destructive"
                             >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </ConfirmPopover>
                           </div>
                         </div>
-                        {milestone.targetDate && (
-                          <div className="mt-1 text-xs text-muted-foreground">期限: {milestone.targetDate}</div>
+                        {(milestone.startDate || milestone.targetDate) && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {milestone.startDate && milestone.targetDate
+                              ? `${milestone.startDate} 〜 ${milestone.targetDate}`
+                              : milestone.targetDate
+                                ? `期限: ${milestone.targetDate}`
+                                : `開始: ${milestone.startDate}`}
+                          </div>
                         )}
                         <div className="mt-2 flex items-center gap-2">
                           <Progress value={progress.percentage} className="h-1.5 flex-1" />
@@ -976,15 +1142,21 @@ export function T01TaskManagement() {
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     完了
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs text-destructive hover:text-destructive"
-                    onClick={handleBulkDelete}
+                  <ConfirmPopover
+                    message={`${selectedTaskIds.size}件のタスクを削除しますか？`}
+                    confirmLabel="削除"
+                    onConfirm={handleBulkDelete}
+                    variant="destructive"
                   >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    削除
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      削除
+                    </Button>
+                  </ConfirmPopover>
                 </div>
               </div>
             ) : (
@@ -1087,14 +1259,20 @@ export function T01TaskManagement() {
                                     >
                                       <Edit className="h-3 w-3" />
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                      onClick={() => handleDeleteTask(childTask.id)}
+                                    <ConfirmPopover
+                                      message="このタスクを削除しますか？"
+                                      confirmLabel="削除"
+                                      onConfirm={() => handleDeleteTask(childTask.id)}
+                                      variant="destructive"
                                     >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </ConfirmPopover>
                                   </div>
                                 </div>
                               ))}
@@ -1193,14 +1371,20 @@ export function T01TaskManagement() {
                                     >
                                       <Edit className="h-3 w-3" />
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                      onClick={() => handleDeleteTask(childTask.id)}
+                                    <ConfirmPopover
+                                      message="このタスクを削除しますか？"
+                                      confirmLabel="削除"
+                                      onConfirm={() => handleDeleteTask(childTask.id)}
+                                      variant="destructive"
                                     >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </ConfirmPopover>
                                   </div>
                                 </div>
                               ))}

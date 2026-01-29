@@ -5,8 +5,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
+
 	"github.com/kensan/backend/services/diary/internal"
 	"github.com/kensan/backend/services/diary/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
 )
 
@@ -198,6 +201,12 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrInvalidDate):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "date", Message: "Date must be in YYYY-MM-DD format"}})
 	default:
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in diary-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
 }

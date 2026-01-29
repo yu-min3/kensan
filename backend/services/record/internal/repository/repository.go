@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/record/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 var (
@@ -28,6 +29,11 @@ var _ Repository = (*PostgresRepository)(nil)
 // NewPostgresRepository creates a new PostgreSQL record repository
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
+}
+
+// wrapDBError wraps a database error with context message and detects schema errors
+func wrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
 }
 
 // GetByID retrieves a learning record by ID (with content)
@@ -64,7 +70,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*record.Le
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, err
+		return nil, wrapDBError("failed to get record by id", err)
 	}
 
 	rec.MilestoneID = milestoneID
@@ -113,7 +119,7 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, err
+		return nil, wrapDBError("failed to get record by id and user id", err)
 	}
 
 	rec.MilestoneID = milestoneID
@@ -169,7 +175,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to list records", err)
 	}
 	defer rows.Close()
 
@@ -196,7 +202,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 			&rec.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, wrapDBError("failed to scan record row", err)
 		}
 
 		rec.MilestoneID = milestoneID
@@ -212,7 +218,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *re
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to iterate record rows", err)
 	}
 
 	return records, nil
@@ -254,7 +260,10 @@ func (r *PostgresRepository) Create(ctx context.Context, rec *record.LearningRec
 		rec.CreatedAt,
 		rec.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return wrapDBError("failed to create record", err)
+	}
+	return nil
 }
 
 // Update updates an existing learning record
@@ -284,7 +293,7 @@ func (r *PostgresRepository) Update(ctx context.Context, rec *record.LearningRec
 		rec.UpdatedAt,
 	)
 	if err != nil {
-		return err
+		return wrapDBError("failed to update record", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -300,7 +309,7 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 
 	result, err := r.pool.Exec(ctx, query, id)
 	if err != nil {
-		return err
+		return wrapDBError("failed to delete record", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -316,7 +325,7 @@ func (r *PostgresRepository) DeleteByIDAndUserID(ctx context.Context, id, userID
 
 	result, err := r.pool.Exec(ctx, query, id, userID)
 	if err != nil {
-		return err
+		return wrapDBError("failed to delete record by id and user id", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -351,7 +360,7 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 
 	rows, err := r.pool.Query(ctx, sqlQuery, userID, searchPattern, limit)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to query semantic search", err)
 	}
 	defer rows.Close()
 
@@ -380,7 +389,7 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 			&score,
 		)
 		if err != nil {
-			return nil, err
+			return nil, wrapDBError("failed to scan semantic search row", err)
 		}
 
 		rec.MilestoneID = milestoneID
@@ -399,7 +408,7 @@ func (r *PostgresRepository) SemanticSearch(ctx context.Context, userID, query s
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to iterate semantic search rows", err)
 	}
 
 	return results, nil

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	memo "github.com/kensan/backend/services/memo/internal"
 	"github.com/kensan/backend/services/memo/internal/service"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
 	"github.com/rs/zerolog/log"
 )
@@ -64,6 +65,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	memos, err := h.service.List(r.Context(), userID, filter)
 	if err != nil {
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to list memos")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list memos")
 		return
@@ -81,6 +88,12 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrMemoNotFound) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get memo")
@@ -114,6 +127,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to create memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create memo")
 		return
@@ -138,6 +157,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to update memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update memo")
 		return
@@ -157,6 +182,12 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+			return
+		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to archive memo")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to archive memo")
 		return
@@ -174,6 +205,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, service.ErrMemoNotFound) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
+			return
+		}
+		// Database schema errors
+		if sharedErrors.IsDatabaseSchema(err) {
+			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in memo-service")
+			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to delete memo")

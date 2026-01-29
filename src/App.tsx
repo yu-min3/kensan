@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LoginPage } from '@/pages/LoginPage'
 import { S01Settings } from '@/pages/S01_Settings'
 import { DailyPage } from '@/pages/DailyPage'
@@ -35,8 +36,9 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
         {/* 認証前のルート */}
         <Route
           path="/login"
@@ -75,8 +77,9 @@ function App() {
           <Route path="ai-review" element={<A02AIReview />} />
           <Route path="settings" element={<S01Settings />} />
         </Route>
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
 

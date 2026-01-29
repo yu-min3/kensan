@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kensan/backend/shared/errors"
+	"github.com/rs/zerolog"
 )
 
 // Response is the standard API response format
@@ -177,18 +179,47 @@ func HandleServiceError(w http.ResponseWriter, r *http.Request, err error, mappi
 //	    return
 //	}
 func ValidateRequired(w http.ResponseWriter, r *http.Request, fields map[string]string) bool {
-	var errors []ErrorDetail
+	var details []ErrorDetail
 	for field, value := range fields {
 		if value == "" {
-			errors = append(errors, ErrorDetail{
+			details = append(details, ErrorDetail{
 				Field:   field,
 				Message: field + " is required",
 			})
 		}
 	}
-	if len(errors) > 0 {
-		ValidationError(w, r, errors)
+	if len(details) > 0 {
+		ValidationError(w, r, details)
 		return false
 	}
 	return true
+}
+
+// HandleError maps common errors to HTTP responses automatically.
+// It checks the error against known error types and writes the appropriate response.
+// Unknown errors are logged and returned as 500 Internal Server Error.
+//
+// Usage:
+//
+//	if err := h.service.DoSomething(...); err != nil {
+//	    middleware.HandleError(w, r, err, log)
+//	    return
+//	}
+func HandleError(w http.ResponseWriter, r *http.Request, err error, log zerolog.Logger) {
+	switch {
+	case errors.IsNotFound(err):
+		Error(w, r, http.StatusNotFound, "NOT_FOUND", err.Error())
+	case errors.IsInvalidInput(err):
+		Error(w, r, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+	case errors.IsAlreadyExists(err):
+		Error(w, r, http.StatusConflict, "ALREADY_EXISTS", err.Error())
+	case errors.IsUnauthorized(err):
+		Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", err.Error())
+	case errors.IsDatabaseSchema(err):
+		log.Error().Err(err).Str("request_id", GetRequestID(r.Context())).Msg("Database schema error")
+		Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+	default:
+		log.Error().Err(err).Str("request_id", GetRequestID(r.Context())).Msg("Unhandled error")
+		Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+	}
 }

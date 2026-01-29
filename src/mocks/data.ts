@@ -33,7 +33,8 @@ export let goals: Goal[] = [
     name: 'Golden Kubestronaut',
     description: 'CNCF認定資格を全て取得する',
     color: '#0EA5E9',
-    isArchived: false,
+    status: 'active',
+    sortOrder: 0,
     createdAt: subDays(new Date(), 90),
     updatedAt: subDays(new Date(), 30),
   },
@@ -42,7 +43,8 @@ export let goals: Goal[] = [
     name: 'OSS活動',
     description: 'オープンソースプロジェクトへの貢献',
     color: '#10B981',
-    isArchived: false,
+    status: 'active',
+    sortOrder: 1,
     createdAt: subDays(new Date(), 60),
     updatedAt: subDays(new Date(), 7),
   },
@@ -51,7 +53,8 @@ export let goals: Goal[] = [
     name: 'アウトプット',
     description: 'ブログ執筆やLT登壇',
     color: '#F59E0B',
-    isArchived: false,
+    status: 'active',
+    sortOrder: 2,
     createdAt: subDays(new Date(), 30),
     updatedAt: subDays(new Date(), 14),
   },
@@ -116,11 +119,11 @@ export let milestones: Milestone[] = [
 // Tags (タグ) - 集計用
 // ============================================
 export let tags: Tag[] = [
-  { id: 'tag-dev', name: '開発', color: '#8B5CF6', pinned: true, usageCount: 45, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 1) },
-  { id: 'tag-input', name: 'Input', color: '#06B6D4', pinned: true, usageCount: 32, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 2) },
-  { id: 'tag-exercise', name: '運動', color: '#EF4444', pinned: false, usageCount: 18, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 5) },
-  { id: 'tag-reading', name: '読書', color: '#84CC16', pinned: false, usageCount: 12, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 3) },
-  { id: 'tag-review', name: '振り返り', color: '#EC4899', pinned: true, usageCount: 8, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 7) },
+  { id: 'tag-dev', name: '開発', color: '#8B5CF6', type: 'task', pinned: true, usageCount: 45, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 1) },
+  { id: 'tag-input', name: 'Input', color: '#06B6D4', type: 'task', pinned: true, usageCount: 32, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 2) },
+  { id: 'tag-exercise', name: '運動', color: '#EF4444', type: 'task', pinned: false, usageCount: 18, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 5) },
+  { id: 'tag-reading', name: '読書', color: '#84CC16', type: 'task', pinned: false, usageCount: 12, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 3) },
+  { id: 'tag-review', name: '振り返り', color: '#EC4899', type: 'task', pinned: true, usageCount: 8, createdAt: subDays(new Date(), 90), updatedAt: subDays(new Date(), 7) },
 ]
 
 // ============================================

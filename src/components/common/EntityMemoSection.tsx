@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ConfirmPopover } from './ConfirmPopover'
 import { useEntityMemos } from '@/hooks/useEntityMemos'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
@@ -71,9 +72,7 @@ export function EntityMemoSection({
   }
 
   const handleDelete = async (memoId: string) => {
-    if (window.confirm('このメモを削除しますか？')) {
-      await deleteMemo(memoId)
-    }
+    await deleteMemo(memoId)
   }
 
   if (!entityId) {
@@ -236,15 +235,21 @@ function MemoItem({
             >
               <Edit2 className="h-3 w-3" />
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-              onClick={onDelete}
-              title="削除"
+            <ConfirmPopover
+              message="このメモを削除しますか？"
+              confirmLabel="削除"
+              onConfirm={onDelete}
+              variant="destructive"
             >
-              <Trash2 className="h-3 w-3" />
-            </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                title="削除"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </ConfirmPopover>
           </div>
         </>
       )}

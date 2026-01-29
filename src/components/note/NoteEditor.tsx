@@ -249,7 +249,7 @@ export function NoteEditor({
                 <SelectContent>
                   <SelectItem value="_none">なし</SelectItem>
                   {goals
-                    .filter((g) => !g.isArchived)
+                    .filter((g) => g.status !== 'archived')
                     .map((goal) => (
                       <SelectItem key={goal.id} value={goal.id}>
                         <div className="flex items-center gap-2">

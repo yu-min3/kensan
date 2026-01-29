@@ -109,7 +109,7 @@ export function TaskSelect({
     })
 
     // Convert to array, goals with tasks first, then standalone
-    const goalsWithTasks = goals.filter(g => !g.isArchived && goalMap.has(g.id))
+    const goalsWithTasks = goals.filter(g => g.status !== 'archived' && goalMap.has(g.id))
 
     goalsWithTasks.forEach(goal => {
       const milestoneMap = goalMap.get(goal.id)!

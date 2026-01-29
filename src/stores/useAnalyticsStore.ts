@@ -18,8 +18,8 @@ interface AnalyticsState {
   fetchWeeklySummary: (weekStart?: string) => Promise<void>
   fetchDailyStudyHours: (days?: number) => Promise<void>
 
-  // 一括取得（ダッシュボード用）
-  fetchDashboardData: () => Promise<void>
+  // 一括取得（ダッシュボード用）- 日付範囲指定対応
+  fetchDashboardData: (startDate?: string, endDate?: string) => Promise<void>
 }
 
 export const useAnalyticsStore = create<AnalyticsState>((set) => ({
@@ -54,13 +54,26 @@ export const useAnalyticsStore = create<AnalyticsState>((set) => ({
     }
   },
 
-  fetchDashboardData: async () => {
+  fetchDashboardData: async (startDate?: string, endDate?: string) => {
     set({ isLoading: true, error: null })
     try {
-      const [weeklySummary, dailyData] = await Promise.all([
-        analyticsApi.getWeeklySummary(),
-        analyticsApi.getDailyStudyHours(7),
-      ])
+      let weeklySummary: WeeklySummary
+      let dailyData: DailyStudyHour[]
+
+      if (startDate && endDate) {
+        // 日付範囲指定がある場合
+        ;[weeklySummary, dailyData] = await Promise.all([
+          analyticsApi.getSummary(startDate, endDate),
+          analyticsApi.getDailyStudyHoursByRange(startDate, endDate),
+        ])
+      } else {
+        // デフォルト（今週）
+        ;[weeklySummary, dailyData] = await Promise.all([
+          analyticsApi.getWeeklySummary(),
+          analyticsApi.getDailyStudyHours(7),
+        ])
+      }
+
       const dailyStudyHours: DailyStudyHour[] = dailyData.map((d) => ({
         date: d.date,
         hours: d.hours,

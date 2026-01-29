@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { NoteEditor, NoteEditorValue } from '@/components/note/NoteEditor'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useTaskStore } from '@/stores/useTaskStore'
@@ -142,7 +143,7 @@ export function N02NoteEdit() {
   }
 
   const handleDelete = async () => {
-    if (id && window.confirm('このノートを削除しますか？')) {
+    if (id) {
       try {
         await deleteNote(id)
         navigate('/notes')
@@ -222,15 +223,21 @@ export function N02NoteEdit() {
                   </>
                 )}
               </Button>
-              <Button
+              <ConfirmPopover
+                message="このノートを削除しますか？"
+                confirmLabel="削除"
+                onConfirm={handleDelete}
                 variant="destructive"
-                size="sm"
-                onClick={handleDelete}
-                className="gap-1"
               >
-                <Trash2 className="h-4 w-4" />
-                削除
-              </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  削除
+                </Button>
+              </ConfirmPopover>
             </>
           )}
           <Button

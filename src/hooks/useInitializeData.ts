@@ -55,8 +55,8 @@ export function useInitializeData() {
         console.log(`[Kensan] Using timezone: ${currentTimezone}, today: ${todayLocal}`)
 
         // Fetch data from all stores in parallel
-        // Use timezone-aware fetch for time blocks and entries
-        await Promise.all([
+        // Use Promise.allSettled to allow partial success
+        const results = await Promise.allSettled([
           fetchTasks(),
           fetchTimeBlocksForLocalDate(todayLocal, currentTimezone),
           fetchTimeEntriesForLocalDate(todayLocal, currentTimezone),
@@ -64,11 +64,27 @@ export function useInitializeData() {
           fetchCurrentTimer(),
         ])
 
+        // Log any failures but don't block initialization
+        const failures = results
+          .map((r, i) => ({ result: r, name: ['tasks', 'timeBlocks', 'timeEntries', 'notes', 'timer'][i] }))
+          .filter((r) => r.result.status === 'rejected')
+
+        if (failures.length > 0) {
+          console.warn('[Kensan] Some data failed to load:', failures.map((f) => f.name))
+          failures.forEach((f) => {
+            if (f.result.status === 'rejected') {
+              console.error(`[Kensan] ${f.name} failed:`, f.result.reason)
+            }
+          })
+        }
+
         console.log('[Kensan] Data initialization complete')
         setInitialized(true)
       } catch (err) {
+        // This catches errors in fetchSettings (required for initialization)
         console.error('[Kensan] Data initialization failed:', err)
         setError((err as Error).message)
+        setInitialized(true) // Still allow app to render with error state
       } finally {
         setIsLoading(false)
       }

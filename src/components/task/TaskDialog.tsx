@@ -78,7 +78,7 @@ export function TaskDialog({ dialog, goals, milestones, tags, tasks, onSave }: T
               <SelectContent>
                 <SelectItem value="">なし</SelectItem>
                 {goals
-                  .filter(g => !g.isArchived)
+                  .filter(g => g.status !== 'archived')
                   .map(goal => {
                     const goalMilestones = milestones.filter(
                       m => m.goalId === goal.id && m.status === 'active'

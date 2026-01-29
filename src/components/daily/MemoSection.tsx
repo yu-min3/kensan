@@ -1,18 +1,65 @@
-import { useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { useMemoStore } from '@/stores/useMemoStore'
 import { formatTime } from '@/lib/dateFormat'
-import { Lightbulb, Archive, Trash2 } from 'lucide-react'
+import { Lightbulb, Archive, Trash2, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function MemoSection() {
-  const { fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
+  const { fetchMemos, updateMemo, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     fetchMemos()
   }, [fetchMemos])
 
   const activeMemos = getActiveMemos()
+
+  const handleStartEdit = (memo: { id: string; content: string }) => {
+    setEditingId(memo.id)
+    setEditContent(memo.content)
+    setTimeout(() => {
+      editTextareaRef.current?.focus()
+      editTextareaRef.current?.setSelectionRange(
+        editTextareaRef.current.value.length,
+        editTextareaRef.current.value.length
+      )
+    }, 0)
+  }
+
+  const handleSaveEdit = async () => {
+    if (editingId === null) return
+    const trimmed = editContent.trim()
+    const original = activeMemos.find((m) => m.id === editingId)?.content
+    if (trimmed === original || trimmed === '') {
+      setEditingId(null)
+      setEditContent('')
+      return
+    }
+    setIsSaving(true)
+    const success = await updateMemo(editingId, trimmed)
+    setIsSaving(false)
+    if (success) {
+      toast.success('保存しました', { duration: 1500 })
+    } else {
+      toast.error('保存に失敗しました', { duration: 3000 })
+    }
+    setEditingId(null)
+    setEditContent('')
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setEditingId(null)
+      setEditContent('')
+    }
+  }
 
   return (
     <Card>
@@ -35,12 +82,36 @@ export function MemoSection() {
                 className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm whitespace-pre-wrap break-words">{memo.content}</p>
+                  {editingId === memo.id ? (
+                    <div className="relative">
+                      <Textarea
+                        ref={editTextareaRef}
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        onBlur={handleSaveEdit}
+                        onKeyDown={handleEditKeyDown}
+                        className="min-h-[60px] resize-none text-sm"
+                        disabled={isSaving}
+                      />
+                      {isSaving && (
+                        <div className="absolute top-2 right-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p
+                      className="text-sm whitespace-pre-wrap break-words cursor-text hover:bg-muted rounded px-1 -mx-1"
+                      onClick={() => handleStartEdit(memo)}
+                    >
+                      {memo.content}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatTime(memo.createdAt)}
                   </p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`flex gap-1 transition-opacity ${editingId === memo.id ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                   <Button
                     variant="ghost"
                     size="sm"

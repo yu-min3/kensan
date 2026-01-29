@@ -158,7 +158,7 @@ export function StartTimerDialog({ open, onOpenChange }: StartTimerDialogProps) 
                   </SelectTrigger>
                   <SelectContent>
                     {goals
-                      .filter(g => !g.isArchived)
+                      .filter(g => g.status !== 'archived')
                       .map(goal => {
                         const goalMilestones = milestones.filter(
                           m => m.goalId === goal.id && m.status === 'active'

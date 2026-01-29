@@ -10,16 +10,35 @@ import (
 // Goal (目標)
 // ============================================
 
+// GoalStatus represents the status of a goal
+type GoalStatus string
+
+const (
+	GoalStatusActive    GoalStatus = "active"
+	GoalStatusCompleted GoalStatus = "completed"
+	GoalStatusArchived  GoalStatus = "archived"
+)
+
+// IsValid checks if the goal status is valid
+func (s GoalStatus) IsValid() bool {
+	switch s {
+	case GoalStatusActive, GoalStatusCompleted, GoalStatusArchived:
+		return true
+	}
+	return false
+}
+
 // Goal represents a goal entity
 type Goal struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"userId"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description,omitempty"`
-	Color       string    `json:"color"`
-	IsArchived  bool      `json:"isArchived"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          string     `json:"id"`
+	UserID      string     `json:"userId"`
+	Name        string     `json:"name"`
+	Description *string    `json:"description,omitempty"`
+	Color       string     `json:"color"`
+	Status      GoalStatus `json:"status"`
+	SortOrder   int        `json:"sortOrder"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
 // CreateGoalInput represents the input for creating a goal
@@ -31,15 +50,15 @@ type CreateGoalInput struct {
 
 // UpdateGoalInput represents the input for updating a goal
 type UpdateGoalInput struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Color       *string `json:"color,omitempty"`
-	IsArchived  *bool   `json:"isArchived,omitempty"`
+	Name        *string     `json:"name,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	Color       *string     `json:"color,omitempty"`
+	Status      *GoalStatus `json:"status,omitempty"`
 }
 
 // GoalFilter represents filters for listing goals
 type GoalFilter struct {
-	IsArchived *bool
+	Status *GoalStatus
 }
 
 // ============================================
@@ -71,6 +90,7 @@ type Milestone struct {
 	GoalID      string          `json:"goalId"`
 	Name        string          `json:"name"`
 	Description *string         `json:"description,omitempty"`
+	StartDate   types.DateOnly  `json:"startDate,omitempty"`
 	TargetDate  types.DateOnly  `json:"targetDate,omitempty"`
 	Status      MilestoneStatus `json:"status"`
 	CreatedAt   time.Time       `json:"createdAt"`
@@ -82,6 +102,7 @@ type CreateMilestoneInput struct {
 	GoalID      string         `json:"goalId"`
 	Name        string         `json:"name"`
 	Description *string        `json:"description,omitempty"`
+	StartDate   types.DateOnly `json:"startDate,omitempty"`
 	TargetDate  types.DateOnly `json:"targetDate,omitempty"`
 }
 
@@ -90,6 +111,7 @@ type UpdateMilestoneInput struct {
 	GoalID      *string          `json:"goalId,omitempty"`
 	Name        *string          `json:"name,omitempty"`
 	Description *string          `json:"description,omitempty"`
+	StartDate   *types.DateOnly  `json:"startDate,omitempty"`
 	TargetDate  *types.DateOnly  `json:"targetDate,omitempty"`
 	Status      *MilestoneStatus `json:"status,omitempty"`
 }
@@ -104,12 +126,21 @@ type MilestoneFilter struct {
 // Tag (タグ)
 // ============================================
 
+// TagType represents the type of tag (task or note)
+type TagType string
+
+const (
+	TagTypeTask TagType = "task"
+	TagTypeNote TagType = "note"
+)
+
 // Tag represents a tag entity
 type Tag struct {
 	ID         string    `json:"id"`
 	UserID     string    `json:"userId"`
 	Name       string    `json:"name"`
 	Color      string    `json:"color"`
+	Type       TagType   `json:"type"`
 	Pinned     bool      `json:"pinned"`
 	UsageCount int       `json:"usageCount"`
 	CreatedAt  time.Time `json:"createdAt"`

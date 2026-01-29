@@ -9,6 +9,7 @@ interface MemoState {
   // Actions
   fetchMemos: (options?: { includeAll?: boolean; date?: string }) => Promise<void>
   addMemo: (content: string) => Promise<Memo | null>
+  updateMemo: (id: string, content: string) => Promise<boolean>
   archiveMemo: (id: string) => Promise<void>
   deleteMemo: (id: string) => Promise<void>
 
@@ -45,6 +46,19 @@ export const useMemoStore = create<MemoState>((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message })
       return null
+    }
+  },
+
+  updateMemo: async (id, content) => {
+    try {
+      const updatedMemo = await memosApi.update(id, { content })
+      set((state) => ({
+        memos: state.memos.map((m) => (m.id === id ? updatedMemo : m)),
+      }))
+      return true
+    } catch (error) {
+      set({ error: (error as Error).message })
+      return false
     }
   },
 

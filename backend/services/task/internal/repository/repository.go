@@ -33,6 +33,11 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// wrapDBError wraps a database error with context message and detects schema errors
+func wrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
+}
+
 // ========== Task Operations ==========
 
 // ListTasks returns all tasks for a user with optional filters
@@ -75,7 +80,7 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tasks: %w", err)
+		return nil, wrapDBError("failed to query tasks", err)
 	}
 	defer rows.Close()
 
@@ -343,7 +348,7 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 
 	rows, err := r.pool.Query(ctx, query, userID, parentTaskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query child tasks: %w", err)
+		return nil, wrapDBError("failed to query child tasks", err)
 	}
 	defer rows.Close()
 
@@ -471,7 +476,7 @@ func (r *PostgresRepository) ReorderTasks(ctx context.Context, userID string, ta
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query reordered tasks: %w", err)
+		return nil, wrapDBError("failed to query reordered tasks", err)
 	}
 	defer rows.Close()
 
@@ -578,34 +583,36 @@ func (r *PostgresRepository) BulkCompleteTasks(ctx context.Context, userID strin
 // ListGoals returns all goals for a user with optional filters
 func (r *PostgresRepository) ListGoals(ctx context.Context, userID string, filter task.GoalFilter) ([]task.Goal, error) {
 	query := `
-		SELECT id, user_id, name, description, color, is_archived, created_at, updated_at
+		SELECT id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
 		FROM goals
 		WHERE user_id = $1
 	`
 	args := []interface{}{userID}
 	argCount := 1
 
-	if filter.IsArchived != nil {
+	if filter.Status != nil {
 		argCount++
-		query += fmt.Sprintf(" AND is_archived = $%d", argCount)
-		args = append(args, *filter.IsArchived)
+		query += fmt.Sprintf(" AND status = $%d", argCount)
+		args = append(args, string(*filter.Status))
 	}
 
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY sort_order ASC, created_at DESC"
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query goals: %w", err)
+		return nil, wrapDBError("failed to query goals", err)
 	}
 	defer rows.Close()
 
 	var goals []task.Goal
 	for rows.Next() {
 		var g task.Goal
-		err := rows.Scan(&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &g.IsArchived, &g.CreatedAt, &g.UpdatedAt)
+		var status string
+		err := rows.Scan(&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan goal: %w", err)
 		}
+		g.Status = task.GoalStatus(status)
 		goals = append(goals, g)
 	}
 
@@ -615,14 +622,15 @@ func (r *PostgresRepository) ListGoals(ctx context.Context, userID string, filte
 // GetGoalByID returns a goal by ID
 func (r *PostgresRepository) GetGoalByID(ctx context.Context, userID, goalID string) (*task.Goal, error) {
 	query := `
-		SELECT id, user_id, name, description, color, is_archived, created_at, updated_at
+		SELECT id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
 		FROM goals
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var g task.Goal
+	var status string
 	err := r.pool.QueryRow(ctx, query, goalID, userID).Scan(
-		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &g.IsArchived, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -630,6 +638,7 @@ func (r *PostgresRepository) GetGoalByID(ctx context.Context, userID, goalID str
 		}
 		return nil, fmt.Errorf("failed to get goal: %w", err)
 	}
+	g.Status = task.GoalStatus(status)
 
 	return &g, nil
 }
@@ -639,19 +648,28 @@ func (r *PostgresRepository) CreateGoal(ctx context.Context, userID string, inpu
 	id := uuid.New().String()
 	now := time.Now()
 
+	// Get next sort_order
+	var maxSortOrder int
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(sort_order), -1) FROM goals WHERE user_id = $1`, userID).Scan(&maxSortOrder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get max sort order: %w", err)
+	}
+
 	query := `
-		INSERT INTO goals (id, user_id, name, description, color, is_archived, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, FALSE, $6, $7)
-		RETURNING id, user_id, name, description, color, is_archived, created_at, updated_at
+		INSERT INTO goals (id, user_id, name, description, color, status, sort_order, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8)
+		RETURNING id, user_id, name, description, color, status, sort_order, created_at, updated_at
 	`
 
 	var g task.Goal
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Description, input.Color, now, now).Scan(
-		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &g.IsArchived, &g.CreatedAt, &g.UpdatedAt,
+	var status string
+	err = r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Description, input.Color, maxSortOrder+1, now, now).Scan(
+		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create goal: %w", err)
 	}
+	g.Status = task.GoalStatus(status)
 
 	return &g, nil
 }
@@ -677,10 +695,10 @@ func (r *PostgresRepository) UpdateGoal(ctx context.Context, userID, goalID stri
 		setClauses = append(setClauses, fmt.Sprintf("color = $%d", argCount))
 		args = append(args, *input.Color)
 	}
-	if input.IsArchived != nil {
+	if input.Status != nil {
 		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("is_archived = $%d", argCount))
-		args = append(args, *input.IsArchived)
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argCount))
+		args = append(args, string(*input.Status))
 	}
 
 	if len(setClauses) == 0 {
@@ -698,12 +716,13 @@ func (r *PostgresRepository) UpdateGoal(ctx context.Context, userID, goalID stri
 
 	query := fmt.Sprintf(`
 		UPDATE goals SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, description, color, is_archived, created_at, updated_at
+		RETURNING id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var g task.Goal
+	var status string
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
-		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &g.IsArchived, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -711,6 +730,7 @@ func (r *PostgresRepository) UpdateGoal(ctx context.Context, userID, goalID stri
 		}
 		return nil, fmt.Errorf("failed to update goal: %w", err)
 	}
+	g.Status = task.GoalStatus(status)
 
 	return &g, nil
 }
@@ -728,12 +748,82 @@ func (r *PostgresRepository) DeleteGoal(ctx context.Context, userID, goalID stri
 	return nil
 }
 
+// ReorderGoals updates the sort order of goals based on the provided order
+func (r *PostgresRepository) ReorderGoals(ctx context.Context, userID string, goalIDs []string) ([]task.Goal, error) {
+	if len(goalIDs) == 0 {
+		return []task.Goal{}, nil
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+
+	// Update sort_order for each goal
+	for i, goalID := range goalIDs {
+		_, err := tx.Exec(ctx, `
+			UPDATE goals
+			SET sort_order = $1, updated_at = $2
+			WHERE id = $3 AND user_id = $4
+		`, i, now, goalID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update goal sort order: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Fetch updated goals
+	placeholders := make([]string, len(goalIDs))
+	args := make([]interface{}, len(goalIDs)+1)
+	args[0] = userID
+	for i, id := range goalIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args[i+1] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
+		FROM goals
+		WHERE user_id = $1 AND id IN (%s)
+		ORDER BY sort_order
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, wrapDBError("failed to query reordered goals", err)
+	}
+	defer rows.Close()
+
+	var goals []task.Goal
+	for rows.Next() {
+		var g task.Goal
+		var status string
+		err := rows.Scan(
+			&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color,
+			&status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan goal: %w", err)
+		}
+		g.Status = task.GoalStatus(status)
+		goals = append(goals, g)
+	}
+
+	return goals, rows.Err()
+}
+
 // ========== Milestone Operations ==========
 
 // ListMilestones returns all milestones for a user with optional filters
 func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, filter task.MilestoneFilter) ([]task.Milestone, error) {
 	query := `
-		SELECT id, user_id, goal_id, name, description, target_date, status, created_at, updated_at
+		SELECT id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
 		FROM milestones
 		WHERE user_id = $1
 	`
@@ -755,7 +845,7 @@ func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, 
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query milestones: %w", err)
+		return nil, wrapDBError("failed to query milestones", err)
 	}
 	defer rows.Close()
 
@@ -763,7 +853,7 @@ func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, 
 	for rows.Next() {
 		var m task.Milestone
 		var status string
-		err := rows.Scan(&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt)
+		err := rows.Scan(&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.StartDate, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan milestone: %w", err)
 		}
@@ -777,7 +867,7 @@ func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, 
 // GetMilestoneByID returns a milestone by ID
 func (r *PostgresRepository) GetMilestoneByID(ctx context.Context, userID, milestoneID string) (*task.Milestone, error) {
 	query := `
-		SELECT id, user_id, goal_id, name, description, target_date, status, created_at, updated_at
+		SELECT id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
 		FROM milestones
 		WHERE id = $1 AND user_id = $2
 	`
@@ -785,7 +875,7 @@ func (r *PostgresRepository) GetMilestoneByID(ctx context.Context, userID, miles
 	var m task.Milestone
 	var status string
 	err := r.pool.QueryRow(ctx, query, milestoneID, userID).Scan(
-		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
+		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.StartDate, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -804,15 +894,15 @@ func (r *PostgresRepository) CreateMilestone(ctx context.Context, userID string,
 	now := time.Now()
 
 	query := `
-		INSERT INTO milestones (id, user_id, goal_id, name, description, target_date, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8)
-		RETURNING id, user_id, goal_id, name, description, target_date, status, created_at, updated_at
+		INSERT INTO milestones (id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
+		RETURNING id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
 	`
 
 	var m task.Milestone
 	var status string
-	err := r.pool.QueryRow(ctx, query, id, userID, input.GoalID, input.Name, input.Description, input.TargetDate, now, now).Scan(
-		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.GoalID, input.Name, input.Description, input.StartDate, input.TargetDate, now, now).Scan(
+		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.StartDate, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create milestone: %w", err)
@@ -843,6 +933,11 @@ func (r *PostgresRepository) UpdateMilestone(ctx context.Context, userID, milest
 		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argCount))
 		args = append(args, *input.Description)
 	}
+	if input.StartDate != nil {
+		argCount++
+		setClauses = append(setClauses, fmt.Sprintf("start_date = $%d", argCount))
+		args = append(args, *input.StartDate)
+	}
 	if input.TargetDate != nil {
 		argCount++
 		setClauses = append(setClauses, fmt.Sprintf("target_date = $%d", argCount))
@@ -869,13 +964,13 @@ func (r *PostgresRepository) UpdateMilestone(ctx context.Context, userID, milest
 
 	query := fmt.Sprintf(`
 		UPDATE milestones SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, goal_id, name, description, target_date, status, created_at, updated_at
+		RETURNING id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var m task.Milestone
 	var status string
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
-		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
+		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.StartDate, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -903,28 +998,60 @@ func (r *PostgresRepository) DeleteMilestone(ctx context.Context, userID, milest
 
 // ========== Tag Operations ==========
 
-// ListTags returns all tags for a user, sorted by pinned first, then usage count
+// ListTags returns all task-type tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
 		FROM tags
-		WHERE user_id = $1
+		WHERE user_id = $1 AND COALESCE(type, 'task') = 'task'
 		ORDER BY pinned DESC, usage_count DESC, name ASC
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tags: %w", err)
+		return nil, wrapDBError("failed to query tags", err)
 	}
 	defer rows.Close()
 
 	var tags []task.Tag
 	for rows.Next() {
 		var t task.Tag
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		var tagType string
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
+		t.Type = task.TagType(tagType)
+		tags = append(tags, t)
+	}
+
+	return tags, rows.Err()
+}
+
+// ListNoteTags returns all note-type tags for a user, sorted by pinned first, then usage count
+func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error) {
+	query := `
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		FROM tags
+		WHERE user_id = $1 AND COALESCE(type, 'task') = 'note'
+		ORDER BY pinned DESC, usage_count DESC, name ASC
+	`
+
+	rows, err := r.pool.Query(ctx, query, userID)
+	if err != nil {
+		return nil, wrapDBError("failed to query note tags", err)
+	}
+	defer rows.Close()
+
+	var tags []task.Tag
+	for rows.Next() {
+		var t task.Tag
+		var tagType string
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note tag: %w", err)
+		}
+		t.Type = task.TagType(tagType)
 		tags = append(tags, t)
 	}
 
@@ -934,19 +1061,21 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 // GetTagByID returns a tag by ID
 func (r *PostgresRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Tag
-	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	var tagType string
+	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get tag: %w", err)
 	}
+	t.Type = task.TagType(tagType)
 
 	return &t, nil
 }
@@ -961,14 +1090,15 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, pinned, usage_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, 0, $6, $6)
-		RETURNING id, user_id, name, color, pinned, usage_count, created_at, updated_at
+		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'task', $5, 0, $6, $6)
+		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
+	var tagType string
 	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
@@ -976,6 +1106,38 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 		}
 		return nil, fmt.Errorf("failed to create tag: %w", err)
 	}
+	t.Type = task.TagType(tagType)
+
+	return &t, nil
+}
+
+// CreateNoteTag creates a new note-type tag
+func (r *PostgresRepository) CreateNoteTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
+	id := uuid.New().String()
+	now := time.Now()
+	pinned := false
+	if input.Pinned != nil {
+		pinned = *input.Pinned
+	}
+
+	query := `
+		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'note', $5, 0, $6, $6)
+		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
+	`
+
+	var t task.Tag
+	var tagType string
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		if sharedErrors.IsUniqueViolation(err) {
+			return nil, ErrTagAlreadyExists
+		}
+		return nil, fmt.Errorf("failed to create note tag: %w", err)
+	}
+	t.Type = task.TagType(tagType)
 
 	return &t, nil
 }
@@ -1013,17 +1175,19 @@ func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string
 
 	query := fmt.Sprintf(`
 		UPDATE tags SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, color, pinned, usage_count, created_at, updated_at
+		RETURNING id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argCount-1, argCount)
 
 	var t task.Tag
-	err := r.pool.QueryRow(ctx, query, args...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	var tagType string
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to update tag: %w", err)
 	}
+	t.Type = task.TagType(tagType)
 
 	return &t, nil
 }
@@ -1049,7 +1213,7 @@ func (r *PostgresRepository) GetTaskTags(ctx context.Context, taskID string) ([]
 
 	rows, err := r.pool.Query(ctx, query, taskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query task tags: %w", err)
+		return nil, wrapDBError("failed to query task tags", err)
 	}
 	defer rows.Close()
 
@@ -1124,7 +1288,7 @@ func (r *PostgresRepository) ListEntityMemos(ctx context.Context, userID string,
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query entity memos: %w", err)
+		return nil, wrapDBError("failed to query entity memos", err)
 	}
 	defer rows.Close()
 
@@ -1285,7 +1449,7 @@ func (r *PostgresRepository) ListTodos(ctx context.Context, userID string, filte
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query todos: %w", err)
+		return nil, wrapDBError("failed to query todos", err)
 	}
 	defer rows.Close()
 
@@ -1351,7 +1515,7 @@ func (r *PostgresRepository) ListTodosWithStatus(ctx context.Context, userID str
 
 	rows, err := r.pool.Query(ctx, query, userID, date)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query todos with status: %w", err)
+		return nil, wrapDBError("failed to query todos with status", err)
 	}
 	defer rows.Close()
 

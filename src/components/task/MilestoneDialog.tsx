@@ -11,6 +11,7 @@ export interface MilestoneFormData {
   name: string
   description: string
   goalId: string
+  startDate: string
   targetDate: string
   status: MilestoneStatus
 }
@@ -73,7 +74,7 @@ export function MilestoneDialog({ dialog, goals, onSave }: MilestoneDialogProps)
               </SelectTrigger>
               <SelectContent>
                 {goals
-                  .filter(g => !g.isArchived)
+                  .filter(g => g.status !== 'archived')
                   .map((goal) => (
                     <SelectItem key={goal.id} value={goal.id} label={goal.name}>
                       <div className="flex items-center gap-2">
@@ -98,15 +99,27 @@ export function MilestoneDialog({ dialog, goals, onSave }: MilestoneDialogProps)
             )}
           </div>
 
-          <div>
-            <Label htmlFor="targetDate">期限（任意）</Label>
-            <Input
-              id="targetDate"
-              type="date"
-              value={dialog.data.targetDate}
-              onChange={(e) => dialog.setField('targetDate', e.target.value)}
-              className="mt-1"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="startDate">開始日（任意）</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={dialog.data.startDate}
+                onChange={(e) => dialog.setField('startDate', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="targetDate">期限（任意）</Label>
+              <Input
+                id="targetDate"
+                type="date"
+                value={dialog.data.targetDate}
+                onChange={(e) => dialog.setField('targetDate', e.target.value)}
+                className="mt-1"
+              />
+            </div>
           </div>
 
           {dialog.isEditing && (

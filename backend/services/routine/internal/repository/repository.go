@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/routine/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 // PostgresRepository handles database operations for routine tasks
@@ -23,6 +24,11 @@ var _ Repository = (*PostgresRepository)(nil)
 // NewPostgresRepository creates a new routine repository
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
+}
+
+// wrapDBError wraps a database error with context message and detects schema errors
+func wrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
 }
 
 // ListRoutines returns all routine tasks for a user with optional filters
@@ -45,7 +51,7 @@ func (r *PostgresRepository) ListRoutines(ctx context.Context, userID string, fi
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query routine tasks: %w", err)
+		return nil, wrapDBError("failed to query routine tasks", err)
 	}
 	defer rows.Close()
 
@@ -59,7 +65,7 @@ func (r *PostgresRepository) ListRoutines(ctx context.Context, userID string, fi
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating routine tasks: %w", err)
+		return nil, wrapDBError("error iterating routine tasks", err)
 	}
 
 	return routines, nil
@@ -79,7 +85,7 @@ func (r *PostgresRepository) GetRoutineByID(ctx context.Context, userID, routine
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get routine task: %w", err)
+		return nil, wrapDBError("failed to get routine task", err)
 	}
 
 	return rt, nil
@@ -111,7 +117,7 @@ func (r *PostgresRepository) CreateRoutine(ctx context.Context, userID string, i
 
 	rt, err := r.scanRoutineTaskRow(row)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create routine task: %w", err)
+		return nil, wrapDBError("failed to create routine task", err)
 	}
 
 	return rt, nil
@@ -185,7 +191,7 @@ func (r *PostgresRepository) UpdateRoutine(ctx context.Context, userID, routineI
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to update routine task: %w", err)
+		return nil, wrapDBError("failed to update routine task", err)
 	}
 
 	return rt, nil
@@ -206,7 +212,7 @@ func (r *PostgresRepository) ToggleRoutineEnabled(ctx context.Context, userID, r
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to toggle routine enabled: %w", err)
+		return nil, wrapDBError("failed to toggle routine enabled", err)
 	}
 
 	return rt, nil
@@ -217,7 +223,7 @@ func (r *PostgresRepository) DeleteRoutine(ctx context.Context, userID, routineI
 	query := `DELETE FROM routine_tasks WHERE id = $1 AND user_id = $2`
 	result, err := r.pool.Exec(ctx, query, routineID, userID)
 	if err != nil {
-		return fmt.Errorf("failed to delete routine task: %w", err)
+		return wrapDBError("failed to delete routine task", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -244,7 +250,7 @@ func (r *PostgresRepository) scanRoutineTask(rows pgx.Rows) (*routine.RoutineTas
 		&rt.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan routine task: %w", err)
+		return nil, wrapDBError("failed to scan routine task", err)
 	}
 	rt.Frequency = routine.RoutineFrequency(frequency)
 	return &rt, nil

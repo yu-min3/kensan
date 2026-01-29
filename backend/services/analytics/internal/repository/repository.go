@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	analytics "github.com/kensan/backend/services/analytics/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 // Compile-time check that PostgresRepository implements Repository
@@ -20,6 +21,11 @@ type PostgresRepository struct {
 // NewPostgresRepository creates a new analytics repository
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
+}
+
+// wrapDBError wraps a database error with context message and detects schema errors
+func wrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
 }
 
 // GetTimeBlocksAggregated returns aggregated time blocks (planned time) for a date range
@@ -38,7 +44,7 @@ func (r *PostgresRepository) GetTimeBlocksAggregated(ctx context.Context, userID
 	var totalMinutes int
 	err := r.pool.QueryRow(ctx, query, userID, startDate, endDate).Scan(&totalMinutes)
 	if err != nil {
-		return 0, fmt.Errorf("failed to query time blocks: %w", err)
+		return 0, wrapDBError("failed to query time blocks", err)
 	}
 
 	return totalMinutes, nil
@@ -60,7 +66,7 @@ func (r *PostgresRepository) GetCompletedTasksCount(ctx context.Context, userID,
 	var count int
 	err := r.pool.QueryRow(ctx, query, userID, startDate, endDate).Scan(&count)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count completed tasks: %w", err)
+		return 0, wrapDBError("failed to count completed tasks", err)
 	}
 
 	return count, nil
@@ -82,7 +88,7 @@ func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, use
 	var totalMinutes int
 	err := r.pool.QueryRow(ctx, query, userID, startDate, endDate).Scan(&totalMinutes)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get total minutes: %w", err)
+		return 0, wrapDBError("failed to get total minutes", err)
 	}
 
 	return totalMinutes, nil
@@ -107,7 +113,7 @@ func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, star
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query daily breakdown: %w", err)
+		return nil, wrapDBError("failed to query daily breakdown", err)
 	}
 	defer rows.Close()
 
@@ -115,13 +121,13 @@ func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, star
 	for rows.Next() {
 		var db analytics.DailyBreakdown
 		if err := rows.Scan(&db.Date, &db.Minutes); err != nil {
-			return nil, fmt.Errorf("failed to scan daily breakdown: %w", err)
+			return nil, wrapDBError("failed to scan daily breakdown", err)
 		}
 		result = append(result, db)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating daily breakdown: %w", err)
+		return nil, wrapDBError("error iterating daily breakdown", err)
 	}
 
 	return result, nil
@@ -146,7 +152,7 @@ func (r *PostgresRepository) GetWeeklyBreakdown(ctx context.Context, userID, sta
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query weekly breakdown: %w", err)
+		return nil, wrapDBError("failed to query weekly breakdown", err)
 	}
 	defer rows.Close()
 
@@ -155,14 +161,14 @@ func (r *PostgresRepository) GetWeeklyBreakdown(ctx context.Context, userID, sta
 		var db analytics.DailyBreakdown
 		var weekStart time.Time
 		if err := rows.Scan(&weekStart, &db.Minutes); err != nil {
-			return nil, fmt.Errorf("failed to scan weekly breakdown: %w", err)
+			return nil, wrapDBError("failed to scan weekly breakdown", err)
 		}
 		db.Date = weekStart.Format("2006-01-02")
 		result = append(result, db)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating weekly breakdown: %w", err)
+		return nil, wrapDBError("error iterating weekly breakdown", err)
 	}
 
 	return result, nil
@@ -216,7 +222,7 @@ func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, start
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query minutes by goal: %w", err)
+		return nil, wrapDBError("failed to query minutes by goal", err)
 	}
 	defer rows.Close()
 
@@ -224,13 +230,13 @@ func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, start
 	for rows.Next() {
 		var g GoalWithMinutes
 		if err := rows.Scan(&g.ID, &g.Name, &g.Color, &g.Minutes); err != nil {
-			return nil, fmt.Errorf("failed to scan goal minutes: %w", err)
+			return nil, wrapDBError("failed to scan goal minutes", err)
 		}
 		result = append(result, g)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating goal minutes: %w", err)
+		return nil, wrapDBError("error iterating goal minutes", err)
 	}
 
 	return result, nil
@@ -258,7 +264,7 @@ func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, 
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query minutes by milestone: %w", err)
+		return nil, wrapDBError("failed to query minutes by milestone", err)
 	}
 	defer rows.Close()
 
@@ -266,13 +272,13 @@ func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, 
 	for rows.Next() {
 		var m MilestoneWithMinutes
 		if err := rows.Scan(&m.ID, &m.Name, &m.GoalID, &m.Minutes); err != nil {
-			return nil, fmt.Errorf("failed to scan milestone minutes: %w", err)
+			return nil, wrapDBError("failed to scan milestone minutes", err)
 		}
 		result = append(result, m)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating milestone minutes: %w", err)
+		return nil, wrapDBError("error iterating milestone minutes", err)
 	}
 
 	return result, nil
@@ -304,7 +310,7 @@ func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startD
 
 	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query minutes by tag: %w", err)
+		return nil, wrapDBError("failed to query minutes by tag", err)
 	}
 	defer rows.Close()
 
@@ -312,13 +318,13 @@ func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startD
 	for rows.Next() {
 		var t TagWithMinutes
 		if err := rows.Scan(&t.ID, &t.Name, &t.Color, &t.Minutes); err != nil {
-			return nil, fmt.Errorf("failed to scan tag minutes: %w", err)
+			return nil, wrapDBError("failed to scan tag minutes", err)
 		}
 		result = append(result, t)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating tag minutes: %w", err)
+		return nil, wrapDBError("error iterating tag minutes", err)
 	}
 
 	return result, nil
@@ -335,7 +341,7 @@ func (r *PostgresRepository) GetGoals(ctx context.Context, userID string) ([]ana
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query goals: %w", err)
+		return nil, wrapDBError("failed to query goals", err)
 	}
 	defer rows.Close()
 
@@ -343,13 +349,13 @@ func (r *PostgresRepository) GetGoals(ctx context.Context, userID string) ([]ana
 	for rows.Next() {
 		var g analytics.GoalSummary
 		if err := rows.Scan(&g.ID, &g.Name, &g.Color); err != nil {
-			return nil, fmt.Errorf("failed to scan goal: %w", err)
+			return nil, wrapDBError("failed to scan goal", err)
 		}
 		result = append(result, g)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating goals: %w", err)
+		return nil, wrapDBError("error iterating goals", err)
 	}
 
 	return result, nil

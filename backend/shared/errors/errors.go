@@ -27,6 +27,12 @@ var (
 
 	// ErrInvalidFormat is the base error for format validation failures
 	ErrInvalidFormat = errors.New("invalid format")
+
+	// ErrDatabaseSchema is the base error for database schema mismatches
+	ErrDatabaseSchema = errors.New("database schema error")
+
+	// ErrDatabaseConnection is the base error for database connection failures
+	ErrDatabaseConnection = errors.New("database connection error")
 )
 
 // EntityError wraps a base error with an entity name for context
@@ -254,6 +260,12 @@ const (
 	PgNotNullViolation = "23502"
 	// PgCheckViolation is the PostgreSQL error code for check constraint violations
 	PgCheckViolation = "23514"
+	// PgUndefinedColumn is the PostgreSQL error code for undefined column
+	PgUndefinedColumn = "42703"
+	// PgUndefinedTable is the PostgreSQL error code for undefined table
+	PgUndefinedTable = "42P01"
+	// PgUndefinedFunction is the PostgreSQL error code for undefined function
+	PgUndefinedFunction = "42883"
 )
 
 // IsUniqueViolation checks if the error is a PostgreSQL unique constraint violation
@@ -290,4 +302,28 @@ func GetPgErrorConstraint(err error) string {
 		return pgErr.ConstraintName
 	}
 	return ""
+}
+
+// IsDatabaseSchemaError checks if the error is a schema-related PostgreSQL error
+func IsDatabaseSchemaError(err error) bool {
+	code := GetPgErrorCode(err)
+	return code == PgUndefinedColumn || code == PgUndefinedTable || code == PgUndefinedFunction
+}
+
+// WrapDatabaseError wraps a database error with appropriate type for better error handling.
+// Schema errors (missing columns/tables) are wrapped with ErrDatabaseSchema.
+// Other errors are returned as-is.
+func WrapDatabaseError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsDatabaseSchemaError(err) {
+		return fmt.Errorf("%w: %v", ErrDatabaseSchema, err)
+	}
+	return err
+}
+
+// IsDatabaseSchema checks if the error is a database schema error
+func IsDatabaseSchema(err error) bool {
+	return errors.Is(err, ErrDatabaseSchema)
 }

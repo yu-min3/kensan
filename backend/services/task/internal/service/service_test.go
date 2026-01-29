@@ -57,6 +57,14 @@ func (m *MockRepository) DeleteGoal(ctx context.Context, userID, goalID string) 
 	return args.Error(0)
 }
 
+func (m *MockRepository) ReorderGoals(ctx context.Context, userID string, goalIDs []string) ([]task.Goal, error) {
+	args := m.Called(ctx, userID, goalIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Goal), args.Error(1)
+}
+
 // Milestone Operations
 func (m *MockRepository) ListMilestones(ctx context.Context, userID string, filter task.MilestoneFilter) ([]task.Milestone, error) {
 	args := m.Called(ctx, userID, filter)
@@ -104,6 +112,14 @@ func (m *MockRepository) ListTags(ctx context.Context, userID string) ([]task.Ta
 	return args.Get(0).([]task.Tag), args.Error(1)
 }
 
+func (m *MockRepository) ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]task.Tag), args.Error(1)
+}
+
 func (m *MockRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
 	args := m.Called(ctx, userID, tagID)
 	if args.Get(0) == nil {
@@ -113,6 +129,14 @@ func (m *MockRepository) GetTagByID(ctx context.Context, userID, tagID string) (
 }
 
 func (m *MockRepository) CreateTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
+	args := m.Called(ctx, userID, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*task.Tag), args.Error(1)
+}
+
+func (m *MockRepository) CreateNoteTag(ctx context.Context, userID string, input task.CreateTagInput) (*task.Tag, error) {
 	args := m.Called(ctx, userID, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

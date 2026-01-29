@@ -1,15 +1,17 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { EntityMemoSection } from '@/components/common/EntityMemoSection'
 import type { DialogState } from '@/hooks/useDialogState'
-import { DEFAULT_COLORS } from '@/types'
+import { DEFAULT_COLORS, type GoalStatus } from '@/types'
 
 export interface GoalFormData {
   name: string
   description: string
   color: string
+  status?: GoalStatus
 }
 
 interface GoalDialogProps {
@@ -86,6 +88,26 @@ export function GoalDialog({ dialog, onSave }: GoalDialogProps) {
               />
             </div>
           </div>
+
+          {/* Status - only show when editing existing goal */}
+          {dialog.editingId && (
+            <div>
+              <Label>ステータス</Label>
+              <Select
+                value={dialog.data.status || 'active'}
+                onValueChange={(v) => dialog.setField('status', v as GoalStatus)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">アクティブ</SelectItem>
+                  <SelectItem value="completed">完了</SelectItem>
+                  <SelectItem value="archived">アーカイブ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Entity Memos - only show when editing existing goal */}
           {dialog.editingId && (

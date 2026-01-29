@@ -2,20 +2,22 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useMemoStore } from '@/stores/useMemoStore'
-import { Lightbulb, X, Send, Loader2, Archive, Trash2, Plus, List } from 'lucide-react'
+import { Lightbulb, X, Send, Loader2, Archive, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatTime } from '@/lib/dateFormat'
-
-type ViewMode = 'input' | 'list'
+import { ConfirmPopover } from './ConfirmPopover'
 
 export function FloatingMemoButton() {
   const [isOpen, setIsOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [content, setContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const { addMemo, fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const { addMemo, updateMemo, fetchMemos, archiveMemo, deleteMemo, getActiveMemos } = useMemoStore()
 
   // パネルを開いたときにメモを取得
   useEffect(() => {
@@ -24,12 +26,12 @@ export function FloatingMemoButton() {
     }
   }, [isOpen, fetchMemos])
 
-  // 入力モードのときにテキストエリアにフォーカス
+  // パネルを開いたときにテキストエリアにフォーカス
   useEffect(() => {
-    if (isOpen && viewMode === 'input' && textareaRef.current) {
+    if (isOpen && textareaRef.current) {
       textareaRef.current.focus()
     }
-  }, [isOpen, viewMode])
+  }, [isOpen])
 
   const handleSubmit = async () => {
     if (!content.trim() || isSubmitting) return
@@ -41,7 +43,6 @@ export function FloatingMemoButton() {
     if (result) {
       toast.success('メモを保存しました', { duration: 2000 })
       setContent('')
-      setViewMode('list') // 保存後はリスト表示に戻る
     } else {
       toast.error('メモの保存に失敗しました', { duration: 4000 })
     }
@@ -53,10 +54,9 @@ export function FloatingMemoButton() {
       handleSubmit()
     }
     if (e.key === 'Escape') {
-      if (viewMode === 'input' && content.trim()) {
-        // 入力中なら入力をキャンセルしてリスト表示に戻る
+      if (content.trim()) {
+        // 入力中なら入力をクリア
         setContent('')
-        setViewMode('list')
       } else {
         setIsOpen(false)
       }
@@ -71,6 +71,47 @@ export function FloatingMemoButton() {
   const handleDelete = async (id: string) => {
     await deleteMemo(id)
     toast.success('削除しました', { duration: 2000 })
+  }
+
+  const handleStartEdit = (memo: { id: string; content: string }) => {
+    setEditingId(memo.id)
+    setEditContent(memo.content)
+    setTimeout(() => {
+      editTextareaRef.current?.focus()
+      editTextareaRef.current?.setSelectionRange(
+        editTextareaRef.current.value.length,
+        editTextareaRef.current.value.length
+      )
+    }, 0)
+  }
+
+  const handleSaveEdit = async () => {
+    if (editingId === null) return
+    const trimmed = editContent.trim()
+    const original = activeMemos.find((m) => m.id === editingId)?.content
+    if (trimmed === original || trimmed === '') {
+      setEditingId(null)
+      setEditContent('')
+      return
+    }
+    setIsSaving(true)
+    const success = await updateMemo(editingId, trimmed)
+    setIsSaving(false)
+    if (success) {
+      toast.success('保存しました', { duration: 1500 })
+    } else {
+      toast.error('保存に失敗しました', { duration: 3000 })
+    }
+    setEditingId(null)
+    setEditContent('')
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setEditingId(null)
+      setEditContent('')
+    }
   }
 
   const activeMemos = getActiveMemos()
@@ -101,129 +142,129 @@ export function FloatingMemoButton() {
               <Lightbulb className="h-4 w-4 text-yellow-500" />
               メモ
             </div>
-            <div className="flex items-center gap-1">
-              {/* View Mode Toggle */}
-              <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-2"
-                onClick={() => setViewMode('list')}
-                title="一覧"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'input' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-2"
-                onClick={() => setViewMode('input')}
-                title="新規追加"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 ml-1"
-                onClick={() => setIsOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-hidden">
-            {viewMode === 'input' ? (
-              /* Input Mode */
-              <div className="p-3">
-                <Textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="思いついたことをメモ..."
-                  className="min-h-[100px] resize-none"
-                />
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-muted-foreground">
-                    Ctrl+Enter で保存
-                  </span>
-                  <Button
-                    size="sm"
-                    onClick={handleSubmit}
-                    disabled={!content.trim() || isSubmitting}
-                    className="gap-1"
-                  >
-                    {isSubmitting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    保存
-                  </Button>
-                </div>
+          {/* Memo List */}
+          <div className="flex-1 overflow-y-auto max-h-[40vh]">
+            {activeMemos.length === 0 ? (
+              <div className="p-6 text-center">
+                <Lightbulb className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  メモがありません
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  下の入力欄からメモを追加
+                </p>
               </div>
             ) : (
-              /* List Mode */
-              <div className="overflow-y-auto max-h-[50vh]">
-                {activeMemos.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <Lightbulb className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      メモがありません
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => setViewMode('input')}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      メモを追加
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {activeMemos.map((memo) => (
-                      <div
-                        key={memo.id}
-                        className="p-3 hover:bg-muted/50 transition-colors group"
-                      >
-                        <p className="text-sm whitespace-pre-wrap break-words">
-                          {memo.content}
-                        </p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatTime(memo.createdAt)}
-                          </span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleArchive(memo.id)}
-                              title="アーカイブ"
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(memo.id)}
-                              title="削除"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+              <div className="divide-y">
+                {activeMemos.map((memo) => (
+                  <div
+                    key={memo.id}
+                    className="p-3 hover:bg-muted/50 transition-colors group"
+                  >
+                    {editingId === memo.id ? (
+                      <div className="relative">
+                        <Textarea
+                          ref={editTextareaRef}
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          onBlur={handleSaveEdit}
+                          onKeyDown={handleEditKeyDown}
+                          className="min-h-[60px] resize-none text-sm"
+                          disabled={isSaving}
+                        />
+                        {isSaving && (
+                          <div className="absolute top-2 right-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                           </div>
-                        </div>
+                        )}
                       </div>
-                    ))}
+                    ) : (
+                      <p
+                        className="text-sm whitespace-pre-wrap break-words cursor-text hover:bg-muted/50 rounded px-1 -mx-1"
+                        onClick={() => handleStartEdit(memo)}
+                      >
+                        {memo.content}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatTime(memo.createdAt)}
+                      </span>
+                      <div className={cn(
+                        "flex gap-1 transition-opacity",
+                        editingId === memo.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"
+                      )}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleArchive(memo.id)}
+                          title="アーカイブ"
+                        >
+                          <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                        <ConfirmPopover
+                          message="このメモを削除しますか？"
+                          confirmLabel="削除"
+                          onConfirm={() => handleDelete(memo.id)}
+                          variant="destructive"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            title="削除"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </ConfirmPopover>
+                      </div>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             )}
+          </div>
+
+          {/* Input Area - Always visible at bottom */}
+          <div className="border-t p-3 bg-muted/30">
+            <Textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="新しいメモを入力..."
+              className="min-h-[60px] max-h-[100px] resize-none bg-background"
+              rows={2}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-muted-foreground">
+                Ctrl+Enter で保存
+              </span>
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={!content.trim() || isSubmitting}
+                className="gap-1"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                保存
+              </Button>
+            </div>
           </div>
         </div>
       </div>

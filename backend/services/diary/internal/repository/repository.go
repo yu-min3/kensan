@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/diary/internal"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 var (
@@ -28,6 +29,11 @@ type PostgresRepository struct {
 // NewPostgresRepository creates a new PostgreSQL diary repository
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
+}
+
+// wrapDBError wraps a database error with context message and detects schema errors
+func wrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
 }
 
 // GetByID retrieves a diary entry by ID
@@ -55,7 +61,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*diary.Dia
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrDiaryNotFound
 		}
-		return nil, err
+		return nil, wrapDBError("failed to get diary entry by ID", err)
 	}
 
 	entry.Tags = tags
@@ -91,7 +97,7 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrDiaryNotFound
 		}
-		return nil, err
+		return nil, wrapDBError("failed to get diary entry by ID and user ID", err)
 	}
 
 	entry.Tags = tags
@@ -127,7 +133,7 @@ func (r *PostgresRepository) GetByDateAndUserID(ctx context.Context, date, userI
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrDiaryNotFound
 		}
-		return nil, err
+		return nil, wrapDBError("failed to get diary entry by date and user ID", err)
 	}
 
 	entry.Tags = tags
@@ -179,7 +185,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *di
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to query diary entries", err)
 	}
 	defer rows.Close()
 
@@ -199,7 +205,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *di
 			&entry.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, wrapDBError("failed to scan diary entry", err)
 		}
 
 		entry.Tags = tags
@@ -211,7 +217,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *di
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, wrapDBError("failed to iterate diary entries", err)
 	}
 
 	return entries, nil
@@ -248,7 +254,10 @@ func (r *PostgresRepository) Create(ctx context.Context, entry *diary.DiaryEntry
 		entry.CreatedAt,
 		entry.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return wrapDBError("failed to create diary entry", err)
+	}
+	return nil
 }
 
 // Update updates an existing diary entry
@@ -275,7 +284,7 @@ func (r *PostgresRepository) Update(ctx context.Context, entry *diary.DiaryEntry
 		entry.UpdatedAt,
 	)
 	if err != nil {
-		return err
+		return wrapDBError("failed to update diary entry", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -291,7 +300,7 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 
 	result, err := r.pool.Exec(ctx, query, id)
 	if err != nil {
-		return err
+		return wrapDBError("failed to delete diary entry", err)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -307,7 +316,7 @@ func (r *PostgresRepository) DeleteByIDAndUserID(ctx context.Context, id, userID
 
 	result, err := r.pool.Exec(ctx, query, id, userID)
 	if err != nil {
-		return err
+		return wrapDBError("failed to delete diary entry by ID and user ID", err)
 	}
 
 	if result.RowsAffected() == 0 {

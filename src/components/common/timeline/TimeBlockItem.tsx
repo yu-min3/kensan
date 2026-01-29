@@ -1,6 +1,7 @@
 import { Edit, Trash2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GoalBadge } from '@/components/common/GoalBadge'
+import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { cn } from '@/lib/utils'
 import { formatTime } from './utils'
 import type { TimeBlockItemProps, ResizeEdge } from './types'
@@ -141,19 +142,22 @@ export function TimeBlockItem({
                 </Button>
               )}
               {onBlockDelete && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onBlockDelete(block.id)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="削除"
+                <ConfirmPopover
+                  message="このタイムブロックを削除しますか？"
+                  confirmLabel="削除"
+                  onConfirm={() => onBlockDelete(block.id)}
+                  variant="destructive"
                 >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="削除"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </ConfirmPopover>
               )}
             </div>
           )}
