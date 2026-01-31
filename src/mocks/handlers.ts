@@ -7,6 +7,7 @@ import { analyticsHandlers } from './handlers/analytics'
 import { aiHandlers } from './handlers/ai'
 import { memoHandlers } from './handlers/memos'
 import { noteHandlers } from './handlers/notes'
+import { agentHandlers } from './handlers/agent'
 
 export const handlers = [
   ...authHandlers,
@@ -17,4 +18,5 @@ export const handlers = [
   ...aiHandlers,
   ...memoHandlers,
   ...noteHandlers,
+  ...agentHandlers,
 ]
