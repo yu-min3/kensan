@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useMemoStore } from '@/stores/useMemoStore'
 import { formatTime } from '@/lib/dateFormat'
+import { handleSubmitOrCancel } from '@/lib/keyboardHandlers'
 import { Lightbulb, Archive, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -53,12 +54,9 @@ export function MemoSection() {
     setEditContent('')
   }
 
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      setEditingId(null)
-      setEditContent('')
-    }
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditContent('')
   }
 
   return (
@@ -89,7 +87,7 @@ export function MemoSection() {
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
                         onBlur={handleSaveEdit}
-                        onKeyDown={handleEditKeyDown}
+                        onKeyDown={handleSubmitOrCancel(handleSaveEdit, cancelEdit)}
                         className="min-h-[60px] resize-none text-sm"
                         disabled={isSaving}
                       />

@@ -68,7 +68,8 @@
       "Bash(do file=\"/home/yu-min/Repositories/kensan-mockup/backend/services/$service/internal/repository/repository.go\" echo \"=== $service - Error pattern example ===\" grep -A 1 \"err :=\" \"$file\")",
       "Bash(do file=\"/home/yu-min/Repositories/kensan-mockup/backend/services/$service/internal/repository/repository.go\" echo \"=== $service - Error handling ===\" grep -B1 -A1 \"if err != nil\" \"$file\")",
       "Bash(for port in 8081 8082 8084 8088 8090 8091)",
-      "Bash(do curl -s http://localhost:$port/health -o /dev/null)"
+      "Bash(do curl -s http://localhost:$port/health -o /dev/null)",
+      "Bash(npx shadcn@latest add alert-dialog:*)"
     ]
   },
   "outputStyle": "default"

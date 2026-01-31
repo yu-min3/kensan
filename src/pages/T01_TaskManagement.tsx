@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TagBadge } from '@/components/common/TagBadge'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
+import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
 import { TaskDialog, type TaskFormData } from '@/components/task/TaskDialog'
 import { GoalDialog, type GoalFormData } from '@/components/task/GoalDialog'
 import { MilestoneDialog, type MilestoneFormData } from '@/components/task/MilestoneDialog'
@@ -290,6 +291,7 @@ function SortableTaskItem({
         >
           {task.name}
         </span>
+        <EntityMemoPopover entityType="task" entityId={task.id} />
 
         {/* Tags */}
         {task.tagIds && task.tagIds.length > 0 && (
@@ -1250,6 +1252,7 @@ export function T01TaskManagement() {
                                   >
                                     {childTask.name}
                                   </span>
+                                  <EntityMemoPopover entityType="task" entityId={childTask.id} />
                                   <div className="opacity-0 group-hover:opacity-100 flex gap-1">
                                     <Button
                                       variant="ghost"
@@ -1362,6 +1365,7 @@ export function T01TaskManagement() {
                                   >
                                     {childTask.name}
                                   </span>
+                                  <EntityMemoPopover entityType="task" entityId={childTask.id} />
                                   <div className="opacity-0 group-hover:opacity-100 flex gap-1">
                                     <Button
                                       variant="ghost"

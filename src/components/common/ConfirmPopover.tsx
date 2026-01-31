@@ -1,10 +1,15 @@
 import * as React from 'react'
-import { Button } from '@/components/ui/button'
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,55 +35,55 @@ export function ConfirmPopover({
   const [open, setOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(false)
 
-  const handleConfirm = async () => {
+  // Use onMouseDown instead of onClick because the dialog gets unmounted
+  // between mousedown and click due to parent re-render cascade in StrictMode.
+  // The mousedown handler fires before the unmount, and the async onConfirm()
+  // continues executing even after the component unmounts.
+  const handleConfirm = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsLoading(true)
     try {
       await onConfirm()
-      setOpen(false)
+    } catch {
+      // error handled by caller
     } finally {
       setIsLoading(false)
+      setOpen(false)
     }
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild disabled={disabled}>
         {children}
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-auto max-w-[280px] p-3"
-        align="end"
-        side="top"
-        sideOffset={8}
-      >
-        <div className="flex items-start gap-2">
-          <AlertTriangle
-            className={cn(
-              'h-4 w-4 mt-0.5 shrink-0',
-              variant === 'destructive' ? 'text-destructive' : 'text-amber-500'
-            )}
-          />
-          <p className="text-sm">{message}</p>
-        </div>
-        <div className="flex justify-end gap-2 mt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setOpen(false)}
-            disabled={isLoading}
-          >
+      </AlertDialogTrigger>
+      <AlertDialogContent className="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-base">
+            <AlertTriangle
+              className={cn(
+                'h-4 w-4 shrink-0',
+                variant === 'destructive' ? 'text-destructive' : 'text-amber-500'
+              )}
+            />
+            確認
+          </AlertDialogTitle>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isLoading}>
             {cancelLabel}
-          </Button>
+          </AlertDialogCancel>
           <Button
             variant={variant === 'destructive' ? 'destructive' : 'default'}
-            size="sm"
-            onClick={handleConfirm}
+            onMouseDown={handleConfirm}
             disabled={isLoading}
           >
             {isLoading ? '処理中...' : confirmLabel}
           </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

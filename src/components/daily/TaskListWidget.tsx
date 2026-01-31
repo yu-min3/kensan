@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { WidgetError } from '@/components/common/WidgetError'
+import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useDraggable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
@@ -186,6 +187,7 @@ function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday,
           <UrgencyIndicator level={level} />
         )}
         <span className="text-sm font-medium flex-1 leading-tight">{task.name}</span>
+        <EntityMemoPopover entityType="task" entityId={task.id} />
         {frequencyLabel && (
           <span className={cn(
             "text-[10px] px-1.5 py-0.5 rounded flex-shrink-0",

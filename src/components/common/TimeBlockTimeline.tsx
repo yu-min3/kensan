@@ -282,8 +282,8 @@ export function TimeBlockTimeline({
                   className="absolute left-0 right-0 z-30 pointer-events-none"
                   style={{ top: `${topPosition}%` }}
                 >
-                  <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-primary" />
-                  <div className="absolute left-0 right-0 border-t border-dotted border-primary" />
+                  <div className="absolute -left-1 -top-[5px] w-[10px] h-[10px] rounded-full bg-brand shadow-[0_0_6px_hsl(var(--brand)/0.5)]" />
+                  <div className="absolute left-0 right-0 border-t-2 border-dashed" style={{ borderColor: 'hsl(var(--brand))' }} />
                 </div>
               )
             }

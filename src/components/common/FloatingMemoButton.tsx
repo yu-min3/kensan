@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatTime } from '@/lib/dateFormat'
 import { ConfirmPopover } from './ConfirmPopover'
+import { handleSubmitOrCancel } from '@/lib/keyboardHandlers'
 
 export function FloatingMemoButton() {
   const [isOpen, setIsOpen] = useState(false)
@@ -48,18 +49,11 @@ export function FloatingMemoButton() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault()
-      handleSubmit()
-    }
-    if (e.key === 'Escape') {
-      if (content.trim()) {
-        // 入力中なら入力をクリア
-        setContent('')
-      } else {
-        setIsOpen(false)
-      }
+  const handleNewMemoEscape = () => {
+    if (content.trim()) {
+      setContent('')
+    } else {
+      setIsOpen(false)
     }
   }
 
@@ -106,12 +100,9 @@ export function FloatingMemoButton() {
     setEditContent('')
   }
 
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      setEditingId(null)
-      setEditContent('')
-    }
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditContent('')
   }
 
   const activeMemos = getActiveMemos()
@@ -178,7 +169,7 @@ export function FloatingMemoButton() {
                           value={editContent}
                           onChange={(e) => setEditContent(e.target.value)}
                           onBlur={handleSaveEdit}
-                          onKeyDown={handleEditKeyDown}
+                          onKeyDown={handleSubmitOrCancel(handleSaveEdit, cancelEdit)}
                           className="min-h-[60px] resize-none text-sm"
                           disabled={isSaving}
                         />
@@ -242,7 +233,7 @@ export function FloatingMemoButton() {
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleSubmitOrCancel(handleSubmit, handleNewMemoEscape)}
               placeholder="新しいメモを入力..."
               className="min-h-[60px] max-h-[100px] resize-none bg-background"
               rows={2}

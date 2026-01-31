@@ -18,6 +18,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import type { EntityType, EntityMemo } from '@/types'
+import { handleSubmitOrCancel } from '@/lib/keyboardHandlers'
 
 interface EntityMemoSectionProps {
   entityType: EntityType
@@ -96,12 +97,7 @@ export function EntityMemoSection({
           onChange={(e) => setNewMemoContent(e.target.value)}
           placeholder="メモを追加..."
           className="min-h-[60px] text-sm resize-none"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              handleAddMemo()
-            }
-          }}
+          onKeyDown={handleSubmitOrCancel(handleAddMemo, () => setNewMemoContent(''))}
         />
         <div className="flex justify-end">
           <Button
@@ -192,6 +188,7 @@ function MemoItem({
           <Textarea
             value={editingContent}
             onChange={(e) => onEditingContentChange(e.target.value)}
+            onKeyDown={handleSubmitOrCancel(onSaveEdit, onCancelEdit)}
             className="min-h-[60px] text-sm resize-none"
             autoFocus
           />
