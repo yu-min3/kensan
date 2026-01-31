@@ -1,4 +1,4 @@
-import { Settings, Bell, Sun, Moon, LogOut } from 'lucide-react'
+import { Settings, Bell, Sun, Moon, LogOut, Bot } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,7 @@ import { KensanLogo } from '@/components/common/KensanLogo'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTheme } from '@/hooks/useTheme'
+import { useChatStore } from '@/stores/useChatStore'
 
 export function Header() {
   const navigate = useNavigate()
@@ -51,6 +52,10 @@ export function Header() {
 
         <Button variant="ghost" size="icon">
           <Bell className="h-5 w-5" />
+        </Button>
+
+        <Button variant="ghost" size="icon" onClick={() => useChatStore.getState().toggle()} title="AI Assistant">
+          <Bot className="h-5 w-5" />
         </Button>
 
         <Link to="/settings">

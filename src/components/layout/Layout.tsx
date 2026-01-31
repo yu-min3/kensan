@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { FloatingMemoButton } from '@/components/common/FloatingMemoButton'
+import { ChatPanel } from '@/components/agent/ChatPanel'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function Layout() {
@@ -16,6 +17,7 @@ export function Layout() {
         <main className="flex-1 overflow-auto p-6">
           <Outlet />
         </main>
+        <ChatPanel />
       </div>
       <FloatingMemoButton />
     </div>
