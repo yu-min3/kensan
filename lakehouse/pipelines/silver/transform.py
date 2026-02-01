@@ -130,6 +130,159 @@ def transform_notes(catalog):
     print(f"  Transformed {len(silver_table)} notes to Silver")
 
 
+def transform_ai_interactions(catalog):
+    """ai_interactions: date抽出、ツール情報解析、トークン合計算出"""
+    bronze = catalog.load_table("bronze.ai_interactions_raw")
+    silver = catalog.load_table("silver.ai_interactions")
+
+    scan = bronze.scan()
+    df = scan.to_arrow()
+
+    if len(df) == 0:
+        print("  No data in bronze.ai_interactions_raw")
+        return
+
+    import json
+
+    dates = []
+    ai_output_lengths = []
+    tool_counts = []
+    tool_names_list = []
+    tokens_totals = []
+    has_feedbacks = []
+
+    for i in range(len(df)):
+        created = df.column("created_at")[i].as_py()
+        ai_output = df.column("ai_output")[i].as_py()
+        tool_calls_json = df.column("tool_calls_json")[i].as_py()
+        tokens_in = df.column("tokens_input")[i].as_py() or 0
+        tokens_out = df.column("tokens_output")[i].as_py() or 0
+        rating = df.column("rating")[i].as_py()
+
+        # date
+        dates.append(created.date() if created else None)
+
+        # ai_output_length
+        ai_output_lengths.append(len(ai_output) if ai_output else 0)
+
+        # tool_count and tool_names
+        if tool_calls_json:
+            try:
+                calls = json.loads(tool_calls_json)
+                tool_counts.append(len(calls))
+                names = list({c.get("name", "") for c in calls if isinstance(c, dict)})
+                tool_names_list.append(json.dumps(names, ensure_ascii=False))
+            except (json.JSONDecodeError, TypeError):
+                tool_counts.append(0)
+                tool_names_list.append("[]")
+        else:
+            tool_counts.append(0)
+            tool_names_list.append("[]")
+
+        # tokens_total
+        tokens_totals.append(tokens_in + tokens_out)
+
+        # has_feedback
+        has_feedbacks.append(rating is not None)
+
+    silver_table = pa.table({
+        "id": df.column("id"),
+        "user_id": df.column("user_id"),
+        "date": pa.array(dates, type=pa.date32()),
+        "situation": df.column("situation"),
+        "user_input": df.column("user_input"),
+        "ai_output_length": pa.array(ai_output_lengths, type=pa.int32()),
+        "tool_count": pa.array(tool_counts, type=pa.int32()),
+        "tool_names_json": pa.array(tool_names_list, type=pa.string()),
+        "tokens_input": df.column("tokens_input"),
+        "tokens_output": df.column("tokens_output"),
+        "tokens_total": pa.array(tokens_totals, type=pa.int32()),
+        "latency_ms": df.column("latency_ms"),
+        "has_feedback": pa.array(has_feedbacks, type=pa.bool_()),
+        "rating": df.column("rating"),
+        "conversation_id": df.column("conversation_id"),
+        "created_at": df.column("created_at"),
+    })
+
+    silver.overwrite(silver_table)
+    print(f"  Transformed {len(silver_table)} AI interactions to Silver")
+
+
+def transform_ai_token_usage(catalog):
+    """ai_token_usage: 日別×situation別のトークン使用量集計"""
+    bronze = catalog.load_table("bronze.ai_interactions_raw")
+    silver = catalog.load_table("silver.ai_token_usage")
+
+    scan = bronze.scan()
+    df = scan.to_arrow()
+
+    if len(df) == 0:
+        print("  No data in bronze.ai_interactions_raw for token usage")
+        return
+
+    # user_id × date × situation ごとに集計
+    usage = {}
+
+    for i in range(len(df)):
+        user_id = df.column("user_id")[i].as_py()
+        created = df.column("created_at")[i].as_py()
+        situation = df.column("situation")[i].as_py() or "chat"
+        tokens_in = df.column("tokens_input")[i].as_py() or 0
+        tokens_out = df.column("tokens_output")[i].as_py() or 0
+        latency = df.column("latency_ms")[i].as_py() or 0
+
+        if created is None:
+            continue
+
+        date_val = created.date()
+        key = (user_id, date_val, situation)
+        if key not in usage:
+            usage[key] = {
+                "interaction_count": 0,
+                "tokens_input_total": 0,
+                "tokens_output_total": 0,
+                "tokens_total": 0,
+                "latency_sum": 0,
+            }
+        usage[key]["interaction_count"] += 1
+        usage[key]["tokens_input_total"] += tokens_in
+        usage[key]["tokens_output_total"] += tokens_out
+        usage[key]["tokens_total"] += tokens_in + tokens_out
+        usage[key]["latency_sum"] += latency
+
+    if not usage:
+        print("  No data to aggregate for ai_token_usage")
+        return
+
+    silver_table = pa.table({
+        "user_id": pa.array([k[0] for k in usage], type=pa.string()),
+        "date": pa.array([k[1] for k in usage], type=pa.date32()),
+        "situation": pa.array([k[2] for k in usage], type=pa.string()),
+        "interaction_count": pa.array(
+            [v["interaction_count"] for v in usage.values()], type=pa.int32()
+        ),
+        "tokens_input_total": pa.array(
+            [v["tokens_input_total"] for v in usage.values()], type=pa.int64()
+        ),
+        "tokens_output_total": pa.array(
+            [v["tokens_output_total"] for v in usage.values()], type=pa.int64()
+        ),
+        "tokens_total": pa.array(
+            [v["tokens_total"] for v in usage.values()], type=pa.int64()
+        ),
+        "avg_latency_ms": pa.array(
+            [
+                v["latency_sum"] // v["interaction_count"] if v["interaction_count"] > 0 else 0
+                for v in usage.values()
+            ],
+            type=pa.int32(),
+        ),
+    })
+
+    silver.overwrite(silver_table)
+    print(f"  Transformed {len(silver_table)} AI token usage records to Silver")
+
+
 def main():
     catalog = get_catalog()
 
@@ -137,6 +290,8 @@ def main():
     transform_time_entries(catalog)
     transform_tasks(catalog)
     transform_notes(catalog)
+    transform_ai_interactions(catalog)
+    transform_ai_token_usage(catalog)
     print("Silver transformation complete.")
 
 

@@ -76,11 +76,20 @@ make pipeline
 
 PostgreSQLのデータをそのまま格納。`_ingested_at` カラムを付与。
 
-| テーブル | ソース | パーティション |
-|---------|--------|---------------|
-| `bronze.time_entries_raw` | time_entries | `month(start_datetime)` |
-| `bronze.tasks_raw` | tasks | なし |
-| `bronze.notes_raw` | notes | なし |
+| テーブル | ソース | パーティション | 取り込み方式 |
+|---------|--------|---------------|-------------|
+| `bronze.time_entries_raw` | time_entries | `month(start_datetime)` | PG batch |
+| `bronze.tasks_raw` | tasks | なし | PG batch |
+| `bronze.notes_raw` | notes | なし | PG batch |
+| `bronze.ai_interactions_raw` | ai_interactions | `month(created_at)` | PG batch |
+| `bronze.ai_facts_raw` | user_facts | なし | PG batch |
+| `bronze.ai_reviews_raw` | ai_review_reports | なし | PG batch |
+| `bronze.ai_contexts_raw` | ai_contexts | なし | PG batch |
+| `bronze.external_tool_results_raw` | kensan-ai直接書込 | `month(executed_at)` | Direct append |
+
+**データフロー 2系統:**
+1. **PG → Bronze (batch)**: `ingest_postgres.py` による定期バッチ取り込み
+2. **kensan-ai → Bronze (direct)**: 外部ツール結果を kensan-ai の LakehouseWriter が fire & forget で直接 append
 
 ### Silver層（整形済み）
 
@@ -91,6 +100,8 @@ PostgreSQLのデータをそのまま格納。`_ingested_at` カラムを付与�
 | `silver.time_entries` | `duration_minutes` 算出、`date` 抽出 | `month(date)` |
 | `silver.tasks` | `is_subtask` 判定（parent_task_id の有無） | なし |
 | `silver.notes` | `content_length` 算出、本文除去 | なし |
+| `silver.ai_interactions` | `date` 抽出、ツール情報解析、`tokens_total` 算出 | `month(date)` |
+| `silver.ai_token_usage` | 日別×situation別のトークン使用量集計 | なし |
 
 ### Gold層（集計済み）
 
@@ -100,6 +111,8 @@ PostgreSQLのデータをそのまま格納。`_ingested_at` カラムを付与�
 |---------|------|--------|
 | `gold.weekly_summary` | 週次の時間・タスク・ノート集計 | user_id × week_start |
 | `gold.goal_progress` | ゴール別の週次進捗 | user_id × goal_name × week_start |
+| `gold.ai_usage_weekly` | AI使用量の週次集計（トークン、ツール利用分布） | user_id × week_start |
+| `gold.ai_quality_weekly` | AI品質の週次集計（評価、ファクト数、レビュー有無） | user_id × week_start |
 
 ## DuckDBクエリ
 
@@ -112,8 +125,12 @@ make query
 全Icebergテーブルが自動で登録される。使えるテーブル名：
 
 - `bronze_time_entries`, `bronze_tasks`, `bronze_notes`
+- `bronze_ai_interactions`, `bronze_ai_facts`, `bronze_ai_reviews`, `bronze_ai_contexts`
+- `bronze_external_tool_results`
 - `silver_time_entries`, `silver_tasks`, `silver_notes`
+- `silver_ai_interactions`, `silver_ai_token_usage`
 - `gold_weekly_summary`, `gold_goal_progress`
+- `gold_ai_usage_weekly`, `gold_ai_quality_weekly`
 
 ```sql
 D> SELECT goal_name, sum(duration_minutes)/60 AS hours
@@ -146,6 +163,24 @@ SELECT completed, count(*) FROM silver_tasks GROUP BY completed;
 -- ノートタイプ別の文字数
 SELECT type, count(*), round(avg(content_length)) AS avg_length
 FROM silver_notes GROUP BY type;
+
+-- AI: 週次トークン消費量
+SELECT week_start, interaction_count, tokens_total,
+       situation_distribution_json
+FROM gold_ai_usage_weekly ORDER BY week_start DESC;
+
+-- AI: situation別のトークン使用量
+SELECT date, situation, interaction_count, tokens_total
+FROM silver_ai_token_usage ORDER BY date DESC LIMIT 30;
+
+-- AI: Web検索の利用頻度
+SELECT tool_name, count(*) AS cnt
+FROM bronze_external_tool_results GROUP BY tool_name;
+
+-- AI: 品質メトリクス（評価ありのインタラクション）
+SELECT week_start, rated_count, round(avg_rating, 2) AS avg_rating,
+       fact_count, review_generated
+FROM gold_ai_quality_weekly ORDER BY week_start DESC;
 ```
 
 ## Nessie設定の注意点
@@ -216,6 +251,7 @@ lakehouse/
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | 1 | MinIO + Nessie + PyIceberg + DuckDB基盤 | ✅ 完了 |
+| 1.5 | AI Data Lakehouse統合（Bronze/Silver/Gold AI テーブル、外部ツール連携） | ✅ 完了 |
 | 2 | Argo Workflows で定期実行、Nessie branching | 未着手 |
 | 3 | k8s デプロイ、Trino 追加、OTel Collector 連携 | 未着手 |
 | 4 | Gold層を kensan-ai のコンテキストとして利用 | 未着手 |

@@ -71,6 +71,9 @@ ALLOWED_TOOLS = [
     "semantic_search",
     "keyword_search",
     "hybrid_search",
+    # External tools
+    "web_search",
+    "web_fetch",
     # Write tools
     "create_task",
     "update_task",
@@ -153,6 +156,10 @@ TOOL_GROUPS: dict[str, list[str]] = {
         "get_recent_interactions",
         "add_user_fact",
     ],
+    "web": [  # Web検索・取得
+        "web_search",
+        "web_fetch",
+    ],
 }
 
 SITUATION_TOOL_GROUPS: dict[str, list[str]] = {
@@ -191,6 +198,7 @@ INTENT_READ_PATTERNS: list[tuple[list[str], list[str]]] = [
     (["分析", "進捗", "レポート", "サマリー", "振り返り"], ["analytics", "review"]),
     (["検索", "探して", "調べて", "どこ"], ["search"]),
     (["レビュー", "週次", "ウィークリー"], ["review", "analytics"]),
+    (["ウェブ", "Web", "web", "ググって", "最新", "ニュース", "公式", "URL", "サイト", "ページ"], ["web"]),
 ]
 
 # 変更系: 明示的な書き込み意図があるときだけ追加

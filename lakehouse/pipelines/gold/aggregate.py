@@ -165,12 +165,222 @@ def aggregate_goal_progress(catalog):
     print(f"  Aggregated {len(gold_table)} goal progress entries to Gold")
 
 
+def aggregate_ai_usage_weekly(catalog):
+    """AI使用量の週次集計"""
+    silver_interactions = catalog.load_table("silver.ai_interactions")
+    gold = catalog.load_table("gold.ai_usage_weekly")
+
+    df = silver_interactions.scan().to_arrow()
+
+    if len(df) == 0:
+        print("  No data to aggregate for ai_usage_weekly")
+        return
+
+    import json
+
+    summaries = {}
+
+    for i in range(len(df)):
+        user_id = df.column("user_id")[i].as_py()
+        date = df.column("date")[i].as_py()
+        situation = df.column("situation")[i].as_py() or "chat"
+        tokens_in = df.column("tokens_input")[i].as_py() or 0
+        tokens_out = df.column("tokens_output")[i].as_py() or 0
+        latency = df.column("latency_ms")[i].as_py() or 0
+        tool_names_json = df.column("tool_names_json")[i].as_py()
+
+        if date is None:
+            continue
+
+        week_start = _iso_week_start(date)
+        key = (user_id, week_start)
+        if key not in summaries:
+            summaries[key] = {
+                "interaction_count": 0,
+                "tokens_input_total": 0,
+                "tokens_output_total": 0,
+                "tokens_total": 0,
+                "latency_sum": 0,
+                "situation_dist": {},
+                "tool_usage": {},
+                "web_search_count": 0,
+            }
+
+        s = summaries[key]
+        s["interaction_count"] += 1
+        s["tokens_input_total"] += tokens_in
+        s["tokens_output_total"] += tokens_out
+        s["tokens_total"] += tokens_in + tokens_out
+        s["latency_sum"] += latency
+
+        # situation distribution
+        s["situation_dist"][situation] = s["situation_dist"].get(situation, 0) + 1
+
+        # tool usage
+        if tool_names_json:
+            try:
+                names = json.loads(tool_names_json)
+                for name in names:
+                    s["tool_usage"][name] = s["tool_usage"].get(name, 0) + 1
+                    if name == "web_search":
+                        s["web_search_count"] += 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if not summaries:
+        print("  No data to aggregate for ai_usage_weekly")
+        return
+
+    gold_table = pa.table({
+        "user_id": pa.array([k[0] for k in summaries], type=pa.string()),
+        "week_start": pa.array([k[1] for k in summaries], type=pa.date32()),
+        "interaction_count": pa.array(
+            [v["interaction_count"] for v in summaries.values()], type=pa.int32()
+        ),
+        "tokens_input_total": pa.array(
+            [v["tokens_input_total"] for v in summaries.values()], type=pa.int64()
+        ),
+        "tokens_output_total": pa.array(
+            [v["tokens_output_total"] for v in summaries.values()], type=pa.int64()
+        ),
+        "tokens_total": pa.array(
+            [v["tokens_total"] for v in summaries.values()], type=pa.int64()
+        ),
+        "avg_latency_ms": pa.array(
+            [
+                v["latency_sum"] // v["interaction_count"] if v["interaction_count"] > 0 else 0
+                for v in summaries.values()
+            ],
+            type=pa.int32(),
+        ),
+        "situation_distribution_json": pa.array(
+            [json.dumps(v["situation_dist"], ensure_ascii=False) for v in summaries.values()],
+            type=pa.string(),
+        ),
+        "tool_usage_json": pa.array(
+            [json.dumps(v["tool_usage"], ensure_ascii=False) for v in summaries.values()],
+            type=pa.string(),
+        ),
+        "web_search_count": pa.array(
+            [v["web_search_count"] for v in summaries.values()], type=pa.int32()
+        ),
+    })
+
+    gold.overwrite(gold_table)
+    print(f"  Aggregated {len(gold_table)} AI usage weekly records to Gold")
+
+
+def aggregate_ai_quality_weekly(catalog):
+    """AI品質の週次集計"""
+    silver_interactions = catalog.load_table("silver.ai_interactions")
+    bronze_facts = catalog.load_table("bronze.ai_facts_raw")
+    bronze_reviews = catalog.load_table("bronze.ai_reviews_raw")
+    gold = catalog.load_table("gold.ai_quality_weekly")
+
+    interactions_df = silver_interactions.scan().to_arrow()
+    facts_df = bronze_facts.scan().to_arrow()
+    reviews_df = bronze_reviews.scan().to_arrow()
+
+    summaries = {}
+
+    # Rating集計
+    for i in range(len(interactions_df)):
+        user_id = interactions_df.column("user_id")[i].as_py()
+        date = interactions_df.column("date")[i].as_py()
+        rating = interactions_df.column("rating")[i].as_py()
+
+        if date is None:
+            continue
+
+        week_start = _iso_week_start(date)
+        key = (user_id, week_start)
+        if key not in summaries:
+            summaries[key] = {
+                "rated_count": 0,
+                "rating_sum": 0,
+                "fact_count": 0,
+                "review_generated": False,
+            }
+
+        if rating is not None:
+            summaries[key]["rated_count"] += 1
+            summaries[key]["rating_sum"] += rating
+
+    # Fact集計
+    for i in range(len(facts_df)):
+        user_id = facts_df.column("user_id")[i].as_py()
+        created = facts_df.column("created_at")[i].as_py()
+
+        if created is None:
+            continue
+
+        week_start = _iso_week_start(created.date())
+        key = (user_id, week_start)
+        if key not in summaries:
+            summaries[key] = {
+                "rated_count": 0,
+                "rating_sum": 0,
+                "fact_count": 0,
+                "review_generated": False,
+            }
+        summaries[key]["fact_count"] += 1
+
+    # Review集計
+    for i in range(len(reviews_df)):
+        user_id = reviews_df.column("user_id")[i].as_py()
+        week_start_val = reviews_df.column("week_start")[i].as_py()
+
+        if week_start_val is None:
+            continue
+
+        week_start = _iso_week_start(week_start_val)
+        key = (user_id, week_start)
+        if key not in summaries:
+            summaries[key] = {
+                "rated_count": 0,
+                "rating_sum": 0,
+                "fact_count": 0,
+                "review_generated": False,
+            }
+        summaries[key]["review_generated"] = True
+
+    if not summaries:
+        print("  No data to aggregate for ai_quality_weekly")
+        return
+
+    gold_table = pa.table({
+        "user_id": pa.array([k[0] for k in summaries], type=pa.string()),
+        "week_start": pa.array([k[1] for k in summaries], type=pa.date32()),
+        "rated_count": pa.array(
+            [v["rated_count"] for v in summaries.values()], type=pa.int32()
+        ),
+        "avg_rating": pa.array(
+            [
+                v["rating_sum"] / v["rated_count"] if v["rated_count"] > 0 else None
+                for v in summaries.values()
+            ],
+            type=pa.float32(),
+        ),
+        "fact_count": pa.array(
+            [v["fact_count"] for v in summaries.values()], type=pa.int32()
+        ),
+        "review_generated": pa.array(
+            [v["review_generated"] for v in summaries.values()], type=pa.bool_()
+        ),
+    })
+
+    gold.overwrite(gold_table)
+    print(f"  Aggregated {len(gold_table)} AI quality weekly records to Gold")
+
+
 def main():
     catalog = get_catalog()
 
     print("Gold aggregation started.")
     aggregate_weekly_summary(catalog)
     aggregate_goal_progress(catalog)
+    aggregate_ai_usage_weekly(catalog)
+    aggregate_ai_quality_weekly(catalog)
     print("Gold aggregation complete.")
 
 

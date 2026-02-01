@@ -55,11 +55,17 @@ kensan-ai/
 │   │   ├── conversation_store.py # 会話ストア
 │   │   ├── chat.py               # 汎用チャットエージェント（動的ツール選択）
 │   │   └── weekly_review.py      # 週次レビューエージェント
-│   ├── tools/                     # Direct Tools (18+ツール)
+│   ├── tools/                     # Direct Tools (38+ツール)
 │   │   ├── base.py               # ツールレジストリ & デコレータ
-│   │   ├── db_tools.py           # データベース操作 (7ツール)
+│   │   ├── db_tools.py           # データベース操作 (21ツール)
 │   │   ├── memory_tools.py       # ユーザーメモリ (4ツール)
-│   │   └── search_tools.py       # セマンティック/キーワード検索 (6ツール: note_content_chunks + notes)
+│   │   ├── search_tools.py       # セマンティック/キーワード検索 (6ツール)
+│   │   ├── review_tools.py       # レビュー (3ツール)
+│   │   ├── analytics_tools.py    # 分析 (2ツール)
+│   │   └── web_tools.py          # 外部Web検索・取得 (2ツール: Tavily API)
+│   ├── lakehouse/                 # Lakehouse連携
+│   │   ├── __init__.py
+│   │   └── writer.py             # Fire & forget Bronze書き込み
 │   ├── storage/                   # ストレージクライアント
 │   │   └── minio_client.py       # MinIO読み取りクライアント
 │   ├── indexing/                   # インデックスパイプライン
@@ -382,6 +388,63 @@ async def create_time_block(args: dict) -> dict:
 - `goal` - 目標 (例: "来月までにリリース")
 - `constraint` - 制約 (例: "平日は19時以降のみ")
 
+### 外部ツール (`web_tools.py`)
+
+Web検索・取得のためのTavily API連携ツール。結果はオプションでLakehouse Bronze層に記録される。
+
+| ツール | 説明 |
+|-------|------|
+| `web_search` | Web検索（Tavily Search API）。検索クエリ、最大結果数、検索深度を指定可能 |
+| `web_fetch` | URL指定でWebページのコンテンツを取得・抽出（Tavily Extract API） |
+
+**設定:**
+- `TAVILY_API_KEY`: Tavily APIキー（未設定時はツール呼び出しでエラー）
+- `LAKEHOUSE_ENABLED`: Lakehouse書き込みの有効化（デフォルト: `false`）
+
+**Lakehouse連携:**
+外部ツールの実行結果は `bronze.external_tool_results_raw` にfire & forgetでappendされる。書き込み失敗はログのみでツール応答をブロックしない。
+
+```python
+# web_search の結果フォーマット
+{
+    "query": "検索クエリ",
+    "results": [
+        {"title": "...", "url": "...", "content": "...", "score": 0.95}
+    ],
+    "result_count": 5
+}
+
+# web_fetch の結果フォーマット
+{
+    "url": "https://example.com",
+    "content": "ページ本文（最大10,000文字）",
+    "content_length": 12345
+}
+```
+
+### Lakehouse Writer (`lakehouse/writer.py`)
+
+Iceberg Bronze層への非同期書き込み基盤。全外部ツールが共有するシングルトン。
+
+```python
+from kensan_ai.lakehouse.writer import get_writer
+
+writer = get_writer()
+await writer.append_tool_result(
+    tool_name="web_search",
+    input_data="kubernetes best practices",
+    result_json='{"results": [...]}',
+    result_count=5,
+    metadata={"search_depth": "basic"},
+)
+```
+
+**設計方針:**
+- `LAKEHOUSE_ENABLED=false` なら全操作がno-op（Nessie/MinIOなしでも動作）
+- Nessie catalog接続はlazy init（初回呼び出し時に確立）
+- ブロッキングI/Oは `run_in_executor` でイベントループを阻害しない
+- 全エラーはログに記録し、例外は伝播しない
+
 ### 検索ツール (`search_tools.py`)
 
 | ツール | 説明 |
@@ -547,6 +610,7 @@ def select_tools(message, base_tools, situation="auto", context_keys=None) -> li
 | `search` | semantic_search, keyword_search, hybrid_search, reindex_notes | Read/Write |
 | `review` | get_reviews, get_review, generate_weekly_review | Read/Write |
 | `memory` | get_user_memory, get_user_facts, get_recent_interactions, add_user_fact | Read/Write |
+| `web` | web_search, web_fetch | Read |
 
 **Read/Write意図分離:**
 
@@ -1246,6 +1310,17 @@ class Settings(BaseSettings):
     OTEL_ENABLED: bool = False
     OTEL_COLLECTOR_URL: str = "localhost:4318"
 
+    # External Tools
+    TAVILY_API_KEY: str = ""
+
+    # Lakehouse (Iceberg direct write)
+    NESSIE_URI: str = "http://localhost:19120/iceberg/"
+    LAKEHOUSE_S3_ENDPOINT: str = "http://localhost:9000"
+    LAKEHOUSE_S3_ACCESS_KEY: str = "kensan"
+    LAKEHOUSE_S3_SECRET_KEY: str = "kensan-minio"
+    LAKEHOUSE_S3_BUCKET: str = "kensan-lakehouse"
+    LAKEHOUSE_ENABLED: bool = False
+
     @model_validator(mode='after')
     def validate_production(self) -> 'Settings':
         """本番環境で必須設定をバリデート"""
@@ -1284,6 +1359,9 @@ DB_NAME=kensan
 
 # オプション
 OPENAI_API_KEY=sk-...          # 埋め込み用
+TAVILY_API_KEY=tvly-...        # Web検索用 (web_search/web_fetch)
+LAKEHOUSE_ENABLED=false        # Lakehouse書き込み有効化
+NESSIE_URI=http://localhost:19120/iceberg/  # Nessie Catalog URI
 MINIO_ENDPOINT=localhost:9000  # ファイルストレージ用
 MINIO_ACCESS_KEY=kensan
 MINIO_SECRET_KEY=kensan-minio

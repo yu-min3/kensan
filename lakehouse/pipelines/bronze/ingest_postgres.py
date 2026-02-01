@@ -15,7 +15,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "catalog"))
 from config import get_catalog, get_pg_dsn
 
 # UUID型のカラム名（string変換が必要）
-UUID_COLUMNS = {"id", "user_id", "task_id", "milestone_id", "goal_id", "parent_task_id"}
+UUID_COLUMNS = {
+    "id", "user_id", "task_id", "milestone_id", "goal_id", "parent_task_id",
+    "context_id", "session_id", "conversation_id", "source_interaction_id",
+    "experiment_id",
+}
 
 # 取り込み対象テーブルの定義
 TABLES = {
@@ -97,6 +101,112 @@ TABLES = {
             ("goal_name", pa.string()),
             ("goal_color", pa.string()),
             ("archived", pa.bool_()),
+            ("created_at", pa.timestamp("us", tz="UTC")),
+            ("updated_at", pa.timestamp("us", tz="UTC")),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+    },
+    # ===== AI Data Tables =====
+    "bronze.ai_interactions_raw": {
+        "query": """
+            SELECT id, user_id, session_id, situation, context_id,
+                   user_input, ai_output, tool_calls::text AS tool_calls_json,
+                   tokens_input, tokens_output, latency_ms,
+                   rating, feedback, conversation_id, created_at
+            FROM ai_interactions
+            WHERE created_at > %(since)s
+            ORDER BY created_at
+        """,
+        "arrow_schema": pa.schema([
+            ("id", pa.string()),
+            ("user_id", pa.string()),
+            ("session_id", pa.string()),
+            ("situation", pa.string()),
+            ("context_id", pa.string()),
+            ("user_input", pa.string()),
+            ("ai_output", pa.string()),
+            ("tool_calls_json", pa.string()),
+            ("tokens_input", pa.int32()),
+            ("tokens_output", pa.int32()),
+            ("latency_ms", pa.int32()),
+            ("rating", pa.int32()),
+            ("feedback", pa.string()),
+            ("conversation_id", pa.string()),
+            ("created_at", pa.timestamp("us", tz="UTC")),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+        "since_column": "created_at",
+    },
+    "bronze.ai_facts_raw": {
+        "query": """
+            SELECT id, user_id, fact_type, content, source,
+                   confidence, source_interaction_id, created_at
+            FROM user_facts
+            WHERE created_at > %(since)s
+            ORDER BY created_at
+        """,
+        "arrow_schema": pa.schema([
+            ("id", pa.string()),
+            ("user_id", pa.string()),
+            ("fact_type", pa.string()),
+            ("content", pa.string()),
+            ("source", pa.string()),
+            ("confidence", pa.float32()),
+            ("source_interaction_id", pa.string()),
+            ("created_at", pa.timestamp("us", tz="UTC")),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+        "since_column": "created_at",
+    },
+    "bronze.ai_reviews_raw": {
+        "query": """
+            SELECT id, user_id, week_start, week_end, summary,
+                   array_to_json(good_points)::text AS good_points_json,
+                   array_to_json(improvement_points)::text AS improvement_points_json,
+                   array_to_json(advice)::text AS advice_json,
+                   tokens_input, tokens_output, created_at
+            FROM ai_review_reports
+            WHERE created_at > %(since)s
+            ORDER BY created_at
+        """,
+        "arrow_schema": pa.schema([
+            ("id", pa.string()),
+            ("user_id", pa.string()),
+            ("week_start", pa.date32()),
+            ("week_end", pa.date32()),
+            ("summary", pa.string()),
+            ("good_points_json", pa.string()),
+            ("improvement_points_json", pa.string()),
+            ("advice_json", pa.string()),
+            ("tokens_input", pa.int32()),
+            ("tokens_output", pa.int32()),
+            ("created_at", pa.timestamp("us", tz="UTC")),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+        "since_column": "created_at",
+    },
+    "bronze.ai_contexts_raw": {
+        "query": """
+            SELECT id, name, situation, version, is_active,
+                   system_prompt,
+                   array_to_json(allowed_tools)::text AS allowed_tools_json,
+                   max_turns, temperature, experiment_id,
+                   created_at, updated_at
+            FROM ai_contexts
+            WHERE updated_at > %(since)s
+            ORDER BY updated_at
+        """,
+        "arrow_schema": pa.schema([
+            ("id", pa.string()),
+            ("name", pa.string()),
+            ("situation", pa.string()),
+            ("version", pa.string()),
+            ("is_active", pa.bool_()),
+            ("system_prompt", pa.string()),
+            ("allowed_tools_json", pa.string()),
+            ("max_turns", pa.int32()),
+            ("temperature", pa.float32()),
+            ("experiment_id", pa.string()),
             ("created_at", pa.timestamp("us", tz="UTC")),
             ("updated_at", pa.timestamp("us", tz="UTC")),
             ("_ingested_at", pa.timestamp("us", tz="UTC")),

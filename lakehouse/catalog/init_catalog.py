@@ -8,6 +8,7 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import (
     BooleanType,
     DateType,
+    FloatType,
     IntegerType,
     ListType,
     LongType,
@@ -99,6 +100,98 @@ def create_bronze_tables(catalog):
     _create_table(catalog, "bronze.notes_raw", schema)
 
 
+def create_bronze_ai_tables(catalog):
+    """Bronze層: AI関連データをPostgreSQLから格納"""
+
+    # bronze.ai_interactions_raw
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "session_id", StringType()),
+        NestedField(4, "situation", StringType()),
+        NestedField(5, "context_id", StringType()),
+        NestedField(6, "user_input", StringType()),
+        NestedField(7, "ai_output", StringType()),
+        NestedField(8, "tool_calls_json", StringType()),
+        NestedField(9, "tokens_input", IntegerType()),
+        NestedField(10, "tokens_output", IntegerType()),
+        NestedField(11, "latency_ms", IntegerType()),
+        NestedField(12, "rating", IntegerType()),
+        NestedField(13, "feedback", StringType()),
+        NestedField(14, "conversation_id", StringType()),
+        NestedField(15, "created_at", TimestamptzType()),
+        NestedField(16, "_ingested_at", TimestamptzType()),
+    )
+    partition_spec = PartitionSpec(
+        PartitionField(15, 1001, MonthTransform(), "created_at_month")
+    )
+    _create_table(catalog, "bronze.ai_interactions_raw", schema, partition_spec)
+
+    # bronze.ai_facts_raw
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "fact_type", StringType()),
+        NestedField(4, "content", StringType()),
+        NestedField(5, "source", StringType()),
+        NestedField(6, "confidence", FloatType()),
+        NestedField(7, "source_interaction_id", StringType()),
+        NestedField(8, "created_at", TimestamptzType()),
+        NestedField(9, "_ingested_at", TimestamptzType()),
+    )
+    _create_table(catalog, "bronze.ai_facts_raw", schema)
+
+    # bronze.ai_reviews_raw
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "week_start", DateType()),
+        NestedField(4, "week_end", DateType()),
+        NestedField(5, "summary", StringType()),
+        NestedField(6, "good_points_json", StringType()),
+        NestedField(7, "improvement_points_json", StringType()),
+        NestedField(8, "advice_json", StringType()),
+        NestedField(9, "tokens_input", IntegerType()),
+        NestedField(10, "tokens_output", IntegerType()),
+        NestedField(11, "created_at", TimestamptzType()),
+        NestedField(12, "_ingested_at", TimestamptzType()),
+    )
+    _create_table(catalog, "bronze.ai_reviews_raw", schema)
+
+    # bronze.ai_contexts_raw
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "name", StringType()),
+        NestedField(3, "situation", StringType()),
+        NestedField(4, "version", StringType()),
+        NestedField(5, "is_active", BooleanType()),
+        NestedField(6, "system_prompt", StringType()),
+        NestedField(7, "allowed_tools_json", StringType()),
+        NestedField(8, "max_turns", IntegerType()),
+        NestedField(9, "temperature", FloatType()),
+        NestedField(10, "experiment_id", StringType()),
+        NestedField(11, "created_at", TimestamptzType()),
+        NestedField(12, "updated_at", TimestamptzType()),
+        NestedField(13, "_ingested_at", TimestamptzType()),
+    )
+    _create_table(catalog, "bronze.ai_contexts_raw", schema)
+
+    # bronze.external_tool_results_raw (kensan-ai direct write)
+    schema = Schema(
+        NestedField(1, "tool_name", StringType()),
+        NestedField(2, "input_data", StringType()),
+        NestedField(3, "result_json", StringType()),
+        NestedField(4, "result_count", IntegerType()),
+        NestedField(5, "metadata_json", StringType()),
+        NestedField(6, "executed_at", TimestamptzType()),
+        NestedField(7, "_ingested_at", TimestamptzType()),
+    )
+    partition_spec = PartitionSpec(
+        PartitionField(6, 1002, MonthTransform(), "executed_at_month")
+    )
+    _create_table(catalog, "bronze.external_tool_results_raw", schema, partition_spec)
+
+
 def create_silver_tables(catalog):
     """Silver層: クリーニング・正規化済みデータ"""
 
@@ -157,6 +250,47 @@ def create_silver_tables(catalog):
     _create_table(catalog, "silver.notes", schema)
 
 
+def create_silver_ai_tables(catalog):
+    """Silver層: AI分析用の整形済みデータ"""
+
+    # silver.ai_interactions
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "date", DateType()),
+        NestedField(4, "situation", StringType()),
+        NestedField(5, "user_input", StringType()),
+        NestedField(6, "ai_output_length", IntegerType()),
+        NestedField(7, "tool_count", IntegerType()),
+        NestedField(8, "tool_names_json", StringType()),
+        NestedField(9, "tokens_input", IntegerType()),
+        NestedField(10, "tokens_output", IntegerType()),
+        NestedField(11, "tokens_total", IntegerType()),
+        NestedField(12, "latency_ms", IntegerType()),
+        NestedField(13, "has_feedback", BooleanType()),
+        NestedField(14, "rating", IntegerType()),
+        NestedField(15, "conversation_id", StringType()),
+        NestedField(16, "created_at", TimestamptzType()),
+    )
+    partition_spec = PartitionSpec(
+        PartitionField(3, 1003, MonthTransform(), "date_month")
+    )
+    _create_table(catalog, "silver.ai_interactions", schema, partition_spec)
+
+    # silver.ai_token_usage
+    schema = Schema(
+        NestedField(1, "user_id", StringType()),
+        NestedField(2, "date", DateType()),
+        NestedField(3, "situation", StringType()),
+        NestedField(4, "interaction_count", IntegerType()),
+        NestedField(5, "tokens_input_total", LongType()),
+        NestedField(6, "tokens_output_total", LongType()),
+        NestedField(7, "tokens_total", LongType()),
+        NestedField(8, "avg_latency_ms", IntegerType()),
+    )
+    _create_table(catalog, "silver.ai_token_usage", schema)
+
+
 def create_gold_tables(catalog):
     """Gold層: 分析用集計テーブル"""
 
@@ -184,6 +318,36 @@ def create_gold_tables(catalog):
     _create_table(catalog, "gold.goal_progress", schema)
 
 
+def create_gold_ai_tables(catalog):
+    """Gold層: AI分析用の週次集計テーブル"""
+
+    # gold.ai_usage_weekly
+    schema = Schema(
+        NestedField(1, "user_id", StringType()),
+        NestedField(2, "week_start", DateType()),
+        NestedField(3, "interaction_count", IntegerType()),
+        NestedField(4, "tokens_input_total", LongType()),
+        NestedField(5, "tokens_output_total", LongType()),
+        NestedField(6, "tokens_total", LongType()),
+        NestedField(7, "avg_latency_ms", IntegerType()),
+        NestedField(8, "situation_distribution_json", StringType()),
+        NestedField(9, "tool_usage_json", StringType()),
+        NestedField(10, "web_search_count", IntegerType()),
+    )
+    _create_table(catalog, "gold.ai_usage_weekly", schema)
+
+    # gold.ai_quality_weekly
+    schema = Schema(
+        NestedField(1, "user_id", StringType()),
+        NestedField(2, "week_start", DateType()),
+        NestedField(3, "rated_count", IntegerType()),
+        NestedField(4, "avg_rating", FloatType()),
+        NestedField(5, "fact_count", IntegerType()),
+        NestedField(6, "review_generated", BooleanType()),
+    )
+    _create_table(catalog, "gold.ai_quality_weekly", schema)
+
+
 def _create_table(catalog, name, schema, partition_spec=None):
     """テーブル作成（冪等）"""
     try:
@@ -208,11 +372,20 @@ def main():
     print("Creating Bronze tables...")
     create_bronze_tables(catalog)
 
+    print("Creating Bronze AI tables...")
+    create_bronze_ai_tables(catalog)
+
     print("Creating Silver tables...")
     create_silver_tables(catalog)
 
+    print("Creating Silver AI tables...")
+    create_silver_ai_tables(catalog)
+
     print("Creating Gold tables...")
     create_gold_tables(catalog)
+
+    print("Creating Gold AI tables...")
+    create_gold_ai_tables(catalog)
 
     print("Done.")
 

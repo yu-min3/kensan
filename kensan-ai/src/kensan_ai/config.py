@@ -64,6 +64,17 @@ class Settings(BaseSettings):
     otel_enabled: bool = False
     otel_collector_url: str = "localhost:4318"
 
+    # External Tools
+    tavily_api_key: str = ""
+
+    # Lakehouse (Iceberg direct write)
+    nessie_uri: str = "http://localhost:19120/iceberg/"
+    lakehouse_s3_endpoint: str = "http://localhost:9000"
+    lakehouse_s3_access_key: str = "kensan"
+    lakehouse_s3_secret_key: str = "kensan-minio"
+    lakehouse_s3_bucket: str = "kensan-lakehouse"
+    lakehouse_enabled: bool = False
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug_bool(cls, v: Any) -> bool:

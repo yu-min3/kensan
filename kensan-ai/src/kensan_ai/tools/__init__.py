@@ -67,6 +67,11 @@ from kensan_ai.tools.analytics_tools import (
     get_daily_summary,
     ALL_ANALYTICS_TOOLS,
 )
+from kensan_ai.tools.web_tools import (
+    web_search,
+    web_fetch,
+    ALL_WEB_TOOLS,
+)
 
 # Aggregate all tools
 ALL_TOOLS = [
@@ -75,6 +80,7 @@ ALL_TOOLS = [
     *ALL_SEARCH_TOOLS,
     *ALL_REVIEW_TOOLS,
     *ALL_ANALYTICS_TOOLS,
+    *ALL_WEB_TOOLS,
 ]
 
 __all__ = [
@@ -131,6 +137,10 @@ __all__ = [
     "get_analytics_summary",
     "get_daily_summary",
     "ALL_ANALYTICS_TOOLS",
+    # Web Tools
+    "web_search",
+    "web_fetch",
+    "ALL_WEB_TOOLS",
     # All
     "ALL_TOOLS",
 ]
