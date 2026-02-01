@@ -1,0 +1,15 @@
+[project]
+name = "kensan-lakehouse"
+version = "0.1.0"
+description = "Kensan Lakehouse - Iceberg data platform"
+requires-python = ">=3.12"
+dependencies = [
+    "pyiceberg[s3fs,pyiceberg-core]>=0.9.0",
+    "duckdb>=1.0.0",
+    "psycopg[binary]>=3.2.0",
+    "pyarrow>=18.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["catalog"]
