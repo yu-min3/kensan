@@ -1,9 +1,81 @@
 """Note queries."""
 
+import asyncio
+import logging
 from typing import Any
 from uuid import UUID
 
 from kensan_ai.db.connection import get_connection
+
+logger = logging.getLogger(__name__)
+
+
+async def _store_embedding(note_id: UUID, text: str) -> None:
+    """Generate and store an embedding for a note (fire-and-forget safe)."""
+    try:
+        from kensan_ai.embeddings.service import get_embedding_service
+
+        import numpy as np
+
+        embedding = await get_embedding_service().generate_embedding(text)
+        vector = np.array(embedding, dtype=np.float32)
+        async with get_connection() as conn:
+            await conn.execute(
+                "UPDATE notes SET embedding = $1 WHERE id = $2",
+                vector,
+                note_id,
+            )
+        logger.info("Stored embedding for note %s", note_id)
+    except Exception:
+        logger.warning("Failed to generate embedding for note %s", note_id, exc_info=True)
+
+
+async def backfill_embeddings(user_id: UUID, batch_size: int = 20) -> int:
+    """Generate embeddings for notes that don't have one yet.
+
+    Returns the number of notes processed.
+    """
+    from kensan_ai.embeddings.service import get_embedding_service
+
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, title, content
+            FROM notes
+            WHERE user_id = $1 AND embedding IS NULL
+              AND (title IS NOT NULL OR content IS NOT NULL)
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            user_id,
+            batch_size,
+        )
+
+    if not rows:
+        return 0
+
+    service = get_embedding_service()
+    texts = [
+        f"{r['title']}\n{r['content']}" if r["title"] and r["content"]
+        else (r["title"] or r["content"] or "")
+        for r in rows
+    ]
+
+    import numpy as np
+
+    embeddings = await service.generate_embeddings(texts)
+
+    async with get_connection() as conn:
+        for row, emb in zip(rows, embeddings):
+            vector = np.array(emb, dtype=np.float32)
+            await conn.execute(
+                "UPDATE notes SET embedding = $1 WHERE id = $2",
+                vector,
+                row["id"],
+            )
+
+    logger.info("Backfilled embeddings for %d notes (user %s)", len(rows), user_id)
+    return len(rows)
 
 
 async def get_notes(
@@ -69,13 +141,20 @@ async def create_note(
             note_type,
         )
 
-        return {
+        result = {
             "id": str(row["id"]),
             "title": row["title"],
             "type": row["type"],
             "content": row["content"],
             "createdAt": row["created_at"].isoformat(),
         }
+
+        # Fire-and-forget embedding generation
+        text = f"{title}\n{content}" if title and content else (title or content or "")
+        if text.strip():
+            asyncio.create_task(_store_embedding(row["id"], text))
+
+        return result
 
 
 async def update_note(
@@ -119,7 +198,7 @@ async def update_note(
         if row is None:
             return None
 
-        return {
+        result = {
             "id": str(row["id"]),
             "title": row["title"],
             "type": row["type"],
@@ -127,3 +206,11 @@ async def update_note(
             "createdAt": row["created_at"].isoformat(),
             "updatedAt": row["updated_at"].isoformat() if row["updated_at"] else None,
         }
+
+        # Re-generate embedding if title or content changed
+        if title is not None or content is not None:
+            text = f"{row['title']}\n{row['content']}" if row["title"] and row["content"] else (row["title"] or row["content"] or "")
+            if text.strip():
+                asyncio.create_task(_store_embedding(row["id"], text))
+
+        return result

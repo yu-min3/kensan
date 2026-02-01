@@ -343,9 +343,230 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
         return {"error": f"Search failed: {str(e)}"}
 
 
+@tool(
+    name="search_notes",
+    description="ノート（学習記録・日記）をキーワードで検索します。タイトルと本文を全文検索します。",
+    input_schema={
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "検索キーワード（スペース区切りでAND検索）",
+            },
+            "note_type": {
+                "type": "string",
+                "description": "ノート種別でフィルタ (例: 'diary', 'learning', 'general')",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "結果の最大件数 (デフォルト: 10)",
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def search_notes(args: dict[str, Any]) -> dict[str, Any]:
+    """Search notes using full-text search on title + content."""
+    user_id = _parse_uuid(args.get("user_id"))
+    if not user_id:
+        return {"error": "Invalid or missing user_id"}
+
+    query = args.get("query", "").strip()
+    if not query:
+        return {"error": "Query cannot be empty"}
+
+    limit = args.get("limit", 10)
+    note_type = args.get("note_type")
+
+    try:
+        keywords = query.split()
+        tsquery = " & ".join(keywords)
+
+        async with get_connection() as conn:
+            if note_type:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, title, type, content, created_at,
+                           ts_rank(
+                               to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(content, '')),
+                               to_tsquery('simple', $1)
+                           ) as rank
+                    FROM notes
+                    WHERE user_id = $2
+                      AND type = $3
+                      AND to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(content, ''))
+                          @@ to_tsquery('simple', $1)
+                    ORDER BY rank DESC
+                    LIMIT $4
+                    """,
+                    tsquery,
+                    user_id,
+                    note_type,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, title, type, content, created_at,
+                           ts_rank(
+                               to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(content, '')),
+                               to_tsquery('simple', $1)
+                           ) as rank
+                    FROM notes
+                    WHERE user_id = $2
+                      AND to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(content, ''))
+                          @@ to_tsquery('simple', $1)
+                    ORDER BY rank DESC
+                    LIMIT $3
+                    """,
+                    tsquery,
+                    user_id,
+                    limit,
+                )
+
+            results = [
+                {
+                    "id": str(row["id"]),
+                    "title": row["title"],
+                    "type": row["type"],
+                    "content": row["content"][:500] + "..." if row["content"] and len(row["content"]) > 500 else row["content"],
+                    "createdAt": row["created_at"].isoformat() if row["created_at"] else None,
+                    "rank": round(row["rank"], 4),
+                }
+                for row in rows
+            ]
+
+            return {"results": results, "count": len(results)}
+
+    except Exception as e:
+        logger.error(f"Note search failed: {e}")
+        return {"error": f"Search failed: {str(e)}"}
+
+
+@tool(
+    name="semantic_search_notes",
+    description="ノート（学習記録・日記）をベクトル類似度で検索します。意味的に類似した内容を見つけるのに適しています。embedding列がセットされたノートのみ対象。",
+    input_schema={
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "検索クエリ",
+            },
+            "note_type": {
+                "type": "string",
+                "description": "ノート種別でフィルタ (例: 'diary', 'learning')",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "結果の最大件数 (デフォルト: 5)",
+            },
+        },
+        "required": ["query"],
+    },
+)
+async def semantic_search_notes(args: dict[str, Any]) -> dict[str, Any]:
+    """Perform semantic search on notes using vector similarity."""
+    user_id = _parse_uuid(args.get("user_id"))
+    if not user_id:
+        return {"error": "Invalid or missing user_id"}
+
+    query = args.get("query", "").strip()
+    if not query:
+        return {"error": "Query cannot be empty"}
+
+    limit = args.get("limit", 5)
+    note_type = args.get("note_type")
+
+    try:
+        embedding_service = get_embedding_service()
+        query_embedding = await embedding_service.generate_embedding(query)
+
+        async with get_connection() as conn:
+            if note_type:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, title, type, content, created_at,
+                           1 - (embedding <=> $1::vector) as similarity
+                    FROM notes
+                    WHERE user_id = $2 AND type = $3 AND embedding IS NOT NULL
+                    ORDER BY embedding <=> $1::vector
+                    LIMIT $4
+                    """,
+                    query_embedding,
+                    user_id,
+                    note_type,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, title, type, content, created_at,
+                           1 - (embedding <=> $1::vector) as similarity
+                    FROM notes
+                    WHERE user_id = $2 AND embedding IS NOT NULL
+                    ORDER BY embedding <=> $1::vector
+                    LIMIT $3
+                    """,
+                    query_embedding,
+                    user_id,
+                    limit,
+                )
+
+            results = [
+                {
+                    "id": str(row["id"]),
+                    "title": row["title"],
+                    "type": row["type"],
+                    "content": row["content"][:500] + "..." if row["content"] and len(row["content"]) > 500 else row["content"],
+                    "createdAt": row["created_at"].isoformat() if row["created_at"] else None,
+                    "similarity": round(row["similarity"], 4),
+                }
+                for row in rows
+            ]
+
+            return {"results": results, "count": len(results)}
+
+    except Exception as e:
+        logger.error(f"Semantic note search failed: {e}")
+        return {"error": f"Search failed: {str(e)}"}
+
+
+@tool(
+    name="backfill_note_embeddings",
+    description="embeddingが未生成のノートに対してベクトルembeddingを一括生成します。semantic_search_notesの検索精度を高めるために使用します。",
+    input_schema={
+        "properties": {
+            "batch_size": {
+                "type": "integer",
+                "description": "一度に処理する最大件数 (デフォルト: 20)",
+            },
+        },
+        "required": [],
+    },
+)
+async def backfill_note_embeddings(args: dict[str, Any]) -> dict[str, Any]:
+    """Generate embeddings for notes that are missing them."""
+    from kensan_ai.db.queries.notes import backfill_embeddings
+
+    user_id = _parse_uuid(args.get("user_id"))
+    if not user_id:
+        return {"error": "Invalid or missing user_id"}
+
+    batch_size = args.get("batch_size", 20)
+
+    try:
+        count = await backfill_embeddings(user_id, batch_size=batch_size)
+        return {"processed": count, "message": f"{count}件のノートにembeddingを生成しました"}
+    except Exception as e:
+        logger.error(f"Backfill embeddings failed: {e}")
+        return {"error": f"Backfill failed: {str(e)}"}
+
+
 # All search tools for export
 ALL_SEARCH_TOOLS = [
     semantic_search,
     keyword_search,
     hybrid_search,
+    search_notes,
+    semantic_search_notes,
+    backfill_note_embeddings,
 ]

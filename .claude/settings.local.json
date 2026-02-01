@@ -76,7 +76,8 @@
       "Bash(npx eslint:*)",
       "Bash(ps:*)",
       "Bash(uv run python:*)",
-      "Bash(npx vite build:*)"
+      "Bash(npx vite build:*)",
+      "Bash(npx playwright:*)"
     ]
   },
   "outputStyle": "default"

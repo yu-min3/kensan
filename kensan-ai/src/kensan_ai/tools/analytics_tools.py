@@ -9,17 +9,16 @@ from kensan_ai.db.queries.analytics import (
     get_analytics_summary as db_get_analytics_summary,
     get_daily_summary as db_get_daily_summary,
 )
+from kensan_ai.db.queries.user_settings import get_user_timezone
 from kensan_ai.lib.parsers import parse_uuid, parse_date
-
-# Default timezone for converting local dates to UTC ranges
-_DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
 
 
 def _local_date_to_utc_range(
     target_date: date,
+    tz: ZoneInfo,
 ) -> tuple[datetime, datetime]:
     """Convert a local date to a UTC datetime range (start inclusive, end exclusive)."""
-    start_local = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_DEFAULT_TZ)
+    start_local = datetime(target_date.year, target_date.month, target_date.day, tzinfo=tz)
     end_local = start_local + timedelta(days=1)
     return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
 
@@ -44,9 +43,11 @@ async def get_analytics_summary(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id or not start or not end:
         return {"error": "Invalid or missing user_id, start_date, or end_date"}
 
+    user_tz = await get_user_timezone(user_id)
+
     # Convert local dates to UTC datetime range
-    start_dt, _ = _local_date_to_utc_range(start)
-    _, end_dt = _local_date_to_utc_range(end)
+    start_dt, _ = _local_date_to_utc_range(start, user_tz)
+    _, end_dt = _local_date_to_utc_range(end, user_tz)
 
     summary = await db_get_analytics_summary(
         user_id=user_id,
@@ -73,12 +74,14 @@ async def get_daily_summary(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
+    user_tz = await get_user_timezone(user_id)
+
     target_date = parse_date(args.get("date"))
     if not target_date:
         target_date = date.today()
 
     # Convert local date to UTC datetime range
-    start_dt, end_dt = _local_date_to_utc_range(target_date)
+    start_dt, end_dt = _local_date_to_utc_range(target_date, user_tz)
 
     summary = await db_get_daily_summary(
         user_id=user_id,

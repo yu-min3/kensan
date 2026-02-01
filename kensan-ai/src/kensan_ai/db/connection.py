@@ -4,10 +4,16 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import asyncpg
+from pgvector.asyncpg import register_vector
 
 from kensan_ai.config import get_settings
 
 _pool: asyncpg.Pool | None = None
+
+
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Initialize each new connection with pgvector type support."""
+    await register_vector(conn)
 
 
 async def create_pool() -> asyncpg.Pool:
@@ -17,6 +23,7 @@ async def create_pool() -> asyncpg.Pool:
         settings.effective_database_url,
         min_size=2,
         max_size=10,
+        init=_init_connection,
     )
 
 

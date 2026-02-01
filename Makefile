@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-docker dev-backend
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-docker dev-backend e2e-install e2e e2e-ui e2e-headed
 
 # Default target
 .DEFAULT_GOAL := help
@@ -135,6 +135,30 @@ health:
 # Help
 # =============================================================================
 
+# =============================================================================
+# E2E Testing (Playwright)
+# =============================================================================
+
+## Install Playwright browsers (chromium)
+e2e-install:
+	npx playwright install chromium
+
+## Run E2E tests
+e2e:
+	npx playwright test --config=e2e/playwright.config.ts
+
+## Run E2E tests in UI mode
+e2e-ui:
+	npx playwright test --config=e2e/playwright.config.ts --ui
+
+## Run E2E tests headed (visible browser)
+e2e-headed:
+	npx playwright test --config=e2e/playwright.config.ts --headed
+
+# =============================================================================
+# Help
+# =============================================================================
+
 ## Show this help
 help:
 	@echo "Kensan - Development Commands"
@@ -160,6 +184,12 @@ help:
 	@echo "  dev           Start frontend with MSW mocking (npm, no backend)"
 	@echo "  dev-docker    Start frontend with MSW in Docker"
 	@echo "  dev-backend   Start backend services for local frontend"
+	@echo ""
+	@echo "E2E Testing:"
+	@echo "  e2e-install  Install Playwright browsers (chromium)"
+	@echo "  e2e          Run E2E tests"
+	@echo "  e2e-ui       Run E2E tests in UI mode"
+	@echo "  e2e-headed   Run E2E tests headed (visible browser)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

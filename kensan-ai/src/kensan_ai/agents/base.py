@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 import uuid as uuid_module
 from dataclasses import dataclass, field
 from typing import AsyncGenerator, AsyncIterator, Any
@@ -13,7 +14,7 @@ from kensan_ai.config import get_settings
 from kensan_ai.tools import get_tools_api_schema, execute_tool, format_tool_result, is_readonly_tool
 from kensan_ai.agents.message_history import MessageHistory
 from kensan_ai.api.sse import sse_event, sse_keepalive
-from kensan_ai.telemetry import get_tracer
+from kensan_ai.telemetry import get_tracer, get_genai_metrics
 
 logger = logging.getLogger("kensan_ai.agent")
 
@@ -60,6 +61,10 @@ class AgentRunner:
         max_turns: int = 10,
         temperature: float = 0.7,
         model: str | None = None,
+        context_id: str | None = None,
+        context_name: str | None = None,
+        context_version: str | None = None,
+        experiment_id: str | None = None,
     ):
         """Initialize the agent runner.
 
@@ -69,20 +74,60 @@ class AgentRunner:
             max_turns: Maximum number of agent turns (tool call cycles)
             temperature: Temperature for the model
             model: Model to use. If None, uses default from settings.
+            context_id: AI context ID from database
+            context_name: AI context name for identification
+            context_version: AI context version string
+            experiment_id: A/B test experiment ID
         """
         self.system_prompt = system_prompt
         self.allowed_tools = allowed_tools
         self.max_turns = max_turns
         self.temperature = temperature
         self.model = model or get_settings().anthropic_model
+        self.context_id = context_id
+        self.context_name = context_name
+        self.context_version = context_version
+        self.experiment_id = experiment_id
 
         # Initialize client
         settings = get_settings()
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
+    @staticmethod
+    def _parse_prompt_sections(prompt: str) -> dict[str, int]:
+        """Parse system prompt into sections by ## headers and return char counts."""
+        import re
+        sections: dict[str, int] = {}
+        # Split by ## headers
+        parts = re.split(r'^(## .+)$', prompt, flags=re.MULTILINE)
+        # parts[0] is text before first ##, parts[1] is first header, parts[2] is content, etc.
+        if parts[0].strip():
+            sections["(ベース指示)"] = len(parts[0].strip())
+        for i in range(1, len(parts), 2):
+            header = parts[i].replace("## ", "").strip()
+            content = parts[i + 1] if i + 1 < len(parts) else ""
+            sections[header] = len(parts[i]) + len(content)
+        return sections
+
     def _get_tools_schema(self) -> list[dict[str, Any]]:
-        """Get the tools schema for the API call."""
-        return get_tools_api_schema(self.allowed_tools)
+        """Get the tools schema for the API call.
+
+        Adds cache_control to the last tool for prompt caching.
+        """
+        tools = get_tools_api_schema(self.allowed_tools)
+        if tools:
+            tools[-1]["cache_control"] = {"type": "ephemeral"}
+        return tools
+
+    def _get_system_blocks(self) -> list[dict[str, Any]]:
+        """Get system prompt as content blocks with cache_control for prompt caching."""
+        return [
+            {
+                "type": "text",
+                "text": self.system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
 
     async def run(self, prompt: str, user_id: str | None = None) -> AgentResult:
         """Run the agent with the given prompt and return the response.
@@ -108,7 +153,7 @@ class AgentRunner:
             response = await self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,
-                system=self.system_prompt,
+                system=self._get_system_blocks(),
                 messages=history.get_messages(),
                 tools=tools if tools else anthropic.NOT_GIVEN,
                 temperature=self.temperature,
@@ -222,7 +267,7 @@ class AgentRunner:
             async with self.client.messages.stream(
                 model=self.model,
                 max_tokens=4096,
-                system=self.system_prompt,
+                system=self._get_system_blocks(),
                 messages=history.get_messages(),
                 tools=tools if tools else anthropic.NOT_GIVEN,
                 temperature=self.temperature,
@@ -360,13 +405,16 @@ class AgentRunner:
                 keepalive_task.cancel()
                 keepalive_task = None
 
+        # Start timer for duration metric
+        _start_time = time.monotonic()
+
         # Start root span (manual lifecycle for async generator)
         stream_span = _tracer.start_span("agent.stream")
-        stream_span.set_attribute("agent.user_id", user_id or "")
-        stream_span.set_attribute("agent.conversation_id", conv_id)
-        stream_span.set_attribute("agent.user_message", user_message[:500])
-        stream_span.set_attribute("agent.model", self.model)
-        stream_span.set_attribute("agent.max_turns", self.max_turns)
+        stream_span.set_attribute("gen_ai.user.id", user_id or "")
+        stream_span.set_attribute("gen_ai.conversation.id", conv_id)
+        stream_span.set_attribute("gen_ai.prompt", user_message[:500])
+        stream_span.set_attribute("gen_ai.request.model", self.model)
+        stream_span.set_attribute("gen_ai.request.max_turns", self.max_turns)
 
         if _has_otel:
             stream_token = otel_context.attach(trace.set_span_in_context(stream_span))
@@ -376,6 +424,9 @@ class AgentRunner:
         outcome = "success"
         actual_turns = 0
 
+        prompt_sections = self._parse_prompt_sections(self.system_prompt)
+        tool_names = [t["name"] for t in tools]
+
         logger.info(
             json.dumps({
                 "event": "agent.prompt",
@@ -383,7 +434,26 @@ class AgentRunner:
                 "conversation_id": conv_id,
                 "user_message": user_message[:500],
                 "model": self.model,
-                "system_prompt_preview": self.system_prompt[:500],
+                "context_id": self.context_id or "",
+                "context_name": self.context_name or "",
+                "context_version": self.context_version or "",
+                "experiment_id": self.experiment_id or "",
+                "system_prompt_length": len(self.system_prompt),
+                "system_prompt_sections": prompt_sections,
+                "tool_count": len(tools),
+                "tool_names": tool_names,
+                "tool_definitions_length": len(json.dumps(tools, ensure_ascii=False)),
+            }, ensure_ascii=False),
+        )
+
+        logger.info(
+            json.dumps({
+                "event": "agent.system_prompt",
+                "conversation_id": conv_id,
+                "context_id": self.context_id or "",
+                "context_name": self.context_name or "",
+                "context_version": self.context_version or "",
+                "system_prompt": self.system_prompt,
             }, ensure_ascii=False),
         )
 
@@ -396,9 +466,9 @@ class AgentRunner:
                     actual_turns = turn + 1
 
                     # Start turn span
-                    turn_span = _tracer.start_span("agent.turn")
-                    turn_span.set_attribute("agent.turn.number", turn + 1)
-                    turn_span.set_attribute("agent.turn.model", self.model)
+                    turn_span = _tracer.start_span("gen_ai.turn")
+                    turn_span.set_attribute("gen_ai.turn.number", turn + 1)
+                    turn_span.set_attribute("gen_ai.request.model", self.model)
 
                     if _has_otel:
                         turn_token = otel_context.attach(trace.set_span_in_context(turn_span))
@@ -417,7 +487,7 @@ class AgentRunner:
                         async with self.client.messages.stream(
                             model=self.model,
                             max_tokens=4096,
-                            system=self.system_prompt,
+                            system=self._get_system_blocks(),
                             messages=history.get_messages(),
                             tools=tools if tools else anthropic.NOT_GIVEN,
                             temperature=self.temperature,
@@ -463,13 +533,17 @@ class AgentRunner:
 
                         turn_input = final_message.usage.input_tokens
                         turn_output = final_message.usage.output_tokens
+                        cache_creation = getattr(final_message.usage, "cache_creation_input_tokens", 0) or 0
+                        cache_read = getattr(final_message.usage, "cache_read_input_tokens", 0) or 0
                         total_input_tokens += turn_input
                         total_output_tokens += turn_output
 
-                        turn_span.set_attribute("agent.turn.stop_reason", final_message.stop_reason or "")
-                        turn_span.set_attribute("agent.turn.input_tokens", turn_input)
-                        turn_span.set_attribute("agent.turn.output_tokens", turn_output)
-                        turn_span.set_attribute("agent.turn.tool_call_count", len(tool_use_blocks))
+                        turn_span.set_attribute("gen_ai.response.finish_reason", final_message.stop_reason or "")
+                        turn_span.set_attribute("gen_ai.usage.input_tokens", turn_input)
+                        turn_span.set_attribute("gen_ai.usage.output_tokens", turn_output)
+                        turn_span.set_attribute("gen_ai.usage.cache_creation_input_tokens", cache_creation)
+                        turn_span.set_attribute("gen_ai.usage.cache_read_input_tokens", cache_read)
+                        turn_span.set_attribute("gen_ai.turn.tool_call_count", len(tool_use_blocks))
 
                         # Collect response text for logging
                         response_text = "".join(
@@ -483,6 +557,8 @@ class AgentRunner:
                                 "stop_reason": final_message.stop_reason or "",
                                 "input_tokens": turn_input,
                                 "output_tokens": turn_output,
+                                "cache_creation_input_tokens": cache_creation,
+                                "cache_read_input_tokens": cache_read,
                                 "tool_call_count": len(tool_use_blocks),
                                 "response_text": response_text[:1000],
                             }, ensure_ascii=False),
@@ -655,11 +731,23 @@ class AgentRunner:
         finally:
             _stop_keepalive()
 
-            stream_span.set_attribute("agent.total_turns", actual_turns)
-            stream_span.set_attribute("agent.total_input_tokens", total_input_tokens)
-            stream_span.set_attribute("agent.total_output_tokens", total_output_tokens)
-            stream_span.set_attribute("agent.pending_action_count", len(pending_actions))
-            stream_span.set_attribute("agent.outcome", outcome)
+            stream_span.set_attribute("gen_ai.usage.total_turns", actual_turns)
+            stream_span.set_attribute("gen_ai.usage.input_tokens", total_input_tokens)
+            stream_span.set_attribute("gen_ai.usage.output_tokens", total_output_tokens)
+            stream_span.set_attribute("gen_ai.response.pending_action_count", len(pending_actions))
+            stream_span.set_attribute("gen_ai.response.outcome", outcome)
+
+            # Record GenAI metrics
+            _duration = time.monotonic() - _start_time
+            token_counter, duration_hist, op_counter = get_genai_metrics()
+            _metric_attrs = {
+                "gen_ai.request.model": self.model,
+                "gen_ai.response.outcome": outcome,
+            }
+            token_counter.add(total_input_tokens, {**_metric_attrs, "gen_ai.token.type": "input"})
+            token_counter.add(total_output_tokens, {**_metric_attrs, "gen_ai.token.type": "output"})
+            duration_hist.record(_duration, _metric_attrs)
+            op_counter.add(1, _metric_attrs)
 
             logger.info(
                 json.dumps({

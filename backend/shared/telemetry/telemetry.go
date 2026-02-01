@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
@@ -18,9 +19,11 @@ import (
 
 // Config holds OpenTelemetry configuration.
 type Config struct {
-	ServiceName  string
-	CollectorURL string // host:port for OTLP HTTP endpoint
-	Enabled      bool
+	ServiceName    string
+	ServiceVersion string
+	Environment    string // e.g. "development", "production"
+	CollectorURL   string // host:port for OTLP HTTP endpoint
+	Enabled        bool
 }
 
 // Provider wraps OTel providers for graceful shutdown.
@@ -36,9 +39,20 @@ func Initialize(ctx context.Context, cfg Config) (*Provider, error) {
 		return &Provider{}, nil
 	}
 
+	serviceVersion := cfg.ServiceVersion
+	if serviceVersion == "" {
+		serviceVersion = "dev"
+	}
+	environment := cfg.Environment
+	if environment == "" {
+		environment = "development"
+	}
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(cfg.ServiceName),
+			semconv.ServiceVersionKey.String(serviceVersion),
+			attribute.String("deployment.environment", environment),
 		),
 	)
 	if err != nil {

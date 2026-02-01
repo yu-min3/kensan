@@ -50,15 +50,16 @@ kensan-ai/
 │   ├── config.py                  # 設定 (Pydantic BaseSettings)
 │   ├── errors.py                  # 統一エラースキーマ
 │   ├── agents/                    # エージェント実装
-│   │   ├── base.py               # AgentRunnerコア
+│   │   ├── base.py               # AgentRunnerコア（プロンプトキャッシング対応）
 │   │   ├── message_history.py    # 会話メッセージ管理
-│   │   ├── chat.py               # 汎用チャットエージェント
+│   │   ├── conversation_store.py # 会話ストア
+│   │   ├── chat.py               # 汎用チャットエージェント（動的ツール選択）
 │   │   └── weekly_review.py      # 週次レビューエージェント
 │   ├── tools/                     # Direct Tools (18+ツール)
 │   │   ├── base.py               # ツールレジストリ & デコレータ
 │   │   ├── db_tools.py           # データベース操作 (7ツール)
 │   │   ├── memory_tools.py       # ユーザーメモリ (4ツール)
-│   │   ├── search_tools.py       # セマンティック/キーワード検索 (3ツール)
+│   │   ├── search_tools.py       # セマンティック/キーワード検索 (5ツール: documents + notes)
 │   │   └── storage_tools.py      # R2ファイル操作 (4ツール)
 │   ├── lib/                       # 共有ユーティリティ
 │   │   └── parsers.py            # UUID、日付、時刻パース
@@ -86,7 +87,8 @@ kensan-ai/
 │   ├── test_errors.py
 │   ├── test_message_history.py
 │   ├── test_parsers.py
-│   └── test_config.py
+│   ├── test_config.py
+│   └── test_chat.py             # ツール選択テスト (21テスト)
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
@@ -324,6 +326,7 @@ format_tool_result(result: Any) -> str
 | `get_time_entries` | 作業実績取得 | No |
 | `get_notes` | ノート取得 (タイプフィルタ可) | No |
 | `create_note` | ノート作成 (データ駆動タイプ) | Yes |
+| `get_routine_tasks` | ルーティンタスク取得 (曜日フィルタ可) | No |
 
 **ノートツールのタイプ指定:**
 `get_notes`と`create_note`の`type`パラメータはデータ駆動。ハードコードのenum制約はなく、`note_types`テーブルに登録された任意のslugを受け付ける（例: `diary`, `learning`, `general`, `book_review`）。
@@ -341,8 +344,6 @@ format_tool_result(result: Any) -> str
             "end_time": {"type": "string", "description": "HH:MM（ローカル時刻）"},
             "task_name": {"type": "string"},
             "goal_id": {"type": "string"},
-            "goal_name": {"type": "string"},
-            "goal_color": {"type": "string"},
             "is_routine": {"type": "boolean"},
         },
         "required": ["user_id", "date", "start_time", "end_time", "task_name"],
@@ -350,7 +351,7 @@ format_tool_result(result: Any) -> str
 )
 async def create_time_block(args: dict) -> dict:
     # ツール入力はローカル日時（LLMの使いやすさ優先）
-    # 内部でAsia/Tokyo → UTCに変換してDB保存
+    # user_settingsからタイムゾーンを取得しUTCに変換してDB保存
     block = await db_create_time_block(
         start_datetime=_combine_to_utc(date, start_time),
         end_datetime=_combine_to_utc(date, end_time),
@@ -379,9 +380,11 @@ async def create_time_block(args: dict) -> dict:
 
 | ツール | 説明 |
 |-------|------|
-| `semantic_search` | ベクトル類似検索 (pgvector) |
-| `keyword_search` | 全文検索 (tsvector) |
-| `hybrid_search` | セマンティック + キーワード複合 |
+| `semantic_search` | ベクトル類似検索 - documentsテーブル (pgvector) |
+| `keyword_search` | 全文検索 - documentsテーブル (tsvector) |
+| `hybrid_search` | セマンティック + キーワード複合 - documentsテーブル |
+| `search_notes` | キーワード全文検索 - notesテーブル (title + content) |
+| `semantic_search_notes` | ベクトル類似検索 - notesテーブル (pgvector) |
 
 **ハイブリッド検索アルゴリズム:**
 ```python
@@ -473,6 +476,39 @@ print(result.tokens_input, result.tokens_output)
    - ループを継続
 3. `end_turn`またはツールなし → 結果を返却
 
+**Anthropic Prompt Caching:**
+
+API呼び出しのトークンコストを削減するため、ツール定義とシステムプロンプトに`cache_control`を付与:
+
+```python
+def _get_tools_schema(self) -> list[dict]:
+    """最後のツール定義に cache_control を追加"""
+    tools = get_tools_api_schema(self.allowed_tools)
+    if tools:
+        tools[-1]["cache_control"] = {"type": "ephemeral"}
+    return tools
+
+def _get_system_blocks(self) -> list[dict]:
+    """システムプロンプトを cache_control 付きコンテンツブロックで返す"""
+    return [{
+        "type": "text",
+        "text": self.system_prompt,
+        "cache_control": {"type": "ephemeral"},
+    }]
+```
+
+キャッシュヒット時はTurn 2以降の入力トークンコストが90%削減される。キャッシュトークン数はログに記録:
+- `cache_creation_input_tokens`: キャッシュ作成時のトークン数
+- `cache_read_input_tokens`: キャッシュヒット時のトークン数
+
+**ツール結果スリム化:**
+
+ツール結果はターンごとに会話全体に含まれるため、不要なフィールドを除外してトークンを節約:
+- UUIDの除外（ネストされたオブジェクトのID）
+- descriptionフィールドの除外
+- コンテンツの切り詰め（メモ/ノート: 300文字）
+- ネスト構造のフラット化（`goal.name` → `goalName`）
+
 **ストリーミング:**
 ```python
 async for chunk in runner.stream(user_message, user_id):
@@ -481,26 +517,76 @@ async for chunk in runner.stream(user_message, user_id):
 
 ### チャットエージェント (`agents/chat.py`)
 
-タスク/時間管理を伴う汎用会話:
+タスク/時間管理を伴う汎用会話。動的ツール選択によりトークンを節約:
 
 ```python
-SYSTEM_PROMPT = """
-あなたはKensanの学習管理アシスタントです。
-ユーザーの目標達成をサポートします。
-
-以下のツールを使えます：
-- 目標・マイルストーンの確認
-- タスクの作成・更新
-- タイムブロックの計画
-- 作業実績の記録
-"""
+SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。..."""
 
 ALLOWED_TOOLS = [
-    "get_goals_and_milestones",
-    "get_tasks", "create_task", "update_task",
-    "get_time_blocks", "create_time_block",
-    "get_time_entries",
+    # Read tools (13)
+    "get_goals_and_milestones", "get_tasks", "get_time_blocks", ...
+    # Write tools (14)
+    "create_task", "update_task", "delete_task", ...
 ]
+```
+
+#### 動的ツール選択
+
+全ツールを毎回送信するとトークンコストが増大するため、`select_tools()`がメッセージ意図に基づき必要なツールのみを選択:
+
+```python
+def select_tools(message, base_tools, situation="auto", context_keys=None) -> list[str]:
+    """situation とメッセージ意図からツールグループを選択し、必要なツールだけを返す。"""
+```
+
+**ツールグループ:**
+
+| グループ | ツール | 種別 |
+|---------|--------|------|
+| `core` | get_tasks, get_time_blocks, get_time_entries, get_memos | 常に含む |
+| `planning` | create/update/delete_time_block | Write |
+| `task` | create/update/delete_task | Write |
+| `goals_read` | get_goals_and_milestones | Read |
+| `goals_write` | create/update/delete_goal, create/update/delete_milestone | Write |
+| `notes_read` | get_notes | Read |
+| `notes_write` | create/update_note, create_memo | Write |
+| `analytics` | get_analytics_summary, get_daily_summary, get_goals_and_milestones | Read |
+| `search` | semantic_search, keyword_search, hybrid_search | Read |
+| `review` | get_reviews, get_review, generate_weekly_review | Read/Write |
+| `memory` | get_user_memory, get_user_facts, get_recent_interactions, add_user_fact | Read/Write |
+| `files` | upload_file, get_file, delete_file, get_upload_url | Read/Write |
+
+**Read/Write意図分離:**
+
+Writeツールは明示的な書き込みキーワード（「作って」「追加して」「削除して」等）がある場合のみ選択される:
+
+```python
+WRITE_KEYWORDS = ["作って", "追加して", "入れて", "変更して", "削除して", ...]
+
+# 例: "このままで目標達成できそう？" → Read only → 7 tools (Write除外)
+# 例: "明日の予定を作って" → Read + Write → planning グループ追加
+```
+
+**Situationベース選択:**
+
+明示的situationが指定された場合は静的グループを使用:
+
+| Situation | グループ |
+|-----------|---------|
+| `weekly` | core, review, notes_read, goals_read, search |
+| `morning` | core, planning, task, goals_read, goals_write |
+| `evening` | core, analytics, notes_read, notes_write, memory |
+
+**コンテキスト除外:**
+
+フロントから渡されたcontextキーに対応するツールを除外（データ重複取得防止）:
+
+```python
+CONTEXT_EXCLUDES_TOOLS = {
+    "週間サマリー": ["get_analytics_summary", "get_daily_summary"],
+    "タスク一覧": ["get_tasks"],
+    ...
+}
 ```
 
 ### 週次レビューエージェント (`agents/weekly_review.py`)
@@ -1208,6 +1294,18 @@ R2_ENDPOINT=https://...        # ファイルストレージ用
 JWT_SECRET=your-secret-key
 ```
 
+### 構造化ログイベント (`agents/base.py`)
+
+AgentRunnerは各実行フェーズで構造化JSONログを出力。Lokiに収集されフロントエンドのInteraction Explorerで可視化:
+
+| イベント | タイミング | 主要フィールド |
+|---------|----------|--------------|
+| `agent.prompt` | 実行開始 | model, user_message, context_id/name/version, experiment_id, system_prompt_length, system_prompt_sections, tool_count, tool_names, tool_definitions_length |
+| `agent.system_prompt` | 実行開始 | system_prompt (全文) |
+| `agent.turn` | 各ターン完了 | turn_number, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, tool_call_count, response_text |
+| `agent.tool_call` | ツール実行 | tool_name, tool_input, tool_output, success, error |
+| `agent.complete` | 実行完了 | outcome, total_turns, total_input/output_tokens, pending_action_count |
+
 ### Telemetry (`telemetry.py`)
 
 OpenTelemetry計装（`OTEL_ENABLED=true`で有効化）:
@@ -1217,8 +1315,17 @@ OpenTelemetry計装（`OTEL_ENABLED=true`で有効化）:
 - `instrument_asyncpg()` - asyncpg DB自動計装
 - `instrument_httpx()` - httpxクライアント自動計装
 - `shutdown_telemetry()` - グレースフルシャットダウン
+- `get_genai_metrics()` - GenAIメトリクス取得（遅延初期化）
 
-パッケージ未インストール時はImportErrorをキャッチし、警告ログで続行。
+**GenAIメトリクス（`base.py` の `stream_sse` finally節で記録）:**
+
+| メトリクス名 | 種別 | 説明 | 属性 |
+|---|---|---|---|
+| `gen_ai.client.token.usage` | Counter | トークン消費量 | `gen_ai.request.model`, `gen_ai.response.outcome`, `gen_ai.token.type` (input/output) |
+| `gen_ai.client.operation.duration` | Histogram | インタラクション所要時間（秒） | `gen_ai.request.model`, `gen_ai.response.outcome` |
+| `gen_ai.client.operation.count` | Counter | エージェント実行回数 | `gen_ai.request.model`, `gen_ai.response.outcome` |
+
+パッケージ未インストール時はImportErrorをキャッチし、No-op実装で続行。
 
 ---
 

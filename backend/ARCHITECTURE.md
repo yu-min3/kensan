@@ -19,7 +19,7 @@ Kensanアプリケーションのバックエンド共通インフラストラ�
 ## システム概要
 
 ### アーキテクチャスタイル
-- **6つの独立したGoマイクロサービス**（ポート8081-8091）
+- **7つの独立したGoマイクロサービス**（ポート8081-8091）
 - 単一のPostgreSQL 16データベース（共有スキーマ）
 - JWT認証（HS256）
 - マルチテナント：全テーブルに`user_id`カラムでデータ分離
@@ -48,6 +48,7 @@ graph TB
         US[user-service :8081]
         TS[task-service :8082]
         TBS[timeblock-service :8084]
+        RS[routine-service :8085]
         AS[analytics-service :8088]
         MS[memo-service :8090]
         NS[note-service :8091]
@@ -70,6 +71,7 @@ graph TB
     SPA -->|Auth, Settings| US
     SPA -->|Goals, Tasks| TS
     SPA -->|TimeBlocks, Timer| TBS
+    SPA -->|Routines| RS
     SPA -->|Summaries| AS
     SPA -->|Quick Notes| MS
     SPA -->|Notes| NS
@@ -78,6 +80,7 @@ graph TB
     US --> PG
     TS --> PG
     TBS --> PG
+    RS --> PG
     AS --> PG
     MS --> PG
     NS --> PG
@@ -96,9 +99,12 @@ graph TB
 | user-service | 8081 | 認証、設定 | [services/user/ARCHITECTURE.md](services/user/ARCHITECTURE.md) |
 | task-service | 8082 | 目標、タスク | [services/task/ARCHITECTURE.md](services/task/ARCHITECTURE.md) |
 | timeblock-service | 8084 | 時間管理 | [services/timeblock/ARCHITECTURE.md](services/timeblock/ARCHITECTURE.md) |
+| routine-service | 8085 | ルーティンタスク | [services/routine/ARCHITECTURE.md](services/routine/ARCHITECTURE.md) |
 | analytics-service | 8088 | 分析 | [services/analytics/ARCHITECTURE.md](services/analytics/ARCHITECTURE.md) |
 | memo-service | 8090 | クイックメモ | [services/memo/ARCHITECTURE.md](services/memo/ARCHITECTURE.md) |
 | note-service | 8091 | ノート | [services/note/ARCHITECTURE.md](services/note/ARCHITECTURE.md) |
+| ~~diary-service~~ | - | ~~日記~~ | [DEPRECATED](services/diary/ARCHITECTURE.md)（note-serviceに統合） |
+| ~~record-service~~ | - | ~~学習記録~~ | [DEPRECATED](services/record/ARCHITECTURE.md)（note-serviceに統合） |
 
 ### サービスディレクトリ構成
 
@@ -197,6 +203,7 @@ claims, err := jwtManager.ValidateToken(tokenString)
 **リクエスト処理：**
 - `RequestID` - リクエストごとのUUID（またはX-Request-IDヘッダーから取得）
 - `OTelTrace` - OpenTelemetry HTTPスパン計装（otelhttp）
+- `Metrics` - OTel HTTP SemConv準拠のリクエストdurationヒストグラム記録
 - `Logger` - zerologによる構造化ログ（trace_id/span_id自動注入）
 - `Auth` - JWT検証、ユーザーID抽出
 
@@ -207,6 +214,7 @@ OpenTelemetryプロバイダー初期化：
 ```go
 provider, err := telemetry.Initialize(ctx, telemetry.Config{
     ServiceName:  "task-service",
+    Environment:  "production",
     CollectorURL: "otel-collector:4318",
     Enabled:      true,
 })
@@ -216,8 +224,11 @@ defer provider.Shutdown(ctx)
 **機能：**
 - OTLP HTTPエクスポーター（トレース＋メトリクス）
 - W3C TraceContext + Baggageプロパゲーター
+- リソース属性：`service.name`, `service.version`, `deployment.environment`
+- HTTPメトリクス（OTel HTTP SemConv準拠）：`http.server.request.duration`（ヒストグラム、属性: `http.request.method`, `http.route`, `http.response.status_code`）。Rate/Errorはhistogram countとstatus_code属性から導出
 - `Enabled=false`の場合はno-op（パフォーマンス影響なし）
 - pgx DBトレーシング（otelpgx）自動設定
+- Service層カスタムスパン用ヘルパー（`telemetry.ServiceTracer()`, `telemetry.StartSpan()`）
 
 **レスポンスヘルパー：**
 ```go
@@ -546,6 +557,19 @@ CREATE TRIGGER update_timestamp
     BEFORE UPDATE ON <table>
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
+
+### 非正規化フィールド自動同期トリガー
+
+goals/milestones/tasks の name/color 変更時に、非正規化フィールドを持つテーブルを自動更新するAFTER UPDATEトリガー（`033_denormalized_field_sync_triggers.sql`）。
+
+| トリガー関数 | 発火条件 | 更新先テーブル | 更新フィールド |
+|-------------|---------|--------------|--------------|
+| `sync_goal_denormalized_fields()` | goals の name または color が変更 | time_blocks, time_entries, running_timers, notes | goal_name, goal_color |
+| `sync_milestone_denormalized_fields()` | milestones の name が変更 | time_blocks, time_entries, running_timers, notes | milestone_name |
+| `sync_task_denormalized_fields()` | tasks の name が変更 | time_blocks, time_entries, running_timers | task_name |
+
+- `IS DISTINCT FROM` で実際に値が変わった時のみ実行（不要なUPDATEを防止）
+- Go/AI両方のDB書き込みを一元的にカバー
 
 ---
 

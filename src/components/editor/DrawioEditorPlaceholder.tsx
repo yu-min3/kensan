@@ -44,7 +44,7 @@ export function DrawioEditorPlaceholder() {
       </div>
 
       {/* キャンバスエリア */}
-      <div className="h-[400px] bg-[#f8f9fa] dark:bg-slate-900 flex items-center justify-center">
+      <div className="h-[400px] bg-muted/50 flex items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Shapes className="h-16 w-16 mx-auto mb-4 opacity-20" />
           <p className="text-sm">drawioエディタ（プレースホルダー）</p>

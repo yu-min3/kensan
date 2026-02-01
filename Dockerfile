@@ -35,6 +35,10 @@ COPY . .
 # Build for production (MSW disabled because import.meta.env.DEV is false)
 RUN npm run build
 
+# Observability proxy targets (Docker internal network)
+ENV LOKI_URL=http://loki:3100
+ENV TEMPO_URL=http://tempo:3200
+
 # Expose preview server port
 EXPOSE 5173
 

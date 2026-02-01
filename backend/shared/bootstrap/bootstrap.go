@@ -63,6 +63,7 @@ func New(name string, opts ...Option) (*Service, error) {
 	ctx := context.Background()
 	otelProvider, err := telemetry.Initialize(ctx, telemetry.Config{
 		ServiceName:  name,
+		Environment:  cfg.Server.Env,
 		CollectorURL: cfg.Telemetry.CollectorURL,
 		Enabled:      cfg.Telemetry.Enabled,
 	})
@@ -89,6 +90,7 @@ func New(name string, opts ...Option) (*Service, error) {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.OTelTrace(name))
+	r.Use(middleware.Metrics)
 	r.Use(middleware.Logger)
 	r.Use(corsMiddleware())
 

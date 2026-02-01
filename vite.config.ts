@@ -2,6 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// In Docker containers, use internal network hostnames; on host, use localhost
+const lokiTarget = process.env.LOKI_URL || 'http://localhost:3100'
+const tempoTarget = process.env.TEMPO_URL || 'http://localhost:3200'
+
+const observabilityProxy = {
+  '/loki': {
+    target: lokiTarget,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/loki/, ''),
+  },
+  '/tempo': {
+    target: tempoTarget,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/tempo/, ''),
+  },
+}
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -10,17 +27,9 @@ export default defineConfig({
     },
   },
   server: {
-    proxy: {
-      '/loki': {
-        target: 'http://localhost:3100',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/loki/, ''),
-      },
-      '/tempo': {
-        target: 'http://localhost:3200',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/tempo/, ''),
-      },
-    },
+    proxy: observabilityProxy,
+  },
+  preview: {
+    proxy: observabilityProxy,
   },
 })

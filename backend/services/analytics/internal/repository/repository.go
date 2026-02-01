@@ -34,7 +34,7 @@ func (r *PostgresRepository) GetTimeBlocksAggregated(ctx context.Context, userID
 		SELECT COALESCE(SUM(
 			EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 		)::integer, 0) AS total_minutes
-		FROM time_blocks
+		FROM analytics_time_blocks
 		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
 			AND goal_id IS NOT NULL
 	`
@@ -54,7 +54,7 @@ func (r *PostgresRepository) GetCompletedTasksCount(ctx context.Context, userID,
 	// and were updated within the date range
 	query := `
 		SELECT COUNT(*)
-		FROM tasks
+		FROM analytics_tasks
 		WHERE user_id = $1
 			AND completed = true
 			AND updated_at >= $2::date
@@ -76,7 +76,7 @@ func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, use
 		SELECT COALESCE(SUM(
 			EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 		)::integer, 0) AS total_minutes
-		FROM time_entries
+		FROM analytics_time_entries
 		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
 			AND goal_id IS NOT NULL
 	`
@@ -98,7 +98,7 @@ func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, star
 			SUM(
 				EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 			)::integer AS minutes
-		FROM time_entries
+		FROM analytics_time_entries
 		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
 		GROUP BY (start_datetime AT TIME ZONE $4)::date
 		ORDER BY local_date ASC
@@ -134,7 +134,7 @@ func (r *PostgresRepository) GetWeeklyBreakdown(ctx context.Context, userID, sta
 			SUM(
 				EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 			)::integer AS minutes
-		FROM time_entries
+		FROM analytics_time_entries
 		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
 		GROUP BY date_trunc('week', (start_datetime AT TIME ZONE $4)::date)
 		ORDER BY week_start ASC
@@ -200,7 +200,7 @@ func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, start
 			SUM(
 				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60
 			)::integer AS minutes
-		FROM time_entries te
+		FROM analytics_time_entries te
 		LEFT JOIN goals g ON te.goal_id = g.id
 		WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.goal_id IS NOT NULL
 		GROUP BY te.goal_id, COALESCE(te.goal_name, g.name, 'Unknown'), COALESCE(te.goal_color, g.color, '#6B7280')
@@ -239,7 +239,7 @@ func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, 
 			SUM(
 				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60
 			)::integer AS minutes
-		FROM time_entries te
+		FROM analytics_time_entries te
 		LEFT JOIN milestones m ON te.milestone_id = m.id
 		WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.milestone_id IS NOT NULL
 		GROUP BY te.milestone_id, COALESCE(te.milestone_name, m.name, 'Unknown'), COALESCE(te.goal_id::text, m.goal_id::text, '')
@@ -275,7 +275,7 @@ func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startD
 			SELECT
 				unnest(te.tag_ids) as tag_id,
 				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60 AS minutes
-			FROM time_entries te
+			FROM analytics_time_entries te
 			WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.tag_ids IS NOT NULL AND array_length(te.tag_ids, 1) > 0
 		)
 		SELECT
@@ -315,7 +315,7 @@ func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startD
 func (r *PostgresRepository) GetGoals(ctx context.Context, userID string) ([]analytics.GoalSummary, error) {
 	query := `
 		SELECT id, name, color
-		FROM goals
+		FROM analytics_goals
 		WHERE user_id = $1 AND is_archived = false
 		ORDER BY name ASC
 	`

@@ -1,6 +1,7 @@
 """Context resolver for loading AI context from database."""
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +9,8 @@ from kensan_ai.context.detector import Situation
 from kensan_ai.context.variable_replacer import VariableReplacer
 from kensan_ai.context.ab_selector import ABSelector
 from kensan_ai.db.connection import get_connection
+
+_VARIABLE_PATTERN = re.compile(r"\{(\w+)\}")
 
 
 @dataclass
@@ -23,6 +26,7 @@ class AIContext:
     max_turns: int
     temperature: float
     experiment_id: UUID | None = None
+    prompt_variables: list[str] = field(default_factory=list)
 
 
 class ContextResolver:
@@ -49,6 +53,8 @@ class ContextResolver:
             if experiment_id and user_id:
                 selected = await ABSelector.select_context(user_id, experiment_id)
                 if selected:
+                    # Detect variables before replacement
+                    prompt_variables = _VARIABLE_PATTERN.findall(selected.system_prompt)
                     # Apply variable replacement if user_id is available
                     system_prompt = await VariableReplacer.replace(
                         selected.system_prompt, user_id
@@ -63,6 +69,7 @@ class ContextResolver:
                         max_turns=selected.max_turns,
                         temperature=selected.temperature,
                         experiment_id=experiment_id,
+                        prompt_variables=prompt_variables,
                     )
 
             # If experiment specified without user_id, get first matching context
@@ -81,6 +88,7 @@ class ContextResolver:
                     context = ContextResolver._row_to_context(row)
                     # Apply variable replacement if user_id is available
                     if user_id:
+                        context.prompt_variables = _VARIABLE_PATTERN.findall(context.system_prompt)
                         context.system_prompt = await VariableReplacer.replace(
                             context.system_prompt, user_id
                         )
@@ -102,6 +110,7 @@ class ContextResolver:
                 context = ContextResolver._row_to_context(row)
                 # Apply variable replacement if user_id is available
                 if user_id:
+                    context.prompt_variables = _VARIABLE_PATTERN.findall(context.system_prompt)
                     context.system_prompt = await VariableReplacer.replace(
                         context.system_prompt, user_id
                     )
@@ -124,6 +133,7 @@ class ContextResolver:
                 context = ContextResolver._row_to_context(row)
                 # Apply variable replacement if user_id is available
                 if user_id:
+                    context.prompt_variables = _VARIABLE_PATTERN.findall(context.system_prompt)
                     context.system_prompt = await VariableReplacer.replace(
                         context.system_prompt, user_id
                     )

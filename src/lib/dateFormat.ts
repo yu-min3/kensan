@@ -13,10 +13,10 @@ import { ja } from 'date-fns/locale'
 export function formatMinutes(minutes: number): string {
   if (minutes >= 60) {
     const h = Math.floor(minutes / 60)
-    const m = minutes % 60
+    const m = Math.round(minutes % 60)
     return m > 0 ? `${h}時間${m}分` : `${h}時間`
   }
-  return `${minutes}分`
+  return `${Math.round(minutes)}分`
 }
 
 /**
@@ -29,7 +29,7 @@ export function formatMinutes(minutes: number): string {
  */
 export function formatDurationShort(minutes: number): string {
   const h = Math.floor(minutes / 60)
-  const m = minutes % 60
+  const m = Math.round(minutes % 60)
   if (h > 0 && m > 0) return `${h}h ${m}m`
   if (h > 0) return `${h}h`
   return `${m}m`

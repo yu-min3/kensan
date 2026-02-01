@@ -92,12 +92,14 @@ export function InteractionTable({ interactions, grafanaBaseUrl }: InteractionTa
   return (
     <div className="border rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[28px_80px_minmax(200px,1fr)_100px_120px_80px_100px_100px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
+      <div className="grid grid-cols-[28px_80px_minmax(200px,1fr)_100px_120px_110px_60px_80px_100px_100px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
         <div></div>
         <div>Time</div>
         <div>User Input</div>
         <div>Outcome</div>
         <div>Model</div>
+        <div>Context</div>
+        <div>Tools</div>
         <div>Turns</div>
         <div>In Tokens</div>
         <div>Out Tokens</div>
@@ -112,7 +114,7 @@ export function InteractionTable({ interactions, grafanaBaseUrl }: InteractionTa
             <button
               onClick={() => toggleExpand(interaction.traceId)}
               className={cn(
-                'w-full grid grid-cols-[28px_80px_minmax(200px,1fr)_100px_120px_80px_100px_100px] gap-2 px-3 py-2.5 text-sm text-left hover:bg-muted/30 transition-colors',
+                'w-full grid grid-cols-[28px_80px_minmax(200px,1fr)_100px_120px_110px_60px_80px_100px_100px] gap-2 px-3 py-2.5 text-sm text-left hover:bg-muted/30 transition-colors',
                 isExpanded && 'bg-muted/20'
               )}
             >
@@ -134,6 +136,12 @@ export function InteractionTable({ interactions, grafanaBaseUrl }: InteractionTa
               <div className="text-xs text-muted-foreground truncate" title={interaction.model}>
                 {interaction.model || '-'}
               </div>
+              <div className="text-xs text-muted-foreground truncate" title={interaction.contextName}>
+                {interaction.contextName || '-'}
+              </div>
+              <div className="tabular-nums text-amber-600 dark:text-amber-400" title={interaction.toolNames.join(', ')}>
+                {interaction.toolCount || '-'}
+              </div>
               <div className="tabular-nums">{interaction.totalTurns}</div>
               <div className="tabular-nums text-blue-600 dark:text-blue-400">
                 {interaction.totalInputTokens.toLocaleString()}
@@ -147,11 +155,21 @@ export function InteractionTable({ interactions, grafanaBaseUrl }: InteractionTa
             {isExpanded && (
               <div className="border-t bg-muted/10">
                 {/* Trace ID bar */}
-                <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-4 text-xs">
+                <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-4 text-xs flex-wrap">
                   <span className="text-muted-foreground">Trace ID:</span>
                   <CopyableTraceId traceId={interaction.traceId} grafanaBaseUrl={grafanaBaseUrl} />
-                  <span className="text-muted-foreground ml-auto">
-                    Total: {(interaction.totalInputTokens + interaction.totalOutputTokens).toLocaleString()} tokens
+                  <span className="text-muted-foreground ml-auto flex items-center gap-3">
+                    {interaction.toolCount > 0 && (
+                      <span>
+                        Tools: <span className="font-medium text-amber-600 dark:text-amber-400 tabular-nums">{interaction.toolCount}</span>
+                        {interaction.toolDefinitionsLength > 0 && (
+                          <span className="ml-1">(~{Math.round(interaction.toolDefinitionsLength * 0.5).toLocaleString()} tokens est.)</span>
+                        )}
+                      </span>
+                    )}
+                    <span>
+                      Total: {(interaction.totalInputTokens + interaction.totalOutputTokens).toLocaleString()} tokens
+                    </span>
                   </span>
                 </div>
 

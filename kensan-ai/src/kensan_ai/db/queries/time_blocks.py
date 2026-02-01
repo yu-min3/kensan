@@ -75,13 +75,14 @@ async def create_time_block(
     task_name: str,
     task_id: UUID | None = None,
     milestone_id: UUID | None = None,
-    milestone_name: str | None = None,
     goal_id: UUID | None = None,
-    goal_name: str | None = None,
-    goal_color: str | None = None,
     is_routine: bool = False,
 ) -> dict[str, Any]:
-    """Create a new time block."""
+    """Create a new time block.
+
+    Denormalized fields (goal_name, goal_color, milestone_name) are
+    automatically resolved from goal_id/milestone_id via subqueries.
+    """
     async with get_connection() as conn:
         block = await conn.fetchrow(
             """
@@ -89,7 +90,12 @@ async def create_time_block(
                 user_id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                $6, (SELECT name FROM milestones WHERE id = $6),
+                $7, (SELECT name FROM goals WHERE id = $7), (SELECT color FROM goals WHERE id = $7),
+                $8
+            )
             RETURNING id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
             """,
@@ -99,10 +105,7 @@ async def create_time_block(
             task_id,
             task_name,
             milestone_id,
-            milestone_name,
             goal_id,
-            goal_name,
-            goal_color,
             is_routine,
         )
 

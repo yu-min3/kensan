@@ -28,17 +28,17 @@ from kensan_ai.db.queries import (
     update_milestone as db_update_milestone,
     delete_milestone as db_delete_milestone,
 )
+from kensan_ai.db.queries.user_settings import get_user_timezone
+from kensan_ai.db.queries.routines import get_routine_tasks as db_get_routine_tasks
 from kensan_ai.lib.parsers import parse_uuid, parse_date, parse_time
-
-# Default timezone for combining date + time into datetime
-_DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
 
 
 def _local_date_to_utc_range(
     target_date: "datetime.date",
+    tz: ZoneInfo,
 ) -> tuple[datetime, datetime]:
     """Convert a local date to a UTC datetime range (start inclusive, end exclusive)."""
-    start_local = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_DEFAULT_TZ)
+    start_local = datetime(target_date.year, target_date.month, target_date.day, tzinfo=tz)
     end_local = start_local + timedelta(days=1)
     return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
 
@@ -46,9 +46,10 @@ def _local_date_to_utc_range(
 def _combine_to_utc(
     target_date: "datetime.date",
     local_time: "datetime.time",
+    tz: ZoneInfo,
 ) -> datetime:
     """Combine a local date and time into a UTC datetime."""
-    local_dt = datetime.combine(target_date, local_time, tzinfo=_DEFAULT_TZ)
+    local_dt = datetime.combine(target_date, local_time, tzinfo=tz)
     return local_dt.astimezone(ZoneInfo("UTC"))
 
 
@@ -67,7 +68,25 @@ async def get_goals_and_milestones(args: dict[str, Any]) -> dict[str, Any]:
         return {"error": "Invalid or missing user_id"}
 
     goals = await db_get_goals(user_id)
-    return {"goals": goals}
+    # Slim down: remove descriptions to reduce token count
+    return {"goals": [
+        {
+            "id": g["id"],
+            "name": g["name"],
+            "color": g["color"],
+            "milestones": [
+                {
+                    "id": m["id"],
+                    "name": m["name"],
+                    "targetDate": m.get("targetDate"),
+                    "status": m["status"],
+                    "taskCount": m["taskCount"],
+                }
+                for m in g.get("milestones", [])
+            ],
+        }
+        for g in goals
+    ]}
 
 
 @tool(
@@ -224,30 +243,43 @@ async def get_time_blocks(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
+    user_tz = await get_user_timezone(user_id)
+
     # Convert local date filters to UTC datetime range
     start_dt = None
     end_dt = None
     target_date = parse_date(args.get("date"))
     if target_date is not None:
-        start_dt, end_dt = _local_date_to_utc_range(target_date)
+        start_dt, end_dt = _local_date_to_utc_range(target_date, user_tz)
     else:
         start_date = parse_date(args.get("start_date"))
         end_date = parse_date(args.get("end_date"))
         if start_date is not None and end_date is not None:
-            start_dt, _ = _local_date_to_utc_range(start_date)
-            _, end_dt = _local_date_to_utc_range(end_date)
+            start_dt, _ = _local_date_to_utc_range(start_date, user_tz)
+            _, end_dt = _local_date_to_utc_range(end_date, user_tz)
 
     blocks = await db_get_time_blocks(
         user_id=user_id,
         start_datetime=start_dt,
         end_datetime=end_dt,
     )
-    return {"timeBlocks": blocks}
+    # Slim down: flatten nested objects, remove IDs not needed for reading
+    return {"timeBlocks": [
+        {
+            "id": b["id"],
+            "startDatetime": b["startDatetime"],
+            "endDatetime": b["endDatetime"],
+            "taskName": b["taskName"],
+            "goalName": b["goal"]["name"] if b.get("goal") else None,
+            "milestoneName": b["milestone"]["name"] if b.get("milestone") else None,
+        }
+        for b in blocks
+    ]}
 
 
 @tool(
     name="create_time_block",
-    description="タイムブロック（計画）を作成する。事前に get_tasks と get_time_blocks で既存タスクと既存予定を確認すること。既存タスクが見つかれば task_id, milestone_id, goal_id, goal_name, goal_color を紐付ける。ユーザーの時間指定が曖昧な場合（「朝」「昼」「午後」等）は常識的に見繕う（朝→08:00-09:00、昼→12:00-13:00、午後→14:00-15:00、夕方→17:00-18:00）。既存の予定と重ならないようにすること。",
+    description="タイムブロック（計画）を作成する。事前に get_tasks と get_time_blocks で既存タスクと既存予定を確認すること。既存タスクが見つかれば task_id, milestone_id, goal_id を紐付ける（goal_name/goal_color/milestone_name はIDから自動解決される）。ユーザーの時間指定が曖昧な場合（「朝」「昼」「午後」等）は常識的に見繕う（朝→08:00-09:00、昼→12:00-13:00、午後→14:00-15:00、夕方→17:00-18:00）。既存の予定と重ならないようにすること。",
     readonly=False,
     input_schema={
         "properties": {
@@ -275,21 +307,9 @@ async def get_time_blocks(args: dict[str, Any]) -> dict[str, Any]:
                 "type": "string",
                 "description": "マイルストーンID (UUID形式、省略可)",
             },
-            "milestone_name": {
-                "type": "string",
-                "description": "マイルストーン名 (省略可)",
-            },
             "goal_id": {
                 "type": "string",
                 "description": "目標ID (UUID形式、省略可)",
-            },
-            "goal_name": {
-                "type": "string",
-                "description": "目標名 (省略可)",
-            },
-            "goal_color": {
-                "type": "string",
-                "description": "目標の色 (省略可)",
             },
             "is_routine": {
                 "type": "boolean",
@@ -316,9 +336,11 @@ async def create_time_block(args: dict[str, Any]) -> dict[str, Any]:
     if not task_name:
         return {"error": "Missing task_name"}
 
+    user_tz = await get_user_timezone(user_id)
+
     # Combine local date + time into UTC datetimes
-    start_dt = _combine_to_utc(target_date, start_time)
-    end_dt = _combine_to_utc(target_date, end_time)
+    start_dt = _combine_to_utc(target_date, start_time, user_tz)
+    end_dt = _combine_to_utc(target_date, end_time, user_tz)
     # Handle overnight blocks (e.g., 23:30 - 00:30)
     if end_dt <= start_dt:
         end_dt += timedelta(days=1)
@@ -330,10 +352,7 @@ async def create_time_block(args: dict[str, Any]) -> dict[str, Any]:
         task_name=task_name,
         task_id=parse_uuid(args.get("task_id")),
         milestone_id=parse_uuid(args.get("milestone_id")),
-        milestone_name=args.get("milestone_name"),
         goal_id=parse_uuid(args.get("goal_id")),
-        goal_name=args.get("goal_name"),
-        goal_color=args.get("goal_color"),
         is_routine=args.get("is_routine", False),
     )
     return {"timeBlock": block}
@@ -366,25 +385,37 @@ async def get_time_entries(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
+    user_tz = await get_user_timezone(user_id)
+
     # Convert local date filters to UTC datetime range
     start_dt = None
     end_dt = None
     target_date = parse_date(args.get("date"))
     if target_date is not None:
-        start_dt, end_dt = _local_date_to_utc_range(target_date)
+        start_dt, end_dt = _local_date_to_utc_range(target_date, user_tz)
     else:
         start_date = parse_date(args.get("start_date"))
         end_date = parse_date(args.get("end_date"))
         if start_date is not None and end_date is not None:
-            start_dt, _ = _local_date_to_utc_range(start_date)
-            _, end_dt = _local_date_to_utc_range(end_date)
+            start_dt, _ = _local_date_to_utc_range(start_date, user_tz)
+            _, end_dt = _local_date_to_utc_range(end_date, user_tz)
 
     entries = await db_get_time_entries(
         user_id=user_id,
         start_datetime=start_dt,
         end_datetime=end_dt,
     )
-    return {"timeEntries": entries}
+    # Slim down: flatten nested objects, remove IDs not needed for reading
+    return {"timeEntries": [
+        {
+            "startDatetime": e["startDatetime"],
+            "endDatetime": e["endDatetime"],
+            "taskName": e["taskName"],
+            "goalName": e["goal"]["name"] if e.get("goal") else None,
+            "description": e.get("description"),
+        }
+        for e in entries
+    ]}
 
 
 # =========================================================================
@@ -438,6 +469,8 @@ async def update_time_block(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id or not tb_id:
         return {"error": "Invalid or missing user_id or time_block_id"}
 
+    user_tz = await get_user_timezone(user_id)
+
     # Convert local date + time to UTC datetime if provided
     target_date = parse_date(args.get("date"))
     start_time = parse_time(args.get("start_time"))
@@ -446,9 +479,9 @@ async def update_time_block(args: dict[str, Any]) -> dict[str, Any]:
     start_dt = None
     end_dt = None
     if target_date and start_time:
-        start_dt = _combine_to_utc(target_date, start_time)
+        start_dt = _combine_to_utc(target_date, start_time, user_tz)
     if target_date and end_time:
-        end_dt = _combine_to_utc(target_date, end_time)
+        end_dt = _combine_to_utc(target_date, end_time, user_tz)
     # Handle overnight (end before start)
     if start_dt and end_dt and end_dt <= start_dt:
         end_dt += timedelta(days=1)
@@ -506,7 +539,11 @@ async def get_memos(args: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         return {"error": "Invalid or missing user_id"}
     memos = await db_get_memos(user_id, limit=args.get("limit", 20))
-    return {"memos": memos}
+    # Slim down: truncate long content
+    return {"memos": [
+        {**m, "content": m["content"][:300] + "..." if len(m.get("content", "")) > 300 else m.get("content", "")}
+        for m in memos
+    ]}
 
 
 @tool(
@@ -557,7 +594,17 @@ async def get_notes(args: dict[str, Any]) -> dict[str, Any]:
         note_type=args.get("type"),
         limit=args.get("limit", 20),
     )
-    return {"notes": notes}
+    # Slim down: truncate content, remove updatedAt
+    return {"notes": [
+        {
+            "id": n["id"],
+            "title": n["title"],
+            "type": n["type"],
+            "content": n["content"][:300] + "..." if n.get("content") and len(n["content"]) > 300 else n.get("content"),
+            "createdAt": n.get("createdAt"),
+        }
+        for n in notes
+    ]}
 
 
 @tool(
@@ -777,6 +824,35 @@ async def delete_milestone(args: dict[str, Any]) -> dict[str, Any]:
     return {"deleted": deleted}
 
 
+# =========================================================================
+# Routine Tasks: get
+# =========================================================================
+
+@tool(
+    name="get_routine_tasks",
+    description="ルーティンタスク（定期的な繰り返しタスク）の一覧を取得する。日次・週次のルーティンや習慣トラッカーの確認に使う。",
+    input_schema={
+        "properties": {
+            "day_of_week": {
+                "type": "integer",
+                "description": "曜日フィルタ (0=日曜, 1=月曜, ..., 6=土曜。省略可)",
+            },
+        },
+        "required": [],
+    },
+)
+async def get_routine_tasks(args: dict[str, Any]) -> dict[str, Any]:
+    """Get routine tasks for a user."""
+    user_id = parse_uuid(args.get("user_id"))
+    if not user_id:
+        return {"error": "Invalid or missing user_id"}
+    routines = await db_get_routine_tasks(
+        user_id=user_id,
+        day_of_week=args.get("day_of_week"),
+    )
+    return {"routineTasks": routines}
+
+
 # All DB tools for export
 ALL_DB_TOOLS = [
     get_goals_and_milestones,
@@ -800,4 +876,5 @@ ALL_DB_TOOLS = [
     create_milestone,
     update_milestone,
     delete_milestone,
+    get_routine_tasks,
 ]

@@ -14,9 +14,91 @@ interface MetadataFormProps {
   schema: FieldSchema[]
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
+  errors?: Record<string, string>
 }
 
-export function MetadataForm({ schema, values, onChange }: MetadataFormProps) {
+/**
+ * Validate metadata values against schema.
+ * Returns a map of field key → error message (empty if all valid).
+ */
+export function validateMetadata(
+  schema: FieldSchema[],
+  values: Record<string, string>,
+): Record<string, string> {
+  const errors: Record<string, string> = {}
+
+  for (const field of schema) {
+    const value = values[field.key] ?? ''
+
+    // Required check
+    if (field.required && !value.trim()) {
+      errors[field.key] = `${field.label}は必須です`
+      continue
+    }
+
+    // Skip further validation if empty and not required
+    if (!value.trim()) continue
+
+    switch (field.type) {
+      case 'integer': {
+        const num = Number(value)
+        if (!Number.isInteger(num)) {
+          errors[field.key] = '整数を入力してください'
+          break
+        }
+        const min = field.constraints?.min as number | undefined
+        const max = field.constraints?.max as number | undefined
+        if (min !== undefined && num < min) {
+          errors[field.key] = `${min}以上の値を入力してください`
+        } else if (max !== undefined && num > max) {
+          errors[field.key] = `${max}以下の値を入力してください`
+        }
+        break
+      }
+      case 'float': {
+        const num = Number(value)
+        if (isNaN(num)) {
+          errors[field.key] = '数値を入力してください'
+          break
+        }
+        const min = field.constraints?.min as number | undefined
+        const max = field.constraints?.max as number | undefined
+        if (min !== undefined && num < min) {
+          errors[field.key] = `${min}以上の値を入力してください`
+        } else if (max !== undefined && num > max) {
+          errors[field.key] = `${max}以下の値を入力してください`
+        }
+        break
+      }
+      case 'url': {
+        try {
+          new URL(value)
+        } catch {
+          errors[field.key] = '有効なURLを入力してください'
+        }
+        break
+      }
+      case 'date': {
+        // YYYY-MM-DD format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || isNaN(Date.parse(value))) {
+          errors[field.key] = 'YYYY-MM-DD形式で入力してください'
+        }
+        break
+      }
+      case 'enum': {
+        const allowed = (field.constraints?.values as string[]) ?? []
+        if (allowed.length > 0 && !allowed.includes(value)) {
+          errors[field.key] = '選択肢から選んでください'
+        }
+        break
+      }
+    }
+  }
+
+  return errors
+}
+
+export function MetadataForm({ schema, values, onChange, errors = {} }: MetadataFormProps) {
   if (schema.length === 0) return null
 
   const handleFieldChange = (key: string, value: string) => {
@@ -33,6 +115,9 @@ export function MetadataForm({ schema, values, onChange }: MetadataFormProps) {
             {field.required && ' *'}
           </Label>
           {renderField(field, values[field.key] ?? '', (v) => handleFieldChange(field.key, v))}
+          {errors[field.key] && (
+            <p className="text-xs text-destructive">{errors[field.key]}</p>
+          )}
         </div>
       ))}
     </div>

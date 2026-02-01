@@ -8,6 +8,7 @@ import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
+import { validateMetadata } from '@/components/note/MetadataForm'
 import { notesApi } from '@/api/services/notes'
 import type { NoteType, Note } from '@/types'
 import { format } from 'date-fns'
@@ -32,7 +33,7 @@ export function N02NoteEdit() {
     deleteNote,
     archiveNote,
   } = useNoteStore()
-  const { types, getBySlug, getConstraints } = useNoteTypeStore()
+  const { types, getBySlug, getConstraints, getMetadataSchema } = useNoteTypeStore()
   const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskStore()
 
   const isNew = !id
@@ -222,6 +223,13 @@ export function N02NoteEdit() {
     if (constraints?.contentRequired && !editorValue.content.trim()) return false
     if (constraints?.titleRequired && !editorValue.title?.trim()) return false
     if (constraints?.dateRequired && !editorValue.date) return false
+
+    // Validate type-specific metadata
+    const metadataSchema = getMetadataSchema(editorValue.type)
+    if (metadataSchema.length > 0) {
+      const metadataErrors = validateMetadata(metadataSchema, editorValue.typeMetadata ?? {})
+      if (Object.keys(metadataErrors).length > 0) return false
+    }
 
     return true
   }

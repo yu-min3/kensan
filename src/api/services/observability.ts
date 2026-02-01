@@ -32,7 +32,7 @@ interface OtelLogEnvelope {
 }
 
 /** Parsed AI event from log body */
-export type AiEventType = 'agent.prompt' | 'agent.turn' | 'agent.tool_call' | 'agent.complete'
+export type AiEventType = 'agent.prompt' | 'agent.turn' | 'agent.tool_call' | 'agent.complete' | 'agent.system_prompt'
 
 export interface AiEventBase {
   event: AiEventType
@@ -45,7 +45,23 @@ export interface AiPromptEvent extends AiEventBase {
   event: 'agent.prompt'
   model: string
   user_message: string
-  system_prompt_length?: number
+  context_id: string
+  context_name: string
+  context_version: string
+  experiment_id: string
+  system_prompt_length: number
+  system_prompt_sections: Record<string, number>
+  tool_count: number
+  tool_names: string[]
+  tool_definitions_length: number
+}
+
+export interface AiSystemPromptEvent extends AiEventBase {
+  event: 'agent.system_prompt'
+  context_id: string
+  context_name: string
+  context_version: string
+  system_prompt: string
 }
 
 export interface AiTurnEvent extends AiEventBase {
@@ -53,6 +69,8 @@ export interface AiTurnEvent extends AiEventBase {
   turn_number: number
   input_tokens: number
   output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
   tool_call_count: number
   response_text: string
 }
@@ -75,7 +93,7 @@ export interface AiCompleteEvent extends AiEventBase {
   pending_action_count: number
 }
 
-export type AiEvent = AiPromptEvent | AiTurnEvent | AiToolCallEvent | AiCompleteEvent
+export type AiEvent = AiPromptEvent | AiSystemPromptEvent | AiTurnEvent | AiToolCallEvent | AiCompleteEvent
 
 /** Aggregated interaction (one agent execution = one trace) */
 export interface Interaction {
@@ -88,6 +106,15 @@ export interface Interaction {
   totalOutputTokens: number
   pendingActionCount: number
   userMessage: string
+  contextId: string
+  contextName: string
+  contextVersion: string
+  experimentId: string
+  systemPromptLength: number
+  systemPromptSections: Record<string, number>
+  toolCount: number
+  toolNames: string[]
+  toolDefinitionsLength: number
   events: AiEvent[]
 }
 
@@ -95,7 +122,7 @@ export interface Interaction {
 // Loki query helper
 // ============================================
 
-async function queryLoki(logql: string, start: string, end: string, limit = 1000): Promise<LokiStreamEntry[]> {
+async function queryLoki(logql: string, start: string, end: string, limit = 5000): Promise<LokiStreamEntry[]> {
   const params = new URLSearchParams({
     query: logql,
     start,
@@ -141,7 +168,24 @@ function toAiEvent(timestamp: Date, traceId: string, body: Record<string, unknow
         event: 'agent.prompt',
         model: (body.model as string) || '',
         user_message: (body.user_message as string) || '',
-        system_prompt_length: body.system_prompt_length as number | undefined,
+        context_id: (body.context_id as string) || '',
+        context_name: (body.context_name as string) || '',
+        context_version: (body.context_version as string) || '',
+        experiment_id: (body.experiment_id as string) || '',
+        system_prompt_length: Number(body.system_prompt_length) || 0,
+        system_prompt_sections: (body.system_prompt_sections as Record<string, number>) || {},
+        tool_count: Number(body.tool_count) || 0,
+        tool_names: (body.tool_names as string[]) || [],
+        tool_definitions_length: Number(body.tool_definitions_length) || 0,
+      }
+    case 'agent.system_prompt':
+      return {
+        ...base,
+        event: 'agent.system_prompt',
+        context_id: (body.context_id as string) || '',
+        context_name: (body.context_name as string) || '',
+        context_version: (body.context_version as string) || '',
+        system_prompt: (body.system_prompt as string) || '',
       }
     case 'agent.turn':
       return {
@@ -150,6 +194,8 @@ function toAiEvent(timestamp: Date, traceId: string, body: Record<string, unknow
         turn_number: Number(body.turn_number) || 0,
         input_tokens: Number(body.input_tokens) || 0,
         output_tokens: Number(body.output_tokens) || 0,
+        cache_creation_input_tokens: Number(body.cache_creation_input_tokens) || 0,
+        cache_read_input_tokens: Number(body.cache_read_input_tokens) || 0,
         tool_call_count: Number(body.tool_call_count) || 0,
         response_text: (body.response_text as string) || '',
       }
@@ -188,7 +234,7 @@ export async function fetchAiEvents(start: Date, end: Date): Promise<AiEvent[]> 
   const endStr = (end.getTime() / 1000).toFixed(0)
 
   const streams = await queryLoki(
-    '{job="kensan-ai"} | json | line_format `{{.body}}` | json | event =~ `agent\\\\..+`',
+    '{job="kensan-ai"}',
     startStr,
     endStr,
   )
@@ -235,6 +281,15 @@ export async function fetchInteractions(start: Date, end: Date): Promise<Interac
       totalOutputTokens: complete?.total_output_tokens || 0,
       pendingActionCount: complete?.pending_action_count || 0,
       userMessage: prompt?.user_message || '',
+      contextId: prompt?.context_id || '',
+      contextName: prompt?.context_name || '',
+      contextVersion: prompt?.context_version || '',
+      experimentId: prompt?.experiment_id || '',
+      systemPromptLength: prompt?.system_prompt_length || 0,
+      systemPromptSections: prompt?.system_prompt_sections || {},
+      toolCount: prompt?.tool_count || 0,
+      toolNames: prompt?.tool_names || [],
+      toolDefinitionsLength: prompt?.tool_definitions_length || 0,
       events: traceEvents,
     })
   }
@@ -249,10 +304,8 @@ export async function fetchTraceEvents(traceId: string, start: Date, end: Date):
   const startStr = (start.getTime() / 1000).toFixed(0)
   const endStr = (end.getTime() / 1000).toFixed(0)
 
-  // Query all AI events, then filter by traceId client-side
-  // (Loki can't filter by traceid in the outer envelope directly with label matchers)
   const streams = await queryLoki(
-    '{job="kensan-ai"} | json | line_format `{{.body}}` | json | event =~ `agent\\\\..+`',
+    '{job="kensan-ai"}',
     startStr,
     endStr,
   )

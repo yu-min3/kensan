@@ -126,12 +126,12 @@ async def agent_stream(
 
     # 1-2. Detect situation and resolve context
     with _tracer.start_as_current_span("agent.context_resolution") as ctx_span:
-        ctx_span.set_attribute("agent.user_id", str(user_id))
+        ctx_span.set_attribute("gen_ai.user.id", str(user_id))
 
         situation = detect_situation(
             explicit_situation=request.situation if request.situation != "auto" else None,
         )
-        ctx_span.set_attribute("agent.situation", situation.value)
+        ctx_span.set_attribute("gen_ai.request.situation", situation.value)
 
         context = await ContextResolver.get_context(situation, user_id=user_id)
 
@@ -142,7 +142,7 @@ async def agent_stream(
                 detail=f"AI context not configured for situation: {situation.value}",
             )
 
-        ctx_span.set_attribute("agent.context_name", context.name if hasattr(context, "name") else situation.value)
+        ctx_span.set_attribute("gen_ai.request.context_name", context.name if hasattr(context, "name") else situation.value)
 
     system_prompt = context.system_prompt
     context_keys: list[str] = []
@@ -160,7 +160,8 @@ async def agent_stream(
             + "\n\n".join(context_lines)
         )
     allowed_tools = select_tools(
-        request.message, context.allowed_tools, request.situation, context_keys
+        request.message, context.allowed_tools, request.situation, context_keys,
+        prompt_variables=context.prompt_variables,
     )
     max_turns = context.max_turns
     temperature = context.temperature
@@ -180,6 +181,10 @@ async def agent_stream(
         allowed_tools=allowed_tools,
         max_turns=max_turns,
         temperature=temperature,
+        context_id=str(context.id),
+        context_name=context.name,
+        context_version=context.version,
+        experiment_id=str(context.experiment_id) if context.experiment_id else None,
     )
 
     # 5. Stream SSE events

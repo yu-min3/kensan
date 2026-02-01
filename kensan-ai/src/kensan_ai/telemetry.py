@@ -49,7 +49,11 @@ def initialize_telemetry(config: TelemetryConfig) -> None:
         from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
-        resource = Resource.create({SERVICE_NAME: config.service_name})
+        resource = Resource.create({
+            SERVICE_NAME: config.service_name,
+            "service.version": "dev",
+            "deployment.environment": "development",
+        })
         endpoint = f"http://{config.collector_url}"
 
         # Traces
@@ -179,6 +183,72 @@ class _NoOpTracer:
 
     def start_as_current_span(self, name: str, **kwargs):  # noqa: ANN003
         return _NoOpSpan()
+
+
+class _NoOpCounter:
+    """No-op counter for when OTel is not available."""
+
+    def add(self, amount: int | float, attributes: dict | None = None) -> None:  # noqa: ANN001
+        pass
+
+
+class _NoOpHistogram:
+    """No-op histogram for when OTel is not available."""
+
+    def record(self, amount: int | float, attributes: dict | None = None) -> None:  # noqa: ANN001
+        pass
+
+
+def get_meter(name: str):
+    """Get an OpenTelemetry meter by name."""
+    try:
+        from opentelemetry import metrics
+
+        return metrics.get_meter(name)
+    except ImportError:
+        return None
+
+
+# GenAI metrics (lazy-initialized on first use)
+_genai_token_usage: _NoOpCounter | None = None
+_genai_operation_duration: _NoOpHistogram | None = None
+_genai_operation_count: _NoOpCounter | None = None
+
+
+def get_genai_metrics() -> tuple:
+    """Get GenAI metric instruments, creating them on first call.
+
+    Returns:
+        (token_usage counter, operation_duration histogram, operation_count counter)
+    """
+    global _genai_token_usage, _genai_operation_duration, _genai_operation_count
+
+    if _genai_token_usage is not None:
+        return _genai_token_usage, _genai_operation_duration, _genai_operation_count
+
+    meter = get_meter("kensan-ai.genai")
+    if meter is None:
+        _genai_token_usage = _NoOpCounter()
+        _genai_operation_duration = _NoOpHistogram()
+        _genai_operation_count = _NoOpCounter()
+    else:
+        _genai_token_usage = meter.create_counter(
+            "gen_ai.client.token.usage",
+            description="Number of tokens consumed by GenAI operations",
+            unit="{token}",
+        )
+        _genai_operation_duration = meter.create_histogram(
+            "gen_ai.client.operation.duration",
+            description="Duration of GenAI agent interactions",
+            unit="s",
+        )
+        _genai_operation_count = meter.create_counter(
+            "gen_ai.client.operation.count",
+            description="Number of GenAI agent operations",
+            unit="{operation}",
+        )
+
+    return _genai_token_usage, _genai_operation_duration, _genai_operation_count
 
 
 def shutdown_telemetry() -> None:

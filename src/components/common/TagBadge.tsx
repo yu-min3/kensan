@@ -20,9 +20,9 @@ export function TagBadge({ name, color, size = 'sm', onRemove }: TagBadgeProps) 
         size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'
       )}
       style={{
-        backgroundColor: `${color}20`,
+        backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
         color: color,
-        border: `1px solid ${color}40`,
+        border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
       }}
     >
       <span

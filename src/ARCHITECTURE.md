@@ -52,13 +52,14 @@ src/
 │   ├── client.ts                 # HttpClientシングルトン
 │   ├── config.ts                 # 環境変数からのサービスURL
 │   ├── createApiService.ts       # 汎用CRUDファクトリ
-│   └── services/                 # ドメイン別API（12ファイル）
+│   └── services/                 # ドメイン別API（13ファイル）
 │       ├── auth.ts, user.ts
 │       ├── tasks.ts              # Goals, Milestones, Tags, Tasks
 │       ├── timeblocks.ts         # TimeBlocks, TimeEntries
 │       ├── timer.ts, routines.ts, notes.ts
 │       ├── records.ts, diaries.ts, memos.ts
-│       └── ai.ts, analytics.ts
+│       ├── agent.ts, analytics.ts
+│       └── observability.ts      # Loki直接クエリ（AI Interaction Explorer用）
 ├── components/
 │   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
@@ -66,8 +67,9 @@ src/
 │   ├── editor/                   # Markdown, Drawioエディタ
 │   ├── task/                     # Goal, Milestone, Taskダイアログ
 │   ├── daily/                    # デイリーページセクション
-│   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm)
-│   └── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
+│   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm + validateMetadata)
+│   ├── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
+│   └── interactions/             # AI Interaction Explorer (InteractionTable, ConversationFlow)
 ├── pages/                        # ページコンポーネント（10ファイル）
 ├── stores/                       # Zustandストア（12ストア）
 ├── hooks/                        # カスタムReactフック
@@ -106,6 +108,7 @@ graph TB
         NoteEdit[N02_NoteEdit]
         Analytics[A01_AnalyticsReport]
         AIReview[A02_AIReview]
+        Interactions[O01_InteractionExplorer]
         Settings[S01_Settings]
     end
 
@@ -140,6 +143,7 @@ graph TB
     Main --> NoteEdit
     Main --> Analytics
     Main --> AIReview
+    Main --> Interactions
     Main --> Settings
 
     Header --> TimerWidget
@@ -219,6 +223,21 @@ graph TB
 - 目標あり/なしの視覚的区別:
   - 目標あり: 左ボーダーに目標色（4px）+ 目標色の薄い背景
   - 目標なし: グレー点線ボーダー + muted背景 + 「その他」ラベル
+
+#### AI Interaction Explorer (`components/interactions/`)
+
+Lokiログからのリアルタイムなインタラクション可視化:
+
+| コンポーネント | 責務 |
+|--------------|------|
+| `InteractionTable` | インタラクション一覧テーブル（時刻、モデル、トークン数、ツール数、outcome）|
+| `ConversationFlow` | 選択したインタラクションの詳細タイムライン（システムプロンプト、ツール定義サマリー、各ターン、ツール呼び出し）|
+
+**ConversationFlowの主要要素:**
+- **SystemPromptEntry**: システムプロンプトのセクション分析（セクション別トークン推定）
+- **ToolDefinitionsSummary**: ツール定義の概要（ツール数、定義サイズ、推定トークン、ツール名リスト）
+- **TurnEntry**: ターンごとのトークン使用量（input/output、cache hit表示）
+- **ToolCallEntry**: ツール呼び出しの入力/出力、成否表示
 
 #### 3. レイアウトコンポーネント (`components/layout/`)
 
@@ -624,6 +643,21 @@ notesApi.archive(id, archived): Promise<Note>
 noteTypesApi.list(): Promise<NoteTypeConfig[]>   // ノートタイプ設定取得
 ```
 
+**observability.ts** - Loki直接クエリ（AI Interaction Explorer用）
+```typescript
+// Lokiからログを取得し、構造化AIイベントにパース
+fetchAiEvents(start: Date, end: Date): Promise<AiEvent[]>
+
+// traceIdでグループ化したInteractionリストを返す
+fetchInteractions(start: Date, end: Date): Promise<Interaction[]>
+
+// 特定traceのイベントを取得
+fetchTraceEvents(traceId: string, start: Date, end: Date): Promise<AiEvent[]>
+
+// イベントタイプ: agent.prompt, agent.system_prompt, agent.turn, agent.tool_call, agent.complete
+// Interactionはprompt + complete + turnsを集約した1エージェント実行単位
+```
+
 ### 設定 (`api/config.ts`)
 
 ```typescript
@@ -656,7 +690,8 @@ export const API_CONFIG = {
 ├── /tasks                 T01_TaskManagement
 ├── /routines              R01_RoutineTaskManagement
 ├── /analytics             A01_AnalyticsReport
-└── /ai-review             A02_AIReview
+├── /ai-review             A02_AIReview
+└── /interactions          O01_InteractionExplorer
 ```
 
 ### ページ命名規則
@@ -669,6 +704,7 @@ export const API_CONFIG = {
 | T | タスク | T01_TaskManagement |
 | R | ルーティン | R01_RoutineTaskManagement |
 | A | 分析/AI | A01_AnalyticsReport, A02_AIReview |
+| O | Observability | O01_InteractionExplorer |
 
 ### ルート保護
 

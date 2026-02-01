@@ -9,7 +9,10 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 ## ユーザー情報
 {user_memory}
 
-## 未完了タスク
+## 目標と進捗（最新データ）
+{goal_progress}
+
+## 未完了タスク（最新データ）
 {pending_tasks}
 
 ## 直近のやりとり
@@ -17,21 +20,16 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 
 ## 思考プロセス（最重要）
 
-ユーザーの発言を受けたら、以下の順序で考えること：
+ユーザーの発言を受けたら、**必ず以下の手順で考えること**：
 
-1. **意図を推測する**
-   - 名詞句（「期限が厳しいタスク」「今日の予定」）→ 既存データの照会
-   - 動詞句（「タスク作って」「予定入れて」）→ 新規作成の依頼
-   - 疑問形（「〜どうなってる？」「〜ある？」）→ 状態確認
-   - 希望表現（「〜したいんだけど」）→ 実行の依頼
-   - 判断に迷ったらデータ取得を優先する。作成は取り消せないが、検索は無害
+1. **上記データを確認する** — 「目標と進捗」「未完了タスク」セクションには最新データが含まれている。このデータで回答できる質問にはツールを使わない
+2. **不足データだけを特定する** — 上記にない情報（例: 特定日のタイムブロック、完了済みタスク、詳細な分析）が必要な場合のみツールを使う
+3. **ツールが必要なら1回で全て呼ぶ** — 複数のツールが必要なら必ず同じターンでまとめて呼ぶ
 
-2. **データを取得する** — 行動前に必ず現状を把握する
-   - 書き込み操作の前に、関連する読み取りツールで既存データを確認する
-   - 「タスク作って」→ まず get_tasks で類似タスクがないか確認
-   - 「予定立てて」→ まず get_tasks + get_time_blocks で既存状況を確認
-
-3. **判断して応答する** — データに基づいて最適な対応をする
+**例:**
+- 「目標達成できそう？」→ 上記データで回答可能。ツール不要
+- 「来週の予定は？」→ 上記にない → get_time_blocks を1回呼ぶ
+- 「予定立てて」→ get_time_blocks を呼ぶ → create_time_block（タスクは上記にある）
 
 ## 日本語の解釈ガイド
 
@@ -43,15 +41,6 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 
 新規作成を示す表現：
 - 「〜を作って」「〜を追加して」「〜を入れて」
-
-## ツール連携パターン
-
-- 関連するreadツールは1回のターンで同時に呼び出すこと
-- **予定を立てる**: get_tasks + get_time_blocks(同日) → create_time_block
-- **タスクの状況確認**: get_tasks(completed=false) → 分析
-- **進捗レポート**: get_goals_and_milestones + get_analytics_summary → 分析
-- **振り返り**: get_daily_summary → 計画vs実績を比較分析
-- **情報を探す**: hybrid_search → 該当データを報告
 
 ## ルール
 - 日本語で応答する
@@ -194,17 +183,49 @@ CONTEXT_EXCLUDES_TOOLS: dict[str, list[str]] = {
     "タスク一覧": ["get_tasks"],
 }
 
-INTENT_PATTERNS: list[tuple[list[str], list[str]]] = [
-    # chat (auto) 用: キーワード → 読み込むグループ群
-    (["予定", "スケジュール", "タイムブロック", "入れて", "入れといて"], ["planning", "task"]),
-    (["タスク", "やること", "TODO"], ["task"]),
-    (["目標", "ゴール", "マイルストーン", "達成"], ["goals_read", "goals_write", "analytics"]),
-    (["ノート", "メモ", "日記", "記録", "書いて"], ["notes_read", "notes_write"]),
+# システムプロンプトの変数 → 対応するツールを除外
+# 変数でデータが注入済みなら、同じデータを返すツールは不要
+VARIABLE_EXCLUDES_TOOLS: dict[str, list[str]] = {
+    "pending_tasks": ["get_tasks"],
+    "goal_progress": ["get_goals_and_milestones"],
+    "today_schedule": ["get_time_blocks"],
+    "today_entries": ["get_time_entries"],
+}
+
+# 参照系: 常にマッチするとreadグループを追加
+INTENT_READ_PATTERNS: list[tuple[list[str], list[str]]] = [
+    (["予定", "スケジュール", "タイムブロック"], ["goals_read"]),
+    (["タスク", "やること", "TODO"], []),  # core に get_tasks 含む
+    (["目標", "ゴール", "マイルストーン", "達成"], ["goals_read", "analytics"]),
+    (["ノート", "メモ", "日記", "記録"], ["notes_read"]),
     (["分析", "進捗", "レポート", "サマリー", "振り返り"], ["analytics", "review"]),
     (["検索", "探して", "調べて", "どこ"], ["search"]),
     (["レビュー", "週次", "ウィークリー"], ["review", "analytics"]),
-    (["ファイル", "アップロード", "画像"], ["files"]),
+    (["ファイル", "画像"], ["files"]),
 ]
+
+# 変更系: 明示的な書き込み意図があるときだけ追加
+WRITE_KEYWORDS: list[str] = [
+    "作って", "追加して", "入れて", "入れといて", "登録して",
+    "変更して", "更新して", "修正して", "編集して",
+    "削除して", "消して", "取り消して",
+    "書いて", "メモして", "記録して",
+    "立てて",  # 予定を立てて
+]
+
+# 書き込みキーワード × ドメインキーワード → writeグループ
+INTENT_WRITE_PATTERNS: list[tuple[list[str], list[str]]] = [
+    (["予定", "スケジュール", "タイムブロック"], ["planning"]),
+    (["タスク", "やること", "TODO"], ["task"]),
+    (["目標", "ゴール", "マイルストーン"], ["goals_write"]),
+    (["ノート", "メモ", "日記", "記録"], ["notes_write"]),
+    (["ファイル", "アップロード"], ["files"]),
+]
+
+
+def _has_write_intent(message: str) -> bool:
+    """メッセージに書き込み意図があるかを判定する。"""
+    return any(kw in message for kw in WRITE_KEYWORDS)
 
 
 def select_tools(
@@ -212,6 +233,7 @@ def select_tools(
     base_tools: list[str],
     situation: str = "auto",
     context_keys: list[str] | None = None,
+    prompt_variables: list[str] | None = None,
 ) -> list[str]:
     """situation とメッセージ意図からツールグループを選択し、必要なツールだけを返す。
 
@@ -220,6 +242,7 @@ def select_tools(
         base_tools: DBで許可されたツールのリスト（上限）
         situation: リクエストの situation（"auto" の場合はキーワードベースで選択）
         context_keys: フロントから渡された context のキー。対応ツールを除外する。
+        prompt_variables: システムプロンプトに含まれる変数名。対応ツールを除外する。
 
     Returns:
         選択されたツールのリスト
@@ -231,13 +254,29 @@ def select_tools(
         selected_groups.update(SITUATION_TOOL_GROUPS[situation])
     else:
         # auto / chat → キーワードベース
-        for keywords, groups in INTENT_PATTERNS:
+        matched_read = False
+        for keywords, groups in INTENT_READ_PATTERNS:
             if any(kw in message for kw in keywords):
                 selected_groups.update(groups)
+                matched_read = True
 
-        # マッチなし → デフォルトセット（最もよく使うパターン）
-        if selected_groups == {"core"}:
-            selected_groups.update(["planning", "task"])
+        # 書き込み意図がある場合のみ write グループを追加
+        if _has_write_intent(message):
+            for keywords, groups in INTENT_WRITE_PATTERNS:
+                if any(kw in message for kw in keywords):
+                    selected_groups.update(groups)
+                    matched_read = True  # ドメインマッチあり
+
+            # 書き込み意図あるが特定ドメインにマッチしない → デフォルト write
+            if not any(
+                any(kw in message for kw in keywords)
+                for keywords, _ in INTENT_WRITE_PATTERNS
+            ):
+                selected_groups.update(["planning", "task"])
+
+        # 読み書きどちらにもマッチなし → デフォルトセット（read only）
+        if not matched_read and selected_groups == {"core"}:
+            selected_groups.add("goals_read")
 
     # グループからツール名リストに展開
     selected: set[str] = set()
@@ -248,6 +287,12 @@ def select_tools(
     if context_keys:
         for key in context_keys:
             for tool_name in CONTEXT_EXCLUDES_TOOLS.get(key, []):
+                selected.discard(tool_name)
+
+    # プロンプト変数で注入済みのデータに対応するツールを除外
+    if prompt_variables:
+        for var in prompt_variables:
+            for tool_name in VARIABLE_EXCLUDES_TOOLS.get(var, []):
                 selected.discard(tool_name)
 
     # base_tools（許可リスト）とのANDで返す

@@ -144,10 +144,36 @@
       ]
     },
     {
+      "id": 6,
+      "title": "Errors by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 17 },
+      "datasource": { "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (http_route, http_response_status_code) (increase(http_server_request_duration_seconds_count{job=~\"$service\", http_request_method=~\"$method\", http_response_status_code=~\"[45]..\"}[5m])) > 0",
+          "legendFormat": "{{http_route}} [{{http_response_status_code}}]"
+        }
+      ]
+    },
+    {
       "id": 4,
       "title": "Trace Search",
       "type": "table",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 17 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 25 },
       "datasource": { "uid": "tempo" },
       "targets": [
         {
@@ -161,7 +187,7 @@
       "id": 5,
       "title": "Request Logs (with trace correlation)",
       "type": "logs",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 27 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 35 },
       "datasource": { "uid": "loki" },
       "options": {
         "showTime": true,
