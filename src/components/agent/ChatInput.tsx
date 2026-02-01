@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useCompositionGuard } from '@/hooks/useCompositionGuard'
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -22,7 +23,10 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
     }
   }, [input, disabled, onSend])
 
+  const { isComposingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard()
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isComposingRef.current) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -44,6 +48,8 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         value={input}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
+        onCompositionStart={onCompositionStart}
+        onCompositionEnd={onCompositionEnd}
         placeholder={placeholder || 'メッセージを入力...'}
         disabled={disabled}
         rows={1}

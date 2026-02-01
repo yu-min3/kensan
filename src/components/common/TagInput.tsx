@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react'
+import { useCompositionGuard } from '@/hooks/useCompositionGuard'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -96,7 +97,10 @@ export function TagInput({
     }
   }
 
+  const { isComposingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard()
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingRef.current) return
     const totalItems = filteredTags.length + (canCreate ? 1 : 0)
 
     switch (e.key) {
@@ -192,6 +196,8 @@ export function TagInput({
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
           placeholder={placeholder}
           className="w-full"
         />
