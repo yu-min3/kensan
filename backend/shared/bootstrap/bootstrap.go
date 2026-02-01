@@ -4,6 +4,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,7 +20,6 @@ import (
 	"github.com/kensan/backend/shared/logging"
 	"github.com/kensan/backend/shared/middleware"
 	"github.com/kensan/backend/shared/telemetry"
-	"github.com/rs/zerolog/log"
 )
 
 // Service represents a microservice with its configuration and dependencies.
@@ -52,12 +52,9 @@ func WithWriteTimeout(d time.Duration) Option {
 // New creates a new Service with all common dependencies initialized.
 // It sets up logging, database connection, JWT manager, and router with middleware.
 func New(name string, opts ...Option) (*Service, error) {
-	// Setup logging
-	logging.SetupFromEnv()
-	logger := logging.ServiceLogger(name)
-
-	// Load configuration
+	// Setup logging (stdout/stderr only, OTel not yet initialized)
 	cfg := config.Load()
+	logging.Setup(cfg.Server.Env)
 
 	// Setup OpenTelemetry
 	ctx := context.Background()
@@ -68,11 +65,17 @@ func New(name string, opts ...Option) (*Service, error) {
 		Enabled:      cfg.Telemetry.Enabled,
 	})
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to initialize OpenTelemetry, continuing without it")
+		slog.Warn("Failed to initialize OpenTelemetry, continuing without it", "error", err)
 		otelProvider = &telemetry.Provider{}
 	}
+
+	// Re-configure logging with OTel bridge if available
+	if lp := otelProvider.LoggerProvider(); lp != nil {
+		logging.SetupWithOTel(cfg.Server.Env, lp)
+	}
+
 	if cfg.Telemetry.Enabled {
-		logger.Info().Str("collector", cfg.Telemetry.CollectorURL).Msg("OpenTelemetry initialized")
+		slog.Info("OpenTelemetry initialized", "collector", cfg.Telemetry.CollectorURL)
 	}
 
 	// Setup database connection
@@ -81,7 +84,7 @@ func New(name string, opts ...Option) (*Service, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	logger.Info().Msg("Connected to database")
+	slog.Info("Connected to database")
 
 	// Setup JWT manager
 	jwtManager := auth.NewJWTManager(cfg.JWT)
@@ -151,7 +154,7 @@ func (s *Service) Run() error {
 	// Start server in goroutine
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info().Str("addr", addr).Str("service", s.Name).Msg("Starting service")
+		slog.Info("Starting service", "addr", addr, "service", s.Name)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -165,7 +168,7 @@ func (s *Service) Run() error {
 	case err := <-errCh:
 		return fmt.Errorf("server error: %w", err)
 	case <-quit:
-		log.Info().Str("service", s.Name).Msg("Shutting down server...")
+		slog.Info("Shutting down server...", "service", s.Name)
 	}
 
 	// Graceful shutdown with timeout
@@ -176,7 +179,7 @@ func (s *Service) Run() error {
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
-	log.Info().Str("service", s.Name).Msg("Server exited properly")
+	slog.Info("Server exited properly", "service", s.Name)
 	return nil
 }
 
@@ -184,7 +187,7 @@ func (s *Service) Run() error {
 func (s *Service) Close() {
 	if s.otelProvider != nil {
 		if err := s.otelProvider.Shutdown(context.Background()); err != nil {
-			log.Warn().Err(err).Msg("Failed to shutdown OpenTelemetry")
+			slog.Warn("Failed to shutdown OpenTelemetry", "error", err)
 		}
 	}
 	if s.Pool != nil {

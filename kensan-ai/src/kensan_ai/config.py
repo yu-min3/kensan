@@ -40,11 +40,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
 
-    # Cloudflare R2 Storage
-    r2_endpoint: str = ""
-    r2_access_key: str = ""
-    r2_secret_key: str = ""
-    r2_bucket: str = "kensan-files"
+    # MinIO Storage (read-only access for note content)
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "kensan"
+    minio_secret_key: str = "kensan-minio"
+    minio_bucket: str = "kensan-notes"
+    minio_use_ssl: bool = False
 
     # JWT (for verifying tokens from user-service)
     jwt_secret: str = "dev-secret-key-change-in-production"

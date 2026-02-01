@@ -29,9 +29,8 @@ type TestEnv struct {
 	cancel       context.CancelFunc
 	pgContainer  *postgres.PostgresContainer
 	pool         *pgxpool.Pool
-	services     map[string]*ServiceProcess
-	clockifyMock *ClockifyMock
-	dbHost       string
+	services map[string]*ServiceProcess
+	dbHost   string
 	dbPort       string
 }
 
@@ -102,9 +101,6 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		dbPort:      port.Port(),
 	}
 
-	// Start Clockify mock server
-	env.clockifyMock = NewClockifyMock()
-
 	return env
 }
 
@@ -156,11 +152,6 @@ func (e *TestEnv) StartService(t *testing.T, serviceName string, port int) {
 		"SERVER_ENV=test",
 	}
 
-	// Add Clockify URL for sync service
-	if shortName == "sync" && e.clockifyMock != nil {
-		env = append(env, fmt.Sprintf("CLOCKIFY_BASE_URL=%s", e.clockifyMock.URL()))
-	}
-
 	// Start service
 	cmd := exec.Command(binPath)
 	cmd.Env = append(os.Environ(), env...)
@@ -208,11 +199,6 @@ func (e *TestEnv) Cleanup(t *testing.T) {
 			}
 			svc.cmd.Wait()
 		}
-	}
-
-	// Stop Clockify mock
-	if e.clockifyMock != nil {
-		e.clockifyMock.Close()
 	}
 
 	// Close database connection
@@ -270,14 +256,6 @@ func (e *TestEnv) Context() context.Context {
 // Pool returns the database connection pool
 func (e *TestEnv) Pool() *pgxpool.Pool {
 	return e.pool
-}
-
-// ClockifyMockURL returns the Clockify mock URL
-func (e *TestEnv) ClockifyMockURL() string {
-	if e.clockifyMock != nil {
-		return e.clockifyMock.URL()
-	}
-	return ""
 }
 
 // runMigrations runs database migrations

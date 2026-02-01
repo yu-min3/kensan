@@ -8,7 +8,7 @@ import (
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/service"
 	"github.com/kensan/backend/shared/middleware"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 // Handler handles HTTP requests for time blocks and time entries
@@ -66,7 +66,7 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 
 	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter)
 	if err != nil {
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to list time blocks")
+		slog.ErrorContext(r.Context(), "Failed to list time blocks", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list time blocks")
 		return
 	}

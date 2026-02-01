@@ -1,18 +1,21 @@
 package main
 
 import (
+	"log/slog"
+	"os"
+
 	"github.com/kensan/backend/services/timeblock/internal/handler"
 	"github.com/kensan/backend/services/timeblock/internal/repository"
 	"github.com/kensan/backend/services/timeblock/internal/service"
 	"github.com/kensan/backend/shared/bootstrap"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
 	// Initialize service with common configuration
 	svc, err := bootstrap.New("timeblock-service")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize service")
+		slog.Error("Failed to initialize service", "error", err)
+		os.Exit(1)
 	}
 	defer svc.Close()
 
@@ -26,6 +29,7 @@ func main() {
 
 	// Run server
 	if err := svc.Run(); err != nil {
-		log.Fatal().Err(err).Msg("Server error")
+		slog.Error("Server error", "error", err)
+		os.Exit(1)
 	}
 }

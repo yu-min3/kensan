@@ -69,7 +69,7 @@ async def backfill_embeddings(user_id: UUID, batch_size: int = 20) -> int:
         for row, emb in zip(rows, embeddings):
             vector = np.array(emb, dtype=np.float32)
             await conn.execute(
-                "UPDATE notes SET embedding = $1 WHERE id = $2",
+                "UPDATE notes SET embedding = $1, index_status = 'pending' WHERE id = $2",
                 vector,
                 row["id"],
             )

@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/note/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 var (
@@ -191,14 +191,14 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *no
 	for rows.Next() {
 		item, err := r.scanNoteListItem(rows)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan note list item")
+			slog.Error("Failed to scan note list item", "error", err)
 			return nil, err
 		}
 
 		// Get tag IDs for each note
 		tagIDs, err := r.GetTagIDs(ctx, item.ID)
 		if err != nil {
-			log.Error().Err(err).Str("noteID", item.ID).Msg("Failed to get tag IDs")
+			slog.Error("Failed to get tag IDs", "error", err, "noteID", item.ID)
 			return nil, err
 		}
 		item.TagIDs = tagIDs

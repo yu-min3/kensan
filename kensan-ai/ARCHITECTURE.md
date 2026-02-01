@@ -39,7 +39,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 | 埋め込み | OpenAI text-embedding-3-small |
 | データベース | PostgreSQL 16 + pgvector |
 | 非同期DB | asyncpg |
-| ストレージ | Cloudflare R2 (S3互換) |
+| ストレージ | MinIO (S3互換、読み取り専用) |
 
 ### ディレクトリ構成
 
@@ -59,8 +59,12 @@ kensan-ai/
 │   │   ├── base.py               # ツールレジストリ & デコレータ
 │   │   ├── db_tools.py           # データベース操作 (7ツール)
 │   │   ├── memory_tools.py       # ユーザーメモリ (4ツール)
-│   │   ├── search_tools.py       # セマンティック/キーワード検索 (5ツール: documents + notes)
-│   │   └── storage_tools.py      # R2ファイル操作 (4ツール)
+│   │   └── search_tools.py       # セマンティック/キーワード検索 (6ツール: note_content_chunks + notes)
+│   ├── storage/                   # ストレージクライアント
+│   │   └── minio_client.py       # MinIO読み取りクライアント
+│   ├── indexing/                   # インデックスパイプライン
+│   │   ├── chunker.py            # コンテンツチャンク分割
+│   │   └── pipeline.py           # リインデックスパイプライン
 │   ├── lib/                       # 共有ユーティリティ
 │   │   └── parsers.py            # UUID、日付、時刻パース
 │   ├── context/                   # AIコンテキスト管理
@@ -88,7 +92,9 @@ kensan-ai/
 │   ├── test_message_history.py
 │   ├── test_parsers.py
 │   ├── test_config.py
-│   └── test_chat.py             # ツール選択テスト (21テスト)
+│   ├── test_chat.py             # ツール選択テスト (40テスト)
+│   ├── test_chunker.py          # チャンク分割テスト (27テスト)
+│   └── test_minio_client.py     # MinIOクライアントテスト (5テスト)
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
@@ -380,30 +386,17 @@ async def create_time_block(args: dict) -> dict:
 
 | ツール | 説明 |
 |-------|------|
-| `semantic_search` | ベクトル類似検索 - documentsテーブル (pgvector) |
-| `keyword_search` | 全文検索 - documentsテーブル (tsvector) |
-| `hybrid_search` | セマンティック + キーワード複合 - documentsテーブル |
+| `semantic_search` | ベクトル類似検索 - note_content_chunksテーブル (pgvector) |
+| `keyword_search` | 全文検索 - note_content_chunksテーブル (tsvector) |
+| `hybrid_search` | セマンティック + キーワード複合 - note_content_chunksテーブル |
 | `search_notes` | キーワード全文検索 - notesテーブル (title + content) |
 | `semantic_search_notes` | ベクトル類似検索 - notesテーブル (pgvector) |
+| `reindex_notes` | pendingノートのチャンク分割 + embedding一括生成 |
 
 **ハイブリッド検索アルゴリズム:**
 ```python
 combined_score = semantic_score * weight + keyword_score * (1 - weight)
 # デフォルト重み: 0.7 (セマンティック重視)
-```
-
-### ストレージツール (`storage_tools.py`)
-
-| ツール | 説明 |
-|-------|------|
-| `upload_file` | R2にファイルアップロード |
-| `get_file` | ファイルメタデータ取得 |
-| `delete_file` | ファイル削除 |
-| `get_upload_url` | 署名付きアップロードURL生成 |
-
-**キー生成:**
-```
-users/{user_id}/{timestamp}/{uuid}_{filename}
 ```
 
 ---
@@ -551,20 +544,20 @@ def select_tools(message, base_tools, situation="auto", context_keys=None) -> li
 | `notes_read` | get_notes | Read |
 | `notes_write` | create/update_note, create_memo | Write |
 | `analytics` | get_analytics_summary, get_daily_summary, get_goals_and_milestones | Read |
-| `search` | semantic_search, keyword_search, hybrid_search | Read |
+| `search` | semantic_search, keyword_search, hybrid_search, reindex_notes | Read/Write |
 | `review` | get_reviews, get_review, generate_weekly_review | Read/Write |
 | `memory` | get_user_memory, get_user_facts, get_recent_interactions, add_user_fact | Read/Write |
-| `files` | upload_file, get_file, delete_file, get_upload_url | Read/Write |
 
 **Read/Write意図分離:**
 
 Writeツールは明示的な書き込みキーワード（「作って」「追加して」「削除して」等）がある場合のみ選択される:
 
 ```python
-WRITE_KEYWORDS = ["作って", "追加して", "入れて", "変更して", "削除して", ...]
+WRITE_KEYWORDS = ["作って", "追加して", "入れて", "変更して", "削除して", "インデックス", ...]
 
 # 例: "このままで目標達成できそう？" → Read only → 7 tools (Write除外)
 # 例: "明日の予定を作って" → Read + Write → planning グループ追加
+# 例: "ノートをインデックスして" → Read + Write → search グループ (reindex_notes含む)
 ```
 
 **Situationベース選択:**
@@ -893,22 +886,22 @@ class EmbeddingService:
 
 ### 検索実装
 
-**ドキュメントテーブル:**
+**note_content_chunksテーブル:**
 ```sql
 id UUID PRIMARY KEY
+note_id UUID
 user_id UUID
-name VARCHAR(255)
-content_type VARCHAR(50)  -- note/diary/learning_record
-content TEXT
+chunk_index INTEGER
+chunk_text TEXT
 embedding vector(1536)    -- pgvector
 created_at TIMESTAMP
 ```
 
 **セマンティック検索:**
 ```sql
-SELECT id, name, content_type,
+SELECT id, note_id, chunk_text,
        1 - (embedding <=> $2) as similarity
-FROM documents
+FROM note_content_chunks
 WHERE user_id = $1
 ORDER BY embedding <=> $2
 LIMIT $3
@@ -916,11 +909,11 @@ LIMIT $3
 
 **キーワード検索:**
 ```sql
-SELECT id, name, content_type,
-       ts_rank(to_tsvector('simple', content), query) as rank
-FROM documents, plainto_tsquery('simple', $2) query
+SELECT id, note_id, chunk_text,
+       ts_rank(to_tsvector('simple', chunk_text), query) as rank
+FROM note_content_chunks, plainto_tsquery('simple', $2) query
 WHERE user_id = $1
-  AND to_tsvector('simple', content) @@ query
+  AND to_tsvector('simple', chunk_text) @@ query
 ORDER BY rank DESC
 ```
 
@@ -1231,10 +1224,11 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # ストレージ
-    R2_ENDPOINT: str | None = None
-    R2_ACCESS_KEY: str | None = None
-    R2_SECRET_KEY: str | None = None
-    R2_BUCKET: str | None = None
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "kensan"
+    MINIO_SECRET_KEY: str = "kensan-minio"
+    MINIO_BUCKET: str = "kensan-notes"
+    MINIO_USE_SSL: bool = False
 
     # サーバー
     SERVER_PORT: int = 8089
@@ -1290,7 +1284,11 @@ DB_NAME=kensan
 
 # オプション
 OPENAI_API_KEY=sk-...          # 埋め込み用
-R2_ENDPOINT=https://...        # ファイルストレージ用
+MINIO_ENDPOINT=localhost:9000  # ファイルストレージ用
+MINIO_ACCESS_KEY=kensan
+MINIO_SECRET_KEY=kensan-minio
+MINIO_BUCKET=kensan-notes
+MINIO_USE_SSL=false
 JWT_SECRET=your-secret-key
 ```
 

@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-01-22
+**Related**: ADR-0007 (非正規化戦略)
 
 ---
 

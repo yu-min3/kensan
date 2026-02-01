@@ -1,4 +1,4 @@
-"""Search tools for semantic and keyword-based document search."""
+"""Search tools for semantic and keyword-based search on note content chunks."""
 
 import logging
 from typing import Any
@@ -23,7 +23,7 @@ def _parse_uuid(value: str | None) -> UUID | None:
 
 @tool(
     name="semantic_search",
-    description="ベクトル類似度を使用してドキュメントを検索します。意味的に類似したコンテンツを見つけるのに適しています。",
+    description="ベクトル類似度を使用してノートのチャンクを検索します。意味的に類似したコンテンツを見つけるのに適しています。",
     input_schema={
         "properties": {
             "query": {
@@ -36,14 +36,14 @@ def _parse_uuid(value: str | None) -> UUID | None:
             },
             "content_type": {
                 "type": "string",
-                "description": "コンテンツタイプでフィルタ (例: 'note', 'diary')",
+                "description": "コンテンツタイプでフィルタ (例: 'markdown', 'code', 'drawio')",
             },
         },
         "required": ["query"],
     },
 )
 async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
-    """Perform semantic search using vector similarity."""
+    """Perform semantic search on note_content_chunks using vector similarity."""
     user_id = _parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
@@ -56,21 +56,20 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
     content_type = args.get("content_type")
 
     try:
-        # Generate embedding for the query
         embedding_service = get_embedding_service()
         query_embedding = await embedding_service.generate_embedding(query)
 
-        # Search using pgvector
         async with get_connection() as conn:
-            # Build the query with optional content_type filter
             if content_type:
                 rows = await conn.fetch(
                     """
-                    SELECT id, name, content_type, content,
-                           1 - (embedding <=> $1::vector) as similarity
-                    FROM documents
-                    WHERE user_id = $2 AND content_type = $3
-                    ORDER BY embedding <=> $1::vector
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
+                           1 - (ncc.embedding <=> $1::vector) as similarity
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    WHERE ncc.user_id = $2 AND ncc.content_type = $3 AND ncc.embedding IS NOT NULL
+                    ORDER BY ncc.embedding <=> $1::vector
                     LIMIT $4
                     """,
                     query_embedding,
@@ -81,11 +80,13 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT id, name, content_type, content,
-                           1 - (embedding <=> $1::vector) as similarity
-                    FROM documents
-                    WHERE user_id = $2
-                    ORDER BY embedding <=> $1::vector
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
+                           1 - (ncc.embedding <=> $1::vector) as similarity
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    WHERE ncc.user_id = $2 AND ncc.embedding IS NOT NULL
+                    ORDER BY ncc.embedding <=> $1::vector
                     LIMIT $3
                     """,
                     query_embedding,
@@ -96,9 +97,12 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
             results = [
                 {
                     "id": str(row["id"]),
-                    "name": row["name"],
+                    "noteId": str(row["note_id"]),
+                    "noteTitle": row["note_title"],
+                    "noteType": row["note_type"],
+                    "chunkIndex": row["chunk_index"],
                     "contentType": row["content_type"],
-                    "content": row["content"][:500] + "..." if row["content"] and len(row["content"]) > 500 else row["content"],
+                    "content": row["chunk_text"][:500] + "..." if row["chunk_text"] and len(row["chunk_text"]) > 500 else row["chunk_text"],
                     "similarity": round(row["similarity"], 4),
                 }
                 for row in rows
@@ -113,7 +117,7 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     name="keyword_search",
-    description="キーワードベースの全文検索を行います。特定の単語やフレーズを含むドキュメントを見つけるのに適しています。",
+    description="キーワードベースの全文検索をノートチャンクに対して行います。特定の単語やフレーズを含むコンテンツを見つけるのに適しています。",
     input_schema={
         "properties": {
             "query": {
@@ -126,14 +130,14 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
             },
             "content_type": {
                 "type": "string",
-                "description": "コンテンツタイプでフィルタ (例: 'note', 'diary')",
+                "description": "コンテンツタイプでフィルタ (例: 'markdown', 'code', 'drawio')",
             },
         },
         "required": ["query"],
     },
 )
 async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
-    """Perform keyword-based full-text search using PostgreSQL tsvector."""
+    """Perform keyword-based full-text search on note_content_chunks."""
     user_id = _parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
@@ -146,21 +150,21 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
     content_type = args.get("content_type")
 
     try:
-        # Convert query to tsquery format (words joined with &)
         keywords = query.split()
         tsquery = " & ".join(keywords)
 
         async with get_connection() as conn:
-            # Build the query with optional content_type filter
             if content_type:
                 rows = await conn.fetch(
                     """
-                    SELECT id, name, content_type, content,
-                           ts_rank(to_tsvector('simple', content), to_tsquery('simple', $1)) as rank
-                    FROM documents
-                    WHERE user_id = $2
-                      AND content_type = $3
-                      AND to_tsvector('simple', content) @@ to_tsquery('simple', $1)
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
+                           ts_rank(to_tsvector('simple', ncc.chunk_text), to_tsquery('simple', $1)) as rank
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    WHERE ncc.user_id = $2
+                      AND ncc.content_type = $3
+                      AND to_tsvector('simple', ncc.chunk_text) @@ to_tsquery('simple', $1)
                     ORDER BY rank DESC
                     LIMIT $4
                     """,
@@ -172,11 +176,13 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT id, name, content_type, content,
-                           ts_rank(to_tsvector('simple', content), to_tsquery('simple', $1)) as rank
-                    FROM documents
-                    WHERE user_id = $2
-                      AND to_tsvector('simple', content) @@ to_tsquery('simple', $1)
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
+                           ts_rank(to_tsvector('simple', ncc.chunk_text), to_tsquery('simple', $1)) as rank
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    WHERE ncc.user_id = $2
+                      AND to_tsvector('simple', ncc.chunk_text) @@ to_tsquery('simple', $1)
                     ORDER BY rank DESC
                     LIMIT $3
                     """,
@@ -188,9 +194,12 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
             results = [
                 {
                     "id": str(row["id"]),
-                    "name": row["name"],
+                    "noteId": str(row["note_id"]),
+                    "noteTitle": row["note_title"],
+                    "noteType": row["note_type"],
+                    "chunkIndex": row["chunk_index"],
                     "contentType": row["content_type"],
-                    "content": row["content"][:500] + "..." if row["content"] and len(row["content"]) > 500 else row["content"],
+                    "content": row["chunk_text"][:500] + "..." if row["chunk_text"] and len(row["chunk_text"]) > 500 else row["chunk_text"],
                     "rank": round(row["rank"], 4),
                 }
                 for row in rows
@@ -218,7 +227,7 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
             },
             "content_type": {
                 "type": "string",
-                "description": "コンテンツタイプでフィルタ (例: 'note', 'diary')",
+                "description": "コンテンツタイプでフィルタ (例: 'markdown', 'code', 'drawio')",
             },
             "semantic_weight": {
                 "type": "number",
@@ -229,7 +238,7 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
     },
 )
 async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
-    """Perform hybrid search combining semantic and keyword search."""
+    """Perform hybrid search combining semantic and keyword search on note_content_chunks."""
     user_id = _parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
@@ -242,43 +251,41 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
     content_type = args.get("content_type")
     semantic_weight = args.get("semantic_weight", 0.7)
 
-    # Clamp semantic_weight to valid range
     semantic_weight = max(0.0, min(1.0, semantic_weight))
     keyword_weight = 1.0 - semantic_weight
 
     try:
-        # Generate embedding for the query
         embedding_service = get_embedding_service()
         query_embedding = await embedding_service.generate_embedding(query)
 
-        # Convert query to tsquery format
         keywords = query.split()
-        tsquery = " | ".join(keywords)  # Use OR for broader matching
+        tsquery = " | ".join(keywords)  # OR for broader matching
 
         async with get_connection() as conn:
-            # Complex hybrid query
             if content_type:
                 rows = await conn.fetch(
                     """
                     WITH semantic AS (
                         SELECT id, 1 - (embedding <=> $1::vector) as semantic_score
-                        FROM documents
-                        WHERE user_id = $2 AND content_type = $3
+                        FROM note_content_chunks
+                        WHERE user_id = $2 AND content_type = $3 AND embedding IS NOT NULL
                     ),
                     keyword AS (
                         SELECT id,
-                               ts_rank(to_tsvector('simple', content), to_tsquery('simple', $4)) as keyword_score
-                        FROM documents
+                               ts_rank(to_tsvector('simple', chunk_text), to_tsquery('simple', $4)) as keyword_score
+                        FROM note_content_chunks
                         WHERE user_id = $2 AND content_type = $3
                     )
-                    SELECT d.id, d.name, d.content_type, d.content,
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
                            COALESCE(s.semantic_score, 0) as semantic_score,
                            COALESCE(k.keyword_score, 0) as keyword_score,
                            (COALESCE(s.semantic_score, 0) * $5 + COALESCE(k.keyword_score, 0) * $6) as combined_score
-                    FROM documents d
-                    LEFT JOIN semantic s ON d.id = s.id
-                    LEFT JOIN keyword k ON d.id = k.id
-                    WHERE d.user_id = $2 AND d.content_type = $3
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    LEFT JOIN semantic s ON ncc.id = s.id
+                    LEFT JOIN keyword k ON ncc.id = k.id
+                    WHERE ncc.user_id = $2 AND ncc.content_type = $3
                     ORDER BY combined_score DESC
                     LIMIT $7
                     """,
@@ -295,23 +302,25 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
                     """
                     WITH semantic AS (
                         SELECT id, 1 - (embedding <=> $1::vector) as semantic_score
-                        FROM documents
-                        WHERE user_id = $2
+                        FROM note_content_chunks
+                        WHERE user_id = $2 AND embedding IS NOT NULL
                     ),
                     keyword AS (
                         SELECT id,
-                               ts_rank(to_tsvector('simple', content), to_tsquery('simple', $3)) as keyword_score
-                        FROM documents
+                               ts_rank(to_tsvector('simple', chunk_text), to_tsquery('simple', $3)) as keyword_score
+                        FROM note_content_chunks
                         WHERE user_id = $2
                     )
-                    SELECT d.id, d.name, d.content_type, d.content,
+                    SELECT ncc.id, ncc.chunk_text, ncc.chunk_index, ncc.content_type,
+                           ncc.note_id, n.title as note_title, n.type as note_type,
                            COALESCE(s.semantic_score, 0) as semantic_score,
                            COALESCE(k.keyword_score, 0) as keyword_score,
                            (COALESCE(s.semantic_score, 0) * $4 + COALESCE(k.keyword_score, 0) * $5) as combined_score
-                    FROM documents d
-                    LEFT JOIN semantic s ON d.id = s.id
-                    LEFT JOIN keyword k ON d.id = k.id
-                    WHERE d.user_id = $2
+                    FROM note_content_chunks ncc
+                    JOIN notes n ON ncc.note_id = n.id
+                    LEFT JOIN semantic s ON ncc.id = s.id
+                    LEFT JOIN keyword k ON ncc.id = k.id
+                    WHERE ncc.user_id = $2
                     ORDER BY combined_score DESC
                     LIMIT $6
                     """,
@@ -326,9 +335,12 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
             results = [
                 {
                     "id": str(row["id"]),
-                    "name": row["name"],
+                    "noteId": str(row["note_id"]),
+                    "noteTitle": row["note_title"],
+                    "noteType": row["note_type"],
+                    "chunkIndex": row["chunk_index"],
                     "contentType": row["content_type"],
-                    "content": row["content"][:500] + "..." if row["content"] and len(row["content"]) > 500 else row["content"],
+                    "content": row["chunk_text"][:500] + "..." if row["chunk_text"] and len(row["chunk_text"]) > 500 else row["chunk_text"],
                     "semanticScore": round(row["semantic_score"], 4),
                     "keywordScore": round(row["keyword_score"], 4),
                     "combinedScore": round(row["combined_score"], 4),
@@ -531,34 +543,37 @@ async def semantic_search_notes(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
-    name="backfill_note_embeddings",
-    description="embeddingが未生成のノートに対してベクトルembeddingを一括生成します。semantic_search_notesの検索精度を高めるために使用します。",
+    name="reindex_notes",
+    description="インデックス未生成のノートに対してチャンク分割とembedding生成を一括実行します。検索精度を高めるために使用します。",
     input_schema={
         "properties": {
             "batch_size": {
                 "type": "integer",
-                "description": "一度に処理する最大件数 (デフォルト: 20)",
+                "description": "一度に処理する最大件数 (デフォルト: 10)",
             },
         },
         "required": [],
     },
 )
-async def backfill_note_embeddings(args: dict[str, Any]) -> dict[str, Any]:
-    """Generate embeddings for notes that are missing them."""
-    from kensan_ai.db.queries.notes import backfill_embeddings
+async def reindex_notes(args: dict[str, Any]) -> dict[str, Any]:
+    """Reindex pending notes: chunk content and generate embeddings."""
+    from kensan_ai.indexing.pipeline import reindex_pending_notes
 
     user_id = _parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
 
-    batch_size = args.get("batch_size", 20)
+    batch_size = args.get("batch_size", 10)
 
     try:
-        count = await backfill_embeddings(user_id, batch_size=batch_size)
-        return {"processed": count, "message": f"{count}件のノートにembeddingを生成しました"}
+        result = await reindex_pending_notes(user_id, batch_size=batch_size)
+        return {
+            **result,
+            "message": f"{result['processed']}件のノートをインデックス化し、{result['chunks_created']}個のチャンクを生成しました",
+        }
     except Exception as e:
-        logger.error(f"Backfill embeddings failed: {e}")
-        return {"error": f"Backfill failed: {str(e)}"}
+        logger.error(f"Reindex notes failed: {e}")
+        return {"error": f"Reindex failed: {str(e)}"}
 
 
 # All search tools for export
@@ -568,5 +583,5 @@ ALL_SEARCH_TOOLS = [
     hybrid_search,
     search_notes,
     semantic_search_notes,
-    backfill_note_embeddings,
+    reindex_notes,
 ]

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/google/uuid"
 	"github.com/kensan/backend/shared/auth"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type contextKey string
@@ -45,22 +45,13 @@ func Logger(next http.Handler) http.Handler {
 		next.ServeHTTP(wrapped, r)
 
 		requestID, _ := r.Context().Value(RequestIDKey).(string)
-		logEvent := log.Info().
-			Str("request_id", requestID).
-			Str("method", r.Method).
-			Str("path", r.URL.Path).
-			Int("status", wrapped.statusCode).
-			Dur("duration", time.Since(start))
-
-		// Inject trace context if available (for Loki correlation)
-		span := trace.SpanFromContext(r.Context())
-		if span.SpanContext().IsValid() {
-			logEvent = logEvent.
-				Str("trace_id", span.SpanContext().TraceID().String()).
-				Str("span_id", span.SpanContext().SpanID().String())
-		}
-
-		logEvent.Msg("request completed")
+		slog.InfoContext(r.Context(), "request completed",
+			"request_id", requestID,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", wrapped.statusCode,
+			"duration", time.Since(start),
+		)
 	})
 }
 

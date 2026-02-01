@@ -18,7 +18,7 @@ Kensan is a personal productivity application for time tracking, task management
 **Target User**: Engineers pursuing self-improvement goals (e.g., Golden Kubestronaut certification)
 
 **Key Features**:
-- Clockify integration for time tracking sync
+- Built-in time tracking with timer
 - Morning planning / Evening reflection workflow
 - Learning record management (Markdown/Drawio)
 - AI-powered weekly reviews via Claude API
@@ -156,11 +156,10 @@ PostgreSQL 16 with migrations in `backend/migrations/`. Key design decisions:
 
 - **Multi-tenancy**: Every table has `user_id` column for complete data isolation
 - **UUID Primary Keys**: Using PostgreSQL's uuid-ossp extension
-- **Encrypted Storage**: Clockify API key encrypted via pgcrypto
-- **Audit Trails**: Automatic `updated_at` via triggers
+- **Auto-updated Timestamps**: `updated_at` columns automatically maintained via PostgreSQL triggers
 - **Denormalization**: `project_name`, `goal_tag` duplicated for query performance
 
-**Core Tables**: users, user_settings, goals, milestones, tags, tasks, time_blocks, time_entries, routine_tasks, notes, memos, ai_review_reports, sync_status
+**Core Tables**: users, user_settings, goals, milestones, tags, tasks, time_blocks, time_entries, running_timers, routine_tasks, notes, memos, ai_review_reports
 
 ---
 
@@ -281,8 +280,6 @@ Error responses:
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
 | `JWT_SECRET` | JWT signing key |
 | `ANTHROPIC_API_KEY` | For AI service (Claude API) |
-| `CLOCKIFY_BASE_URL` | Clockify API base URL |
-| `DB_ENCRYPTION_KEY` | Key for encrypting sensitive data |
 
 ---
 
@@ -359,10 +356,6 @@ Error responses:
 **"Database connection failed"**
 - Ensure PostgreSQL is running: `docker ps | grep postgres`
 - Check connection string in environment variables
-
-**"Clockify sync not working"**
-- Verify API key is configured in settings
-- Check sync-service logs: `docker logs kensan-sync-service`
 
 ### Useful Commands
 

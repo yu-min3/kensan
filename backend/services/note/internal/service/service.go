@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/kensan/backend/services/note/internal"
@@ -688,7 +688,7 @@ func (s *Service) DeleteContent(ctx context.Context, userID, noteID, contentID s
 	if content.StorageKey != nil && s.storage != nil {
 		if err := s.storage.Delete(ctx, *content.StorageKey); err != nil {
 			// Log but don't fail - orphaned objects are less harmful than failed deletes
-			log.Warn().Err(err).Str("key", *content.StorageKey).Msg("Failed to delete storage object")
+			slog.Warn("Failed to delete storage object", "error", err, "key", *content.StorageKey)
 		}
 	}
 

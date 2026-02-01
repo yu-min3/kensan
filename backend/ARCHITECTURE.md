@@ -33,7 +33,7 @@ Kensanアプリケーションのバックエンド共通インフラストラ�
 | データベース | PostgreSQL | 16 |
 | DBドライバ | pgx | v5.7.2 |
 | JWT | golang-jwt | v5.2.1 |
-| ログ | zerolog | v1.33.0 |
+| ログ | slog + otelslog | Go標準 + v0.14.0 |
 | UUID | google/uuid | v1.6.0 |
 
 ### システムアーキテクチャ図
@@ -60,7 +60,7 @@ graph TB
 
     subgraph Storage
         PG[(PostgreSQL 16)]
-        R2[(Cloudflare R2)]
+        MinIO[(MinIO<br/>オブジェクトストレージ)]
     end
 
     subgraph "External APIs"
@@ -84,8 +84,9 @@ graph TB
     AS --> PG
     MS --> PG
     NS --> PG
+    NS --> MinIO
     AI --> PG
-    AI --> R2
+    AI --> MinIO
     AI --> Claude
     AI --> OpenAI
 ```
@@ -204,7 +205,7 @@ claims, err := jwtManager.ValidateToken(tokenString)
 - `RequestID` - リクエストごとのUUID（またはX-Request-IDヘッダーから取得）
 - `OTelTrace` - OpenTelemetry HTTPスパン計装（otelhttp）
 - `Metrics` - OTel HTTP SemConv準拠のリクエストdurationヒストグラム記録
-- `Logger` - zerologによる構造化ログ（trace_id/span_id自動注入）
+- `Logger` - slogによる構造化ログ（otelslogブリッジでtrace_id/span_id自動注入）
 - `Auth` - JWT検証、ユーザーID抽出
 
 ### Telemetry (`telemetry/telemetry.go`)
@@ -222,7 +223,7 @@ defer provider.Shutdown(ctx)
 ```
 
 **機能：**
-- OTLP HTTPエクスポーター（トレース＋メトリクス）
+- OTLP HTTPエクスポーター（トレース＋メトリクス＋ログ）
 - W3C TraceContext + Baggageプロパゲーター
 - リソース属性：`service.name`, `service.version`, `deployment.environment`
 - HTTPメトリクス（OTel HTTP SemConv準拠）：`http.server.request.duration`（ヒストグラム、属性: `http.request.method`, `http.route`, `http.response.status_code`）。Rate/Errorはhistogram countとstatus_code属性から導出
@@ -459,7 +460,8 @@ erDiagram
     users ||--o{ ai_interactions : "has"
     users ||--o| user_memory : "has"
     users ||--o{ user_facts : "has"
-    users ||--o{ documents : "owns"
+    users ||--o{ documents : "owns (DEPRECATED - removed in migration 037)"
+    users ||--o{ note_content_chunks : "owns (unified search - migration 037)"
     users ||--o{ ai_review_reports : "has"
 
     note_types ||--o{ notes : "defines type"
@@ -527,12 +529,36 @@ CREATE TABLE note_types (
 - `validateMetadata()` でメタデータスキーマに基づくバリデーション
 - `GET /note-types` エンドポイントでフロントエンドに提供
 
+### note_content_chunks テーブル（統合検索）
+
+ノート検索のためのベクトル埋め込みとチャンクを管理。migration 037 で `documents` テーブルを廃止し、note_content_chunks に統合。
+
+```sql
+CREATE TABLE note_content_chunks (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,                     -- migration 037で追加
+    note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    content_type VARCHAR(50),                  -- migration 037で追加 ('note', 'attachment', etc.)
+    chunk_text TEXT NOT NULL,
+    chunk_index INT NOT NULL,
+    embedding VECTOR(1536),                    -- OpenAI text-embedding-3-small
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+```
+
+**migration 037 の変更点:**
+- `documents` テーブルを削除（note_id, content_type, file_pathなどを持っていた）
+- `note_content_chunks` に `user_id UUID NOT NULL` カラムを追加
+- `note_content_chunks` に `content_type VARCHAR(50)` カラムを追加
+- 検索処理を note_content_chunks のみに統合
+
 ### 主要な設計原則
 
 - **マルチテナント**: 全テーブルに`user_id`カラムでデータ完全分離
 - **UUID主キー**: PostgreSQLのuuid-ossp拡張を使用
 - **非正規化**: クエリパフォーマンスのため`project_name`、`goal_tag`を複製
-- **監査証跡**: トリガーによる`updated_at`自動更新
+- **タイムスタンプ自動更新**: トリガーによる`updated_at`自動更新
 
 ### インデックスと制約
 
@@ -697,11 +723,13 @@ JWT_SECRET=your-secret-key
 ## 依存関係
 
 ```
-github.com/go-chi/chi/v5       v5.1.0
-github.com/go-chi/cors         v1.2.1
-github.com/golang-jwt/jwt/v5   v5.2.1
-github.com/google/uuid         v1.6.0
-github.com/jackc/pgx/v5        v5.7.2
-github.com/rs/zerolog          v1.33.0
-golang.org/x/crypto            v0.43.0
+github.com/go-chi/chi/v5                         v5.1.0
+github.com/go-chi/cors                           v1.2.1
+github.com/golang-jwt/jwt/v5                     v5.2.1
+github.com/google/uuid                           v1.6.0
+github.com/jackc/pgx/v5                          v5.7.4
+go.opentelemetry.io/contrib/bridges/otelslog     v0.14.0
+go.opentelemetry.io/otel/sdk/log                 v0.15.0
+go.opentelemetry.io/otel/exporters/otlp/otlplog  v0.15.0
+golang.org/x/crypto                              v0.46.0
 ```

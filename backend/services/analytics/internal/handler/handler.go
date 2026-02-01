@@ -10,7 +10,7 @@ import (
 	"github.com/kensan/backend/services/analytics/internal/service"
 	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 // Handler handles HTTP requests for analytics
@@ -56,11 +56,11 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		// Database schema errors
 		if sharedErrors.IsDatabaseSchema(err) {
-			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get summary")
+		slog.ErrorContext(r.Context(), "Failed to get summary", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get summary")
 		return
 	}
@@ -85,11 +85,11 @@ func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 		}
 		// Database schema errors
 		if sharedErrors.IsDatabaseSchema(err) {
-			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to get weekly summary")
+		slog.ErrorContext(r.Context(), "Failed to get weekly summary", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get weekly summary")
 		return
 	}
@@ -137,7 +137,7 @@ func (h *Handler) GetMonthlySummary(w http.ResponseWriter, r *http.Request) {
 		}
 		// Database schema errors
 		if sharedErrors.IsDatabaseSchema(err) {
-			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
@@ -178,7 +178,7 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 		}
 		// Database schema errors
 		if sharedErrors.IsDatabaseSchema(err) {
-			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}
@@ -217,7 +217,7 @@ func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 		}
 		// Database schema errors
 		if sharedErrors.IsDatabaseSchema(err) {
-			log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in analytics-service")
+			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 			return
 		}

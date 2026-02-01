@@ -10,7 +10,7 @@ import (
 	"github.com/kensan/backend/services/note/internal"
 	"github.com/kensan/backend/services/note/internal/service"
 	"github.com/kensan/backend/shared/middleware"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 // Handler handles HTTP requests for note operations
@@ -316,7 +316,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrStorageUnavailable):
 		middleware.Error(w, r, http.StatusServiceUnavailable, "STORAGE_UNAVAILABLE", "Storage service is not configured")
 	default:
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in note-service")
+		slog.ErrorContext(r.Context(), "Unhandled error in note-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
 }

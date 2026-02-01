@@ -10,7 +10,7 @@ import (
 	"github.com/kensan/backend/services/task/internal/service"
 	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 // Handler handles HTTP requests for tasks, goals, milestones, and tags
@@ -87,13 +87,13 @@ func (h *Handler) handleServiceError(w http.ResponseWriter, r *http.Request, err
 
 	// Database schema errors
 	if sharedErrors.IsDatabaseSchema(err) {
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Database schema error in task-service")
+		slog.ErrorContext(r.Context(), "Database schema error in task-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 		middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 		return true
 	}
 
 	// Default: internal error
-	log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in task-service")
+	slog.ErrorContext(r.Context(), "Unhandled error in task-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
 	if defaultMsg == "" {
 		defaultMsg = "An internal error occurred"
 	}

@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test'
 import path from 'node:path'
 
 const AUTH_FILE = path.join(import.meta.dirname, '.auth', 'user.json')
+const E2E_PORT = 5174
 
 export default defineConfig({
   testDir: './tests',
@@ -16,13 +17,20 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${E2E_PORT}`,
     storageState: AUTH_FILE,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
+  webServer: {
+    command: `npm run dev -- --port ${E2E_PORT}`,
+    url: `http://localhost:${E2E_PORT}`,
+    reuseExistingServer: !process.env.CI,
+    cwd: path.join(import.meta.dirname, '..'),
+    timeout: 30_000,
+  },
   projects: [
     {
       name: 'chromium',

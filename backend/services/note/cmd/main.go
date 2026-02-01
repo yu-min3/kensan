@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 
 	"github.com/kensan/backend/services/note/internal/handler"
@@ -9,14 +10,14 @@ import (
 	"github.com/kensan/backend/services/note/internal/service"
 	"github.com/kensan/backend/services/note/internal/storage"
 	"github.com/kensan/backend/shared/bootstrap"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
 	// Initialize service with common configuration
 	svc, err := bootstrap.New("note-service")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize service")
+		slog.Error("Failed to initialize service", "error", err)
+		os.Exit(1)
 	}
 	defer svc.Close()
 
@@ -37,12 +38,12 @@ func main() {
 
 		storageClient, err = storage.NewClient(storageCfg)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize storage client, file upload will be disabled")
+			slog.Warn("Failed to initialize storage client, file upload will be disabled", "error", err)
 		} else {
-			log.Info().Str("endpoint", endpoint).Str("bucket", storageCfg.Bucket).Msg("Storage client initialized")
+			slog.Info("Storage client initialized", "endpoint", endpoint, "bucket", storageCfg.Bucket)
 		}
 	} else {
-		log.Info().Msg("Storage not configured, file upload will be disabled")
+		slog.Info("Storage not configured, file upload will be disabled")
 	}
 
 	// Setup repository, service, and handler
@@ -51,9 +52,10 @@ func main() {
 
 	// Load note type configurations from database
 	if err := noteService.LoadNoteTypes(context.Background()); err != nil {
-		log.Fatal().Err(err).Msg("Failed to load note types")
+		slog.Error("Failed to load note types", "error", err)
+		os.Exit(1)
 	}
-	log.Info().Msg("Note types loaded successfully")
+	slog.Info("Note types loaded successfully")
 
 	noteHandler := handler.NewHandler(noteService)
 
@@ -62,6 +64,7 @@ func main() {
 
 	// Run server
 	if err := svc.Run(); err != nil {
-		log.Fatal().Err(err).Msg("Server error")
+		slog.Error("Server error", "error", err)
+		os.Exit(1)
 	}
 }

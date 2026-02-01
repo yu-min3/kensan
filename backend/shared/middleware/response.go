@@ -2,12 +2,12 @@ package middleware
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/shared/errors"
-	"github.com/rs/zerolog"
 )
 
 // Response is the standard API response format
@@ -205,7 +205,7 @@ func ValidateRequired(w http.ResponseWriter, r *http.Request, fields map[string]
 //	    middleware.HandleError(w, r, err, log)
 //	    return
 //	}
-func HandleError(w http.ResponseWriter, r *http.Request, err error, log zerolog.Logger) {
+func HandleError(w http.ResponseWriter, r *http.Request, err error, logger *slog.Logger) {
 	switch {
 	case errors.IsNotFound(err):
 		Error(w, r, http.StatusNotFound, "NOT_FOUND", err.Error())
@@ -216,10 +216,10 @@ func HandleError(w http.ResponseWriter, r *http.Request, err error, log zerolog.
 	case errors.IsUnauthorized(err):
 		Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", err.Error())
 	case errors.IsDatabaseSchema(err):
-		log.Error().Err(err).Str("request_id", GetRequestID(r.Context())).Msg("Database schema error")
+		logger.ErrorContext(r.Context(), "Database schema error", "error", err, "request_id", GetRequestID(r.Context()))
 		Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
 	default:
-		log.Error().Err(err).Str("request_id", GetRequestID(r.Context())).Msg("Unhandled error")
+		logger.ErrorContext(r.Context(), "Unhandled error", "error", err, "request_id", GetRequestID(r.Context()))
 		Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 	}
 }

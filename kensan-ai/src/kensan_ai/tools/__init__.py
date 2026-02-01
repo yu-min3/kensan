@@ -53,14 +53,8 @@ from kensan_ai.tools.search_tools import (
     semantic_search,
     keyword_search,
     hybrid_search,
+    reindex_notes,
     ALL_SEARCH_TOOLS,
-)
-from kensan_ai.tools.storage_tools import (
-    upload_file,
-    get_file,
-    delete_file,
-    get_upload_url,
-    ALL_STORAGE_TOOLS,
 )
 from kensan_ai.tools.review_tools import (
     get_reviews,
@@ -79,7 +73,6 @@ ALL_TOOLS = [
     *ALL_DB_TOOLS,
     *ALL_MEMORY_TOOLS,
     *ALL_SEARCH_TOOLS,
-    *ALL_STORAGE_TOOLS,
     *ALL_REVIEW_TOOLS,
     *ALL_ANALYTICS_TOOLS,
 ]
@@ -127,13 +120,8 @@ __all__ = [
     "semantic_search",
     "keyword_search",
     "hybrid_search",
+    "reindex_notes",
     "ALL_SEARCH_TOOLS",
-    # Storage Tools
-    "upload_file",
-    "get_file",
-    "delete_file",
-    "get_upload_url",
-    "ALL_STORAGE_TOOLS",
     # Review Tools
     "get_reviews",
     "get_review",

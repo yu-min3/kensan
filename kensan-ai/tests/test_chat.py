@@ -226,3 +226,52 @@ class TestToolCount:
         """マッチなしでもツールは最小限"""
         result = select_tools("こんにちは", BASE)
         assert len(result) <= 6, f"Too many tools for greeting: {len(result)} tools: {result}"
+
+
+class TestSelectToolsSearch:
+    """検索グループのツール選択テスト。"""
+
+    def test_search_keyword_includes_search_group(self):
+        """「検索して」→ search グループ含む"""
+        result = select_tools("ノートを検索して", BASE)
+        assert "semantic_search" in result
+        assert "keyword_search" in result
+        assert "hybrid_search" in result
+
+    def test_reindex_not_in_allowed_tools(self):
+        """reindex_notesはALLOWED_TOOLSに含まれない → select_toolsから除外"""
+        from kensan_ai.agents.chat import TOOL_GROUPS
+        # reindex_notes is in search group
+        assert "reindex_notes" in TOOL_GROUPS["search"]
+        # but not in ALLOWED_TOOLS
+        assert "reindex_notes" not in ALLOWED_TOOLS
+        # so it won't appear in result
+        result = select_tools("検索して", BASE)
+        assert "reindex_notes" not in result
+
+    def test_explore_keyword_includes_search(self):
+        """「探して」→ search グループ含む"""
+        result = select_tools("CKAについて探して", BASE)
+        assert "semantic_search" in result
+
+    def test_investigate_keyword_includes_search(self):
+        """「調べて」→ search グループ含む"""
+        result = select_tools("Istioについて調べて", BASE)
+        assert "semantic_search" in result
+
+
+class TestSelectToolsNoFiles:
+    """ファイル関連ツールが存在しないことのテスト。"""
+
+    def test_no_upload_file_in_allowed_tools(self):
+        """upload_fileがALLOWED_TOOLSに含まれない"""
+        assert "upload_file" not in ALLOWED_TOOLS
+
+    def test_no_download_file_in_allowed_tools(self):
+        """download_fileがALLOWED_TOOLSに含まれない"""
+        assert "download_file" not in ALLOWED_TOOLS
+
+    def test_no_files_tool_group(self):
+        """filesツールグループが存在しない"""
+        from kensan_ai.agents.chat import TOOL_GROUPS
+        assert "files" not in TOOL_GROUPS

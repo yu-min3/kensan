@@ -71,11 +71,6 @@ ALLOWED_TOOLS = [
     "semantic_search",
     "keyword_search",
     "hybrid_search",
-    # File tools
-    "upload_file",
-    "get_file",
-    "delete_file",
-    "get_upload_url",
     # Write tools
     "create_task",
     "update_task",
@@ -145,6 +140,7 @@ TOOL_GROUPS: dict[str, list[str]] = {
         "semantic_search",
         "keyword_search",
         "hybrid_search",
+        "reindex_notes",
     ],
     "review": [  # レビュー
         "get_reviews",
@@ -156,12 +152,6 @@ TOOL_GROUPS: dict[str, list[str]] = {
         "get_user_facts",
         "get_recent_interactions",
         "add_user_fact",
-    ],
-    "files": [  # ファイル操作
-        "upload_file",
-        "get_file",
-        "delete_file",
-        "get_upload_url",
     ],
 }
 
@@ -201,7 +191,6 @@ INTENT_READ_PATTERNS: list[tuple[list[str], list[str]]] = [
     (["分析", "進捗", "レポート", "サマリー", "振り返り"], ["analytics", "review"]),
     (["検索", "探して", "調べて", "どこ"], ["search"]),
     (["レビュー", "週次", "ウィークリー"], ["review", "analytics"]),
-    (["ファイル", "画像"], ["files"]),
 ]
 
 # 変更系: 明示的な書き込み意図があるときだけ追加
@@ -219,7 +208,6 @@ INTENT_WRITE_PATTERNS: list[tuple[list[str], list[str]]] = [
     (["タスク", "やること", "TODO"], ["task"]),
     (["目標", "ゴール", "マイルストーン"], ["goals_write"]),
     (["ノート", "メモ", "日記", "記録"], ["notes_write"]),
-    (["ファイル", "アップロード"], ["files"]),
 ]
 
 

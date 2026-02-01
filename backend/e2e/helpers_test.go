@@ -199,12 +199,9 @@ type ProfileResponse struct {
 
 // SettingsResponseData represents user settings data
 type SettingsResponseData struct {
-	ClockifyAPIKey string `json:"clockifyApiKey"`
-	WorkspaceID    string `json:"workspaceId"`
-	WorkspaceName  string `json:"workspaceName"`
-	Timezone       string `json:"timezone"`
-	Theme          string `json:"theme"`
-	IsConfigured   bool   `json:"isConfigured"`
+	Timezone     string `json:"timezone"`
+	Theme        string `json:"theme"`
+	IsConfigured bool   `json:"isConfigured"`
 }
 
 // SettingsResponse is the full API response for settings
@@ -214,54 +211,8 @@ type SettingsResponse struct {
 
 // UpdateSettingsRequest represents settings update request
 type UpdateSettingsRequest struct {
-	ClockifyAPIKey *string `json:"clockifyApiKey,omitempty"`
-	WorkspaceID    *string `json:"workspaceId,omitempty"`
-	WorkspaceName  *string `json:"workspaceName,omitempty"`
-	Timezone       *string `json:"timezone,omitempty"`
-	Theme          *string `json:"theme,omitempty"`
-}
-
-// WorkspacesRequest represents request for getting workspaces
-type WorkspacesRequest struct {
-	APIKey string `json:"apiKey"`
-}
-
-// WorkspacesResponseData represents workspaces response data
-type WorkspacesResponseData struct {
-	User struct {
-		ID              string `json:"id"`
-		Email           string `json:"email"`
-		Name            string `json:"name"`
-		ActiveWorkspace string `json:"activeWorkspace"`
-	} `json:"user"`
-	Workspaces []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"workspaces"`
-}
-
-// WorkspacesResponse is the full API response for workspaces
-type WorkspacesResponse struct {
-	Data WorkspacesResponseData `json:"data"`
-}
-
-// SyncStatusResponse represents sync status response
-type SyncStatusResponse struct {
-	Data struct {
-		UserID     string  `json:"userId"`
-		LastSyncAt *string `json:"lastSyncAt"`
-		Status     string  `json:"status"`
-	} `json:"data"`
-}
-
-// SyncResultResponse represents sync result response
-type SyncResultResponse struct {
-	Data struct {
-		ProjectsCreated int `json:"projectsCreated"`
-		ProjectsUpdated int `json:"projectsUpdated"`
-		EntriesCreated  int `json:"entriesCreated"`
-		EntriesUpdated  int `json:"entriesUpdated"`
-	} `json:"data"`
+	Timezone *string `json:"timezone,omitempty"`
+	Theme    *string `json:"theme,omitempty"`
 }
 
 // ErrorResponse represents an error response

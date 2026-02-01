@@ -307,10 +307,11 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
-      R2_ENDPOINT: ${R2_ENDPOINT:-}
-      R2_ACCESS_KEY: ${R2_ACCESS_KEY:-}
-      R2_SECRET_KEY: ${R2_SECRET_KEY:-}
-      R2_BUCKET: ${R2_BUCKET:-kensan-files}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: kensan
+      MINIO_SECRET_KEY: kensan-minio
+      MINIO_BUCKET: kensan-notes
+      MINIO_USE_SSL: "false"
       OTEL_ENABLED: "true"
       OTEL_COLLECTOR_URL: "otel-collector:4318"
       OTEL_SEMCONV_STABILITY_OPT_IN: "http"
@@ -318,6 +319,8 @@ services:
       - "8089:8089"
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - kensan-network

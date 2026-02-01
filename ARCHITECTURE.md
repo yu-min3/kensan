@@ -50,7 +50,7 @@ graph TB
 
     subgraph "データストア"
         PG[("PostgreSQL 16<br/>+ pgvector")]
-        R2[("Cloudflare R2<br/>ファイルストレージ")]
+        MinIO[("MinIO<br/>オブジェクトストレージ")]
     end
 
     subgraph "外部API"
@@ -74,8 +74,9 @@ graph TB
     AS --> PG
     MS --> PG
     NS --> PG
+    NS --> MinIO
     AI --> PG
-    AI --> R2
+    AI -->|読み取り専用| MinIO
     AI --> Claude
     AI --> OpenAI
 ```
@@ -113,7 +114,7 @@ graph TB
 | | Anthropic SDK | 0.40+ | Claude API |
 | | OpenAI SDK | 1.50+ | 埋め込みAPI |
 | **インフラ** | PostgreSQL | 16 | メインDB + pgvector |
-| | Cloudflare R2 | - | ファイルストレージ |
+| | MinIO | - | オブジェクトストレージ (ノートコンテンツ) |
 | | Docker Compose | - | ローカル開発 |
 
 ---
@@ -310,7 +311,6 @@ sequenceDiagram
 | トークン有効期限 | 24時間 |
 | パスワードハッシュ | bcrypt |
 | データ分離 | 全テーブル `user_id` によるマルチテナント |
-| 機密データ暗号化 | Clockify APIキー: pgcrypto |
 | JWT自動注入 | HttpClient がリクエストに自動付与 |
 | AI tool user_id注入 | AgentRunner が自動注入 (LLMに依存しない) |
 
@@ -383,7 +383,7 @@ graph TB
 | **UTC保存** | TIMESTAMPTZ型、フロントで変換 |
 | **非正規化** | TimeBlock/TimeEntry/NoteにGoal名・色を複製 (JOIN回避) |
 | **同期トリガー** | Goal/Milestone/Task名変更時に非正規化フィールドを自動同期 |
-| **監査証跡** | `updated_at`トリガーによる自動更新 |
+| **タイムスタンプ自動更新** | `updated_at`トリガーによる自動更新 |
 | **データ駆動タイプ** | note_typesテーブルでノートタイプを管理 (ハードコード不要) |
 | **ベクトル検索** | pgvectorによるセマンティック検索 |
 
@@ -573,7 +573,7 @@ graph TB
         DBTools["DB操作<br/>get_tasks, create_time_block, ..."]
         MemTools["メモリ<br/>get_user_memory, get_user_facts, ..."]
         SearchTools["検索<br/>semantic_search, keyword_search, ..."]
-        StorageTools["ストレージ<br/>upload_file, get_file, ..."]
+        IndexTools["インデックス<br/>reindex_notes"]
     end
 
     subgraph "メモリシステム"
