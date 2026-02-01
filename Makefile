@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-docker dev-backend e2e-install e2e e2e-ui e2e-headed
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed
 
 # Default target
 .DEFAULT_GOAL := help
@@ -101,15 +101,6 @@ dev:
 	@echo ""
 	npm run dev:mock
 
-## Start with Docker + MSW (alternative to local npm)
-dev-docker:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build frontend
-	@echo ""
-	@echo "🔧 Development Mode (Docker + MSW)"
-	@echo ""
-	@echo "Frontend: http://localhost:5173"
-	@echo ""
-
 ## Start backend services only (for local frontend development)
 dev-backend: db backend
 	@echo ""
@@ -182,7 +173,6 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  dev           Start frontend with MSW mocking (npm, no backend)"
-	@echo "  dev-docker    Start frontend with MSW in Docker"
 	@echo "  dev-backend   Start backend services for local frontend"
 	@echo ""
 	@echo "E2E Testing:"

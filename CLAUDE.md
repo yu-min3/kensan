@@ -411,10 +411,10 @@ make clean && make up
 
 | Document | Location | Description |
 |----------|----------|-------------|
-| Project Proposal | `mydocs/kensan_proposal_v0.5.md` | Full project specification |
-| Screen Requirements | `mydocs/kensan_screen_requirements.md` | UI/UX requirements |
-| API Specification | `mydocs/api_specification.md` | Endpoint documentation |
-| Development Status | `mydocs/DEVELOPMENT_STATUS.md` | Current implementation status |
-| Architecture Guide | `mydocs/architecture_guide_for_beginners.md` | Beginner-friendly architecture explanation |
-| Implementation Overview | `mydocs/implementation_overview.md` | Frontend technical guide |
-| ADRs | `mydocs/adr/` | Architecture Decision Records |
+| Project Proposal | `docs/spec/kensan_proposal_v0.5.md` | Full project specification |
+| Screen Requirements | `docs/spec/kensan_screen_requirements.md` | UI/UX requirements |
+| API Specification | `docs/spec/api_specification.md` | Endpoint documentation |
+| Development Status | `docs/status/DEVELOPMENT_STATUS.md` | Current implementation status |
+| Architecture Guide | `docs/guides/architecture_guide_for_beginners.md` | Beginner-friendly architecture explanation |
+| Implementation Overview | `docs/guides/implementation_overview.md` | Frontend technical guide |
+| ADRs | `docs/adr/` | Architecture Decision Records |

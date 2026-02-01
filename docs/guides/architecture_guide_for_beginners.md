@@ -2,7 +2,7 @@
 
 このドキュメントでは、Kensanサービスの仕組みを図を使ってわかりやすく説明します。
 
-**最終更新: 2026-01-27**
+**最終更新: 2026-02-01**
 
 ---
 
@@ -73,7 +73,6 @@ graph TB
     FE <--> BE1
     FE <--> BE2
     FE <--> BE4
-    FE <--> BE5
     FE <--> BE8
     FE <--> BE10
     FE <--> BE11
@@ -82,15 +81,12 @@ graph TB
     BE1 --> DB
     BE2 --> DB
     BE4 --> DB
-    BE5 --> DB
-    BE6 --> DB
-    BE7 --> DB
     BE8 --> DB
     BE10 --> DB
     BE11 --> DB
 
     AI_SVC -->|"Direct Tools<br/>(asyncpg)"| DB
-    AI_SVC -->|"週次レビュー生成"| AI
+    AI_SVC -->|"エージェント対話"| AI
 ```
 
 ### ポイント解説
@@ -98,8 +94,8 @@ graph TB
 | 用語 | 説明 |
 |------|------|
 | **フロントエンド** | ユーザーが直接触る画面部分。ブラウザで動作します |
-| **バックエンド** | データの保存・処理を担当。Goで書かれた9つのマイクロサービス |
-| **kensan-ai** | AI機能を担当するPythonサービス（ポート8089）。**DBに直接接続**してデータ取得し、Claude APIで週次レビューを生成。バックエンドサービスは経由しない |
+| **バックエンド** | データの保存・処理を担当。Goで書かれた6つのマイクロサービス |
+| **kensan-ai** | AI機能を担当するPythonサービス（ポート8089）。**DBに直接接続**してデータ取得し、Claude APIでエージェント対話を実現。バックエンドサービスは経由しない |
 | **PostgreSQL** | すべてのデータを保存するデータベース。ベクトル検索にも対応 |
 
 ---
@@ -110,7 +106,7 @@ graph TB
 
 ### 3.1 ページ一覧
 
-現在、Kensanには10個のページがあります：
+現在、Kensanには8個のページがあります：
 
 ```mermaid
 graph LR
@@ -119,7 +115,7 @@ graph LR
     end
 
     subgraph "設定"
-        S01["⚙️ S01_Settings<br/>初期設定"]
+        S01["⚙️ S01_Settings<br/>初期設定・ユーザー設定"]
     end
 
     subgraph "日常（ホーム）"
@@ -127,7 +123,7 @@ graph LR
     end
 
     subgraph "タスク管理"
-        T01["📋 T01_TaskManagement<br/>目標・タスク管理<br/>（定期タスクはfrequencyで対応）"]
+        T01["📋 T01_TaskManagement<br/>目標・マイルストーン・タスク<br/>ガントチャート"]
     end
 
     subgraph "記録"
@@ -135,9 +131,9 @@ graph LR
         N02["✏️ N02_NoteEdit<br/>ノート編集"]
     end
 
-    subgraph "分析"
-        A01["📊 A01_AnalyticsReport<br/>週次レポート"]
-        A02["🤖 A02_AIReview<br/>AI振り返り"]
+    subgraph "分析・AI"
+        A01["📊 A01_AnalyticsReport<br/>時間分析・レポート"]
+        O01["🔍 O01_InteractionExplorer<br/>AI対話履歴"]
     end
 ```
 
@@ -149,11 +145,10 @@ graph LR
 |------|------|-----|
 | **S** | Settings（設定） | S01_Settings |
 | **D** | Daily（日常） | DailyPage（ホームページ） |
-| **T** | Task（タスク） | T01_TaskManagement（定期タスクはfrequencyで対応） |
+| **T** | Task（タスク） | T01_TaskManagement |
 | **N** | Note（ノート） | N01_NoteList, N02_NoteEdit |
-| **A** | Analytics/AI（分析） | A01_AnalyticsReport（期間選択対応）, A02_AIReview |
-
-> **変更点**: ダッシュボードはDailyPageに統合され、分析ページに期間選択（今日/今週/今月/カスタム）と学習記録ウィジェットが追加されました。
+| **A** | Analytics（分析） | A01_AnalyticsReport |
+| **O** | Observability/Other | O01_InteractionExplorer |
 
 ### 3.3 フロントエンドの構成
 
@@ -161,7 +156,7 @@ graph LR
 graph TB
     subgraph "src/ ディレクトリ構造"
         subgraph "pages/ - 画面"
-            P["10個のページコンポーネント"]
+            P["8個のページコンポーネント"]
         end
 
         subgraph "components/ - 部品"
@@ -175,11 +170,11 @@ graph TB
         end
 
         subgraph "stores/ - 状態管理"
-            ST["14個のZustandストア"]
+            ST["15個のZustandストア"]
         end
 
         subgraph "api/ - API連携"
-            API["12個のAPIサービス"]
+            API["10個のAPIサービス"]
         end
     end
 
@@ -236,7 +231,7 @@ components/
 
 ```mermaid
 graph TB
-    subgraph "12個のZustandストア"
+    subgraph "15個のZustandストア"
         Auth["useAuthStore<br/>認証状態"]
         Settings["useSettingsStore<br/>ユーザー設定"]
 
@@ -253,6 +248,8 @@ graph TB
         Note["useNoteStore<br/>ノート（日記・学習記録）"]
         Memo["useMemoStore<br/>メモ"]
         Analytics["useAnalyticsStore<br/>分析データ"]
+        Chat["useChatStore<br/>AIチャット"]
+        NoteType["useNoteTypeStore<br/>ノートタイプ"]
     end
 
     TaskManager -->|"統合"| Goal
@@ -308,7 +305,7 @@ graph TB
 
 ## 4. バックエンドの仕組み
 
-バックエンドは9つの**Goマイクロサービス**で構成されています。
+バックエンドは6つの**Goマイクロサービス** + 1つの**Python AIサービス**で構成されています。
 
 ### 4.1 マイクロサービス一覧
 
@@ -422,7 +419,7 @@ graph TB
         Claude["🧠 Claude API"]
     end
 
-    FE -->|"POST /chat<br/>POST /ai/reviews/generate"| API
+    FE -->|"POST /agent/stream<br/>POST /agent/approve"| API
     API --> Agent
     Agent -->|"ツール呼び出し"| Tools
     Tools -->|"SQL実行"| DB
@@ -543,10 +540,11 @@ graph LR
 
 | メソッド | パス | 説明 |
 |---------|------|------|
-| POST | `/chat` | 非ストリーミングチャット |
-| POST | `/chat/stream` | ストリーミングチャット |
-| POST | `/ai/reviews/generate` | 週次レビュー生成 |
-| GET | `/ai/reviews` | レビュー一覧 |
+| GET | `/health` | ヘルスチェック |
+| POST | `/agent/stream` | エージェントストリーミング（SSE） |
+| POST | `/agent/approve` | アクション承認・実行 |
+| GET | `/conversations` | 会話一覧 |
+| GET | `/conversations/{id}` | 会話詳細 |
 | POST | `/interactions/{id}/feedback` | フィードバック送信 |
 
 ---
@@ -912,7 +910,7 @@ graph LR
 ### 覚えておくべきポイント
 
 1. **フロントエンド**はReact + TypeScriptで、Zustandで状態管理
-2. **バックエンド**は9つのGoマイクロサービスで構成
+2. **バックエンド**は6つのGoマイクロサービス + Python AIサービスで構成
 3. すべてのサービスは**Handler → Service → Repository**の3層構造
 4. **JWT**で認証し、**user_id**でデータを分離（マルチテナント）
 5. **Goal → Milestone → Task**の3層でタスク管理、**Tag**で横断分類
@@ -926,13 +924,13 @@ graph LR
 
 | カテゴリ | 数 |
 |---------|-----|
-| ページ | 10 |
-| コンポーネント | 59 |
-| Zustandストア | 16 |
-| APIサービス | 12 |
-| バックエンドサービス | 9 |
+| ページ | 8 |
+| Zustandストア | 15 |
+| APIサービス | 10 |
+| Goバックエンドサービス | 6 |
+| Python AIサービス | 1 |
 | 共有パッケージ | 6 |
-| データベーステーブル | 14+ |
+| DBマイグレーション | 36 |
 
 ---
 
