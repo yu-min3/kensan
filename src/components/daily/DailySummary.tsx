@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
+import { getLocalDate } from '@/lib/timezone'
 import { formatDurationShort, formatDateIso } from '@/lib/dateFormat'
 import { TrendingUp } from 'lucide-react'
 import {
@@ -13,27 +15,29 @@ import {
 
 interface DailySummaryProps {
   mode: 'compact' | 'detailed'
+  selectedDate?: string
 }
 
-export function DailySummary({ mode }: DailySummaryProps) {
+export function DailySummary({ mode, selectedDate }: DailySummaryProps) {
   const { timeBlocks, timeEntries } = useTimeBlockStore()
+  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
 
-  const todayDateIso = formatDateIso(new Date())
+  const targetDateIso = selectedDate || formatDateIso(new Date())
 
-  // Filter today's data
-  const todayBlocks = timeBlocks.filter((b) => b.date === todayDateIso)
-  const todayEntries = timeEntries.filter((e) => e.date === todayDateIso)
+  // Filter data for the target date, excluding items without goals
+  const todayBlocks = timeBlocks.filter((b) => getLocalDate(b.startDatetime, timezone) === targetDateIso && b.goalId)
+  const todayEntries = timeEntries.filter((e) => getLocalDate(e.startDatetime, timezone) === targetDateIso && e.goalId)
 
-  // Calculate planned and actual minutes
-  const calculateMinutes = (items: { startTime: string; endTime: string }[]) => {
+  // Calculate minutes from ISO datetime pairs
+  const calculateMinutes = (items: { startDatetime: string; endDatetime: string }[]) => {
     return items.reduce((acc, item) => {
-      const [sh, sm] = item.startTime.split(':').map(Number)
-      const [eh, em] = item.endTime.split(':').map(Number)
-      return acc + (eh * 60 + em) - (sh * 60 + sm)
+      const startMs = new Date(item.startDatetime).getTime()
+      const endMs = new Date(item.endDatetime).getTime()
+      return acc + (endMs - startMs) / 60000
     }, 0)
   }
 
-  // すべての時間を達成率計算の対象とする
+  // 目標ありのみを達成率計算の対象とする
   const plannedMinutes = calculateMinutes(todayBlocks)
   const actualMinutes = calculateMinutes(todayEntries)
   const difference = actualMinutes - plannedMinutes
@@ -42,12 +46,12 @@ export function DailySummary({ mode }: DailySummaryProps) {
   // Goal-based time distribution (for detailed mode)
   const timeByGoalMap = todayEntries.reduce(
     (acc, entry) => {
-      const goalId = entry.goalId || 'other'
-      const goalName = entry.goalName || '目標なし'
+      const goalId = entry.goalId!
+      const goalName = entry.goalName || 'Unknown'
       const goalColor = entry.goalColor || '#6b7280'
-      const [sh, sm] = entry.startTime.split(':').map(Number)
-      const [eh, em] = entry.endTime.split(':').map(Number)
-      const minutes = (eh * 60 + em) - (sh * 60 + sm)
+      const startMs = new Date(entry.startDatetime).getTime()
+      const endMs = new Date(entry.endDatetime).getTime()
+      const minutes = (endMs - startMs) / 60000
       if (!acc[goalId]) {
         acc[goalId] = { name: goalName, color: goalColor, value: 0 }
       }
@@ -83,7 +87,7 @@ export function DailySummary({ mode }: DailySummaryProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5" />
-          今日のサマリー
+          {targetDateIso === formatDateIso(new Date()) ? '今日' : targetDateIso}のサマリー
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">

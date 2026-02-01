@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     default_max_turns: int = 10
     default_temperature: float = 0.7
 
+    # OpenTelemetry
+    otel_enabled: bool = False
+    otel_collector_url: str = "localhost:4318"
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug_bool(cls, v: Any) -> bool:

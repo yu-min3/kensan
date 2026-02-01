@@ -12,14 +12,17 @@ import (
 
 // Analytics-specific validation errors wrapping shared error base
 var (
-	ErrInvalidWeekStart  = fmt.Errorf("invalid week start date: %w", errors.ErrInvalidInput)
-	ErrInvalidMonth      = fmt.Errorf("invalid month: %w", errors.ErrInvalidInput)
-	ErrInvalidYear       = fmt.Errorf("invalid year: %w", errors.ErrInvalidInput)
-	ErrInvalidPeriod     = fmt.Errorf("invalid trend period: %w", errors.ErrInvalidInput)
-	ErrInvalidCount      = fmt.Errorf("invalid count: %w", errors.ErrInvalidInput)
-	ErrInvalidDateRange  = fmt.Errorf("invalid date range: %w", errors.ErrInvalidInput)
-	ErrMissingDateRange  = fmt.Errorf("start_date and end_date are required: %w", errors.ErrInvalidInput)
+	ErrInvalidWeekStart = fmt.Errorf("invalid week start date: %w", errors.ErrInvalidInput)
+	ErrInvalidMonth     = fmt.Errorf("invalid month: %w", errors.ErrInvalidInput)
+	ErrInvalidYear      = fmt.Errorf("invalid year: %w", errors.ErrInvalidInput)
+	ErrInvalidPeriod    = fmt.Errorf("invalid trend period: %w", errors.ErrInvalidInput)
+	ErrInvalidCount     = fmt.Errorf("invalid count: %w", errors.ErrInvalidInput)
+	ErrInvalidDateRange = fmt.Errorf("invalid date range: %w", errors.ErrInvalidInput)
+	ErrMissingDateRange = fmt.Errorf("start_date and end_date are required: %w", errors.ErrInvalidInput)
 )
+
+// defaultTimezone is used when no timezone is specified
+const defaultTimezone = "UTC"
 
 // Service handles business logic for analytics
 type Service struct {
@@ -31,8 +34,42 @@ func NewService(repo repository.Repository) *Service {
 	return &Service{repo: repo}
 }
 
+// resolveTimezone returns the timezone or default if empty
+func resolveTimezone(tz string) string {
+	if tz == "" {
+		return defaultTimezone
+	}
+	return tz
+}
+
+// dateToUtcRange converts a local date range (YYYY-MM-DD) to UTC datetime range
+// startDate is inclusive, endDate is inclusive (converted to next day start for exclusive end)
+func dateToUtcRange(startDate, endDate, timezone string) (string, string, error) {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return "", "", ErrInvalidDateRange
+	}
+
+	start, err := time.ParseInLocation("2006-01-02", startDate, loc)
+	if err != nil {
+		return "", "", ErrInvalidDateRange
+	}
+
+	end, err := time.ParseInLocation("2006-01-02", endDate, loc)
+	if err != nil {
+		return "", "", ErrInvalidDateRange
+	}
+
+	// End is inclusive in the old API, so add 1 day for exclusive end
+	endExclusive := end.AddDate(0, 0, 1)
+
+	return start.UTC().Format(time.RFC3339), endExclusive.UTC().Format(time.RFC3339), nil
+}
+
 // GetWeeklySummary returns a weekly summary for a given week
 func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter analytics.WeeklySummaryFilter) (*analytics.WeeklySummary, error) {
+	tz := resolveTimezone(filter.Timezone)
+
 	var weekStart time.Time
 	var err error
 
@@ -59,26 +96,32 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 	startDate := weekStart.Format("2006-01-02")
 	endDate := weekEnd.Format("2006-01-02")
 
-	// Get total minutes
-	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDate, endDate)
+	// Convert date range to UTC datetime range
+	startDt, endDt, err := dateToUtcRange(startDate, endDate, tz)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get minutes by goal (new data model)
-	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
+	// Get total minutes
+	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDt, endDt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by goal
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by tag
-	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	byTag, err := s.getTagSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by milestone
-	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +133,7 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 	}
 
 	// Get planned vs actual
-	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDate, endDate)
+	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +153,10 @@ func (s *Service) GetWeeklySummary(ctx context.Context, userID string, filter an
 	}, nil
 }
 
-// getGoalSummaries returns goal summaries for a date range
-func (s *Service) getGoalSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.GoalSummary, error) {
-	goalMinutes, err := s.repo.GetMinutesByGoal(ctx, userID, startDate, endDate)
+// getGoalSummaries returns goal summaries for a datetime range
+func (s *Service) getGoalSummaries(ctx context.Context, userID, startDt, endDt string) ([]analytics.GoalSummary, error) {
+	goalMinutes, err := s.repo.GetMinutesByGoal(ctx, userID, startDt, endDt)
 	if err != nil {
-		// Return error instead of silently returning empty slice
 		return nil, err
 	}
 
@@ -130,11 +172,10 @@ func (s *Service) getGoalSummaries(ctx context.Context, userID, startDate, endDa
 	return result, nil
 }
 
-// getTagSummaries returns tag summaries for a date range
-func (s *Service) getTagSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.TagSummary, error) {
-	tagMinutes, err := s.repo.GetMinutesByTag(ctx, userID, startDate, endDate)
+// getTagSummaries returns tag summaries for a datetime range
+func (s *Service) getTagSummaries(ctx context.Context, userID, startDt, endDt string) ([]analytics.TagSummary, error) {
+	tagMinutes, err := s.repo.GetMinutesByTag(ctx, userID, startDt, endDt)
 	if err != nil {
-		// Return error instead of silently returning empty slice
 		return nil, err
 	}
 
@@ -150,11 +191,10 @@ func (s *Service) getTagSummaries(ctx context.Context, userID, startDate, endDat
 	return result, nil
 }
 
-// getMilestoneSummaries returns milestone summaries for a date range
-func (s *Service) getMilestoneSummaries(ctx context.Context, userID, startDate, endDate string) ([]analytics.MilestoneSummary, error) {
-	milestoneMinutes, err := s.repo.GetMinutesByMilestone(ctx, userID, startDate, endDate)
+// getMilestoneSummaries returns milestone summaries for a datetime range
+func (s *Service) getMilestoneSummaries(ctx context.Context, userID, startDt, endDt string) ([]analytics.MilestoneSummary, error) {
+	milestoneMinutes, err := s.repo.GetMinutesByMilestone(ctx, userID, startDt, endDt)
 	if err != nil {
-		// Return error instead of silently returning empty slice
 		return nil, err
 	}
 
@@ -172,6 +212,8 @@ func (s *Service) getMilestoneSummaries(ctx context.Context, userID, startDate, 
 
 // GetMonthlySummary returns a monthly summary for a given month
 func (s *Service) GetMonthlySummary(ctx context.Context, userID string, filter analytics.MonthlySummaryFilter) (*analytics.MonthlySummary, error) {
+	tz := resolveTimezone(filter.Timezone)
+
 	year := filter.Year
 	month := filter.Month
 
@@ -198,26 +240,32 @@ func (s *Service) GetMonthlySummary(ctx context.Context, userID string, filter a
 	startDate := monthStart.Format("2006-01-02")
 	endDate := monthEnd.Format("2006-01-02")
 
-	// Get total minutes
-	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDate, endDate)
+	// Convert date range to UTC datetime range
+	startDt, endDt, err := dateToUtcRange(startDate, endDate, tz)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get minutes by goal (new data model)
-	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
+	// Get total minutes
+	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDt, endDt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minutes by goal
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by tag
-	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	byTag, err := s.getTagSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by milestone
-	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
@@ -229,13 +277,13 @@ func (s *Service) GetMonthlySummary(ctx context.Context, userID string, filter a
 	}
 
 	// Get planned vs actual
-	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDate, endDate)
+	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get weekly breakdown
-	weeklyBreakdown, err := s.repo.GetWeeklyBreakdown(ctx, userID, startDate, endDate)
+	// Get weekly breakdown (needs timezone for GROUP BY)
+	weeklyBreakdown, err := s.repo.GetWeeklyBreakdown(ctx, userID, startDt, endDt, tz)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +360,13 @@ func (s *Service) GetTrends(ctx context.Context, userID string, filter analytics
 		startDateStr := startDate.Format("2006-01-02")
 		endDateStr := endDate.Format("2006-01-02")
 
-		totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDateStr, endDateStr)
+		// Convert to UTC datetime range using UTC timezone (trends don't need TZ grouping)
+		startDt, endDt, err := dateToUtcRange(startDateStr, endDateStr, defaultTimezone)
+		if err != nil {
+			return nil, err
+		}
+
+		totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDt, endDt)
 		if err != nil {
 			return nil, err
 		}
@@ -333,6 +387,8 @@ func (s *Service) GetSummaryByDateRange(ctx context.Context, userID string, filt
 		return nil, ErrMissingDateRange
 	}
 
+	tz := resolveTimezone(filter.Timezone)
+
 	// Validate date format
 	startTime, err := time.Parse("2006-01-02", filter.StartDate)
 	if err != nil {
@@ -349,26 +405,32 @@ func (s *Service) GetSummaryByDateRange(ctx context.Context, userID string, filt
 	startDate := filter.StartDate
 	endDate := filter.EndDate
 
+	// Convert date range to UTC datetime range
+	startDt, endDt, err := dateToUtcRange(startDate, endDate, tz)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get total minutes
-	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDate, endDate)
+	totalMinutes, err := s.repo.GetTotalMinutesByDateRange(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by goal
-	byGoal, err := s.getGoalSummaries(ctx, userID, startDate, endDate)
+	byGoal, err := s.getGoalSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by tag
-	byTag, err := s.getTagSummaries(ctx, userID, startDate, endDate)
+	byTag, err := s.getTagSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get minutes by milestone
-	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDate, endDate)
+	byMilestone, err := s.getMilestoneSummaries(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +442,7 @@ func (s *Service) GetSummaryByDateRange(ctx context.Context, userID string, filt
 	}
 
 	// Get planned vs actual
-	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDate, endDate)
+	plannedMinutes, err := s.repo.GetTimeBlocksAggregated(ctx, userID, startDt, endDt)
 	if err != nil {
 		return nil, err
 	}
@@ -402,6 +464,8 @@ func (s *Service) GetSummaryByDateRange(ctx context.Context, userID string, filt
 
 // GetDailyStudyHours returns daily study hours for chart display
 func (s *Service) GetDailyStudyHours(ctx context.Context, userID string, filter analytics.DailyStudyHoursFilter) ([]analytics.DailyStudyHour, error) {
+	tz := resolveTimezone(filter.Timezone)
+
 	var startDate, endDate time.Time
 
 	// If start_date and end_date are provided, use them
@@ -437,8 +501,14 @@ func (s *Service) GetDailyStudyHours(ctx context.Context, userID string, filter 
 	startDateStr := startDate.Format("2006-01-02")
 	endDateStr := endDate.Format("2006-01-02")
 
-	// Get daily breakdown from repository
-	dailyBreakdown, err := s.repo.GetDailyBreakdown(ctx, userID, startDateStr, endDateStr)
+	// Convert to UTC datetime range
+	startDt, endDt, err := dateToUtcRange(startDateStr, endDateStr, tz)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get daily breakdown from repository (needs timezone for GROUP BY)
+	dailyBreakdown, err := s.repo.GetDailyBreakdown(ctx, userID, startDt, endDt, tz)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 """Time block queries."""
 
-from datetime import date, time
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,23 +9,26 @@ from kensan_ai.db.connection import get_connection
 
 async def get_time_blocks(
     user_id: UUID,
-    target_date: date | None = None,
-    start_date: date | None = None,
-    end_date: date | None = None,
+    start_datetime: datetime | None = None,
+    end_datetime: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Get time blocks for a user with optional date filters."""
+    """Get time blocks for a user with optional datetime filters.
+
+    Args:
+        user_id: The user ID.
+        start_datetime: Filter blocks starting from this datetime (inclusive, UTC).
+        end_datetime: Filter blocks starting before this datetime (exclusive, UTC).
+    """
     async with get_connection() as conn:
         conditions = ["user_id = $1"]
         params: list[Any] = [user_id]
         param_idx = 2
 
-        if target_date is not None:
-            conditions.append(f"date = ${param_idx}")
-            params.append(target_date)
-            param_idx += 1
-        elif start_date is not None and end_date is not None:
-            conditions.append(f"date >= ${param_idx} AND date <= ${param_idx + 1}")
-            params.extend([start_date, end_date])
+        if start_datetime is not None and end_datetime is not None:
+            conditions.append(
+                f"start_datetime >= ${param_idx} AND start_datetime < ${param_idx + 1}"
+            )
+            params.extend([start_datetime, end_datetime])
             param_idx += 2
 
         where_clause = " AND ".join(conditions)
@@ -33,12 +36,12 @@ async def get_time_blocks(
         blocks = await conn.fetch(
             f"""
             SELECT
-                id, date, start_time, end_time, task_id, task_name,
+                id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color,
                 is_routine
             FROM time_blocks
             WHERE {where_clause}
-            ORDER BY date, start_time
+            ORDER BY start_datetime
             """,
             *params,
         )
@@ -46,9 +49,8 @@ async def get_time_blocks(
         return [
             {
                 "id": str(block["id"]),
-                "date": block["date"].isoformat(),
-                "startTime": block["start_time"].strftime("%H:%M"),
-                "endTime": block["end_time"].strftime("%H:%M"),
+                "startDatetime": block["start_datetime"].isoformat(),
+                "endDatetime": block["end_datetime"].isoformat(),
                 "taskId": str(block["task_id"]) if block["task_id"] else None,
                 "taskName": block["task_name"],
                 "milestone": {
@@ -68,9 +70,8 @@ async def get_time_blocks(
 
 async def create_time_block(
     user_id: UUID,
-    target_date: date,
-    start_time: time,
-    end_time: time,
+    start_datetime: datetime,
+    end_datetime: datetime,
     task_name: str,
     task_id: UUID | None = None,
     milestone_id: UUID | None = None,
@@ -85,17 +86,16 @@ async def create_time_block(
         block = await conn.fetchrow(
             """
             INSERT INTO time_blocks (
-                user_id, date, start_time, end_time, task_id, task_name,
+                user_id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            RETURNING id, date, start_time, end_time, task_id, task_name,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
             """,
             user_id,
-            target_date,
-            start_time,
-            end_time,
+            start_datetime,
+            end_datetime,
             task_id,
             task_name,
             milestone_id,
@@ -108,9 +108,8 @@ async def create_time_block(
 
         return {
             "id": str(block["id"]),
-            "date": block["date"].isoformat(),
-            "startTime": block["start_time"].strftime("%H:%M"),
-            "endTime": block["end_time"].strftime("%H:%M"),
+            "startDatetime": block["start_datetime"].isoformat(),
+            "endDatetime": block["end_datetime"].isoformat(),
             "taskId": str(block["task_id"]) if block["task_id"] else None,
             "taskName": block["task_name"],
             "milestone": {
@@ -124,3 +123,72 @@ async def create_time_block(
             } if block["goal_id"] else None,
             "isRoutine": block["is_routine"],
         }
+
+
+async def update_time_block(
+    time_block_id: UUID,
+    user_id: UUID,
+    start_datetime: datetime | None = None,
+    end_datetime: datetime | None = None,
+    task_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Update an existing time block."""
+    async with get_connection() as conn:
+        updates = []
+        params: list[Any] = []
+        param_idx = 1
+
+        if start_datetime is not None:
+            updates.append(f"start_datetime = ${param_idx}")
+            params.append(start_datetime)
+            param_idx += 1
+
+        if end_datetime is not None:
+            updates.append(f"end_datetime = ${param_idx}")
+            params.append(end_datetime)
+            param_idx += 1
+
+        if task_name is not None:
+            updates.append(f"task_name = ${param_idx}")
+            params.append(task_name)
+            param_idx += 1
+
+        if not updates:
+            return None
+
+        params.extend([time_block_id, user_id])
+        set_clause = ", ".join(updates)
+
+        block = await conn.fetchrow(
+            f"""
+            UPDATE time_blocks
+            SET {set_clause}
+            WHERE id = ${param_idx} AND user_id = ${param_idx + 1}
+            RETURNING id, start_datetime, end_datetime, task_id, task_name,
+                milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
+            """,
+            *params,
+        )
+
+        if block is None:
+            return None
+
+        return {
+            "id": str(block["id"]),
+            "startDatetime": block["start_datetime"].isoformat(),
+            "endDatetime": block["end_datetime"].isoformat(),
+            "taskId": str(block["task_id"]) if block["task_id"] else None,
+            "taskName": block["task_name"],
+            "isRoutine": block["is_routine"],
+        }
+
+
+async def delete_time_block(time_block_id: UUID, user_id: UUID) -> bool:
+    """Delete a time block. Returns True if deleted."""
+    async with get_connection() as conn:
+        result = await conn.execute(
+            "DELETE FROM time_blocks WHERE id = $1 AND user_id = $2",
+            time_block_id,
+            user_id,
+        )
+        return result == "DELETE 1"

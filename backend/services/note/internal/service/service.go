@@ -1,10 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/google/uuid"
 	"github.com/kensan/backend/services/note/internal"
@@ -18,28 +25,43 @@ var (
 	ErrNoteNotFound       = sharedErrors.NoteNotFound()
 	ErrNoteAlreadyExists  = repository.ErrNoteAlreadyExists
 	ErrTypeRequired       = sharedErrors.Required("type")
-	ErrInvalidType        = errors.New("type must be diary or learning")
+	ErrInvalidType        = errors.New("invalid note type")
 	ErrTitleRequired      = sharedErrors.Required("title")
 	ErrContentRequired    = sharedErrors.Required("content")
 	ErrFormatRequired     = sharedErrors.Required("format")
 	ErrInvalidFormat      = errors.New("format must be markdown or drawio")
-	ErrDateRequired       = errors.New("date is required for diary notes")
+	ErrDateRequired       = errors.New("date is required for this note type")
 	ErrQueryRequired      = sharedErrors.Required("query")
 	ErrUnauthorized       = sharedErrors.ErrUnauthorized
 	ErrStorageUnavailable = errors.New("storage is not configured")
+	ErrMetadataValidation = errors.New("metadata validation error")
 )
 
 // StorageClient interface for storage operations
 type StorageClient interface {
+	Upload(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
 	GetPresignedUploadURL(ctx context.Context, key string, expiry time.Duration) (string, error)
 	GetPresignedDownloadURL(ctx context.Context, key string, expiry time.Duration) (string, error)
 	Delete(ctx context.Context, key string) error
 }
 
+const (
+	// storageThreshold is the content size above which content is stored externally
+	storageThreshold = 100 * 1024 // 100KB
+)
+
+// contentTypesAlwaysExternal are content types that always use external storage
+var contentTypesAlwaysExternal = map[note.ContentType]bool{
+	note.ContentTypeImage: true,
+	note.ContentTypePDF:   true,
+}
+
 // Service handles note business logic
 type Service struct {
-	repo    repository.Repository
-	storage StorageClient
+	repo      repository.Repository
+	storage   StorageClient
+	typeCache map[string]*note.NoteTypeConfig
+	typeMu    sync.RWMutex
 }
 
 // NewService creates a new note service
@@ -49,9 +71,55 @@ func NewService(repo repository.Repository, storageClient *storage.Client) *Serv
 		sc = storageClient
 	}
 	return &Service{
-		repo:    repo,
-		storage: sc,
+		repo:      repo,
+		storage:   sc,
+		typeCache: make(map[string]*note.NoteTypeConfig),
 	}
+}
+
+// LoadNoteTypes loads note type configurations from the database into cache.
+// Should be called during service initialization.
+func (s *Service) LoadNoteTypes(ctx context.Context) error {
+	types, err := s.repo.ListNoteTypes(ctx, false)
+	if err != nil {
+		return fmt.Errorf("failed to load note types: %w", err)
+	}
+
+	s.typeMu.Lock()
+	defer s.typeMu.Unlock()
+	s.typeCache = make(map[string]*note.NoteTypeConfig, len(types))
+	for _, t := range types {
+		s.typeCache[t.Slug] = t
+	}
+
+	return nil
+}
+
+// GetNoteTypes returns all active note type configurations
+func (s *Service) GetNoteTypes(ctx context.Context) ([]*note.NoteTypeConfig, error) {
+	s.typeMu.RLock()
+	defer s.typeMu.RUnlock()
+
+	var result []*note.NoteTypeConfig
+	for _, t := range s.typeCache {
+		if t.IsActive {
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
+// getNoteTypeConfig returns the config for a given type slug
+func (s *Service) getNoteTypeConfig(slug string) *note.NoteTypeConfig {
+	s.typeMu.RLock()
+	defer s.typeMu.RUnlock()
+	return s.typeCache[slug]
+}
+
+// IsValidNoteType checks if a note type slug is valid and active
+func (s *Service) IsValidNoteType(slug string) bool {
+	cfg := s.getNoteTypeConfig(slug)
+	return cfg != nil && cfg.IsActive
 }
 
 // List retrieves notes for a user with optional filters
@@ -235,25 +303,28 @@ func (s *Service) Search(ctx context.Context, userID string, query string, filte
 	return s.repo.Search(ctx, userID, query, filter, limit)
 }
 
-// validateCreateInput validates the create input
+// validateCreateInput validates the create input using data-driven type configuration
 func (s *Service) validateCreateInput(input *note.CreateNoteInput) error {
 	// Validate type
 	if input.Type == "" {
 		return ErrTypeRequired
 	}
-	if !input.Type.IsValid() {
+
+	cfg := s.getNoteTypeConfig(string(input.Type))
+	if cfg == nil || !cfg.IsActive {
 		return ErrInvalidType
 	}
 
-	// Validate title (always required)
-	if input.Title == nil || strings.TrimSpace(*input.Title) == "" {
-		return ErrTitleRequired
+	// Validate title based on constraints
+	if cfg.Constraints.TitleRequired {
+		if input.Title == nil || strings.TrimSpace(*input.Title) == "" {
+			return ErrTitleRequired
+		}
 	}
 
-	// Validate content
-	if input.Content == "" {
-		return ErrContentRequired
-	}
+	// Content and date are not enforced on creation to support draft workflows
+	// (e.g., creating a note to upload images before filling in content).
+	// The frontend enforces these constraints via its save button validation.
 
 	// Validate format
 	if input.Format == "" {
@@ -263,14 +334,101 @@ func (s *Service) validateCreateInput(input *note.CreateNoteInput) error {
 		return ErrInvalidFormat
 	}
 
-	// Validate date (required for diary and learning)
-	if input.Type == note.NoteTypeDiary || input.Type == note.NoteTypeLearning {
-		if !input.Date.Valid {
-			return ErrDateRequired
+	// Validate metadata against schema
+	if len(cfg.MetadataSchema) > 0 {
+		if err := s.validateMetadata(input.Metadata, cfg.MetadataSchema); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// validateMetadata validates metadata against the type's schema
+func (s *Service) validateMetadata(metadata []note.SetNoteMetadataInput, schema []note.FieldSchema) error {
+	// Build lookup map from provided metadata
+	metaMap := make(map[string]string, len(metadata))
+	for _, m := range metadata {
+		if m.Value != nil {
+			metaMap[m.Key] = *m.Value
+		}
+	}
+
+	for _, field := range schema {
+		value, exists := metaMap[field.Key]
+
+		// Check required fields
+		if field.Required && (!exists || value == "") {
+			return fmt.Errorf("%w: %s is required", ErrMetadataValidation, field.Label)
+		}
+
+		if !exists || value == "" {
+			continue
+		}
+
+		// Type-based validation
+		switch field.Type {
+		case "integer":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("%w: %s must be an integer", ErrMetadataValidation, field.Label)
+			}
+			if minVal, ok := field.Constraints["min"]; ok {
+				if min, ok := toInt(minVal); ok && n < min {
+					return fmt.Errorf("%w: %s must be at least %d", ErrMetadataValidation, field.Label, min)
+				}
+			}
+			if maxVal, ok := field.Constraints["max"]; ok {
+				if max, ok := toInt(maxVal); ok && n > max {
+					return fmt.Errorf("%w: %s must be at most %d", ErrMetadataValidation, field.Label, max)
+				}
+			}
+		case "enum":
+			if valuesRaw, ok := field.Constraints["values"]; ok {
+				if values, ok := toStringSlice(valuesRaw); ok {
+					found := false
+					for _, v := range values {
+						if v == value {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return fmt.Errorf("%w: %s must be one of %v", ErrMetadataValidation, field.Label, values)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// toInt converts an any value to int
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	}
+	return 0, false
+}
+
+// toStringSlice converts an any value to []string
+func toStringSlice(v any) ([]string, bool) {
+	if arr, ok := v.([]any); ok {
+		result := make([]string, 0, len(arr))
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, true
+	}
+	return nil, false
 }
 
 // ========== NoteContent Operations ==========
@@ -317,7 +475,30 @@ func (s *Service) GetContent(ctx context.Context, userID, noteID, contentID stri
 	return content, nil
 }
 
-// CreateContent creates a new note content
+// shouldUseExternalStorage determines if content should be stored in external storage.
+// Returns true if content type is binary (image/pdf) or content exceeds the size threshold.
+func (s *Service) shouldUseExternalStorage(input *note.CreateNoteContentInput) bool {
+	if s.storage == nil {
+		return false
+	}
+	// Binary types always go to external storage
+	if contentTypesAlwaysExternal[input.ContentType] {
+		return true
+	}
+	// Text content exceeding threshold goes to external storage
+	if input.Content != nil && len(*input.Content) > storageThreshold {
+		return true
+	}
+	// Explicit file size exceeding threshold
+	if input.FileSizeBytes != nil && *input.FileSizeBytes > storageThreshold {
+		return true
+	}
+	return false
+}
+
+// CreateContent creates a new note content.
+// If storage is configured, content exceeding 100KB or binary types (image, pdf)
+// are automatically uploaded to external storage.
 func (s *Service) CreateContent(ctx context.Context, userID, noteID string, input *note.CreateNoteContentInput) (*note.NoteContent, error) {
 	// Verify note belongs to user
 	_, err := s.repo.GetByIDAndUserID(ctx, noteID, userID)
@@ -345,12 +526,47 @@ func (s *Service) CreateContent(ctx context.Context, userID, noteID string, inpu
 		}
 	}
 
+	// Auto-upload to external storage if threshold exceeded or binary type
+	storageProvider := input.StorageProvider
+	storageKey := input.StorageKey
+	inlineContent := input.Content
+
+	if input.StorageKey == nil && s.shouldUseExternalStorage(input) {
+		contentID := uuid.New().String()
+		ext := storage.GetExtensionForContentType(string(input.ContentType))
+		key := storage.GenerateKey(noteID, contentID, ext)
+
+		mimeType := "application/octet-stream"
+		if input.MimeType != nil {
+			mimeType = *input.MimeType
+		} else {
+			switch input.ContentType {
+			case note.ContentTypeMarkdown:
+				mimeType = "text/markdown"
+			case note.ContentTypeDrawio:
+				mimeType = "application/xml"
+			}
+		}
+
+		if input.Content != nil {
+			data := []byte(*input.Content)
+			if err := s.storage.Upload(ctx, key, bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
+				return nil, fmt.Errorf("failed to upload content to storage: %w", err)
+			}
+
+			provider := note.StorageProviderMinIO
+			storageProvider = &provider
+			storageKey = &key
+			inlineContent = nil // clear inline content since it's in storage
+		}
+	}
+
 	content := &note.NoteContent{
 		NoteID:          noteID,
 		ContentType:     input.ContentType,
-		Content:         input.Content,
-		StorageProvider: input.StorageProvider,
-		StorageKey:      input.StorageKey,
+		Content:         inlineContent,
+		StorageProvider: storageProvider,
+		StorageKey:      storageKey,
 		FileName:        input.FileName,
 		MimeType:        input.MimeType,
 		FileSizeBytes:   input.FileSizeBytes,
@@ -370,7 +586,9 @@ func (s *Service) CreateContent(ctx context.Context, userID, noteID string, inpu
 	return content, nil
 }
 
-// UpdateContent updates an existing note content
+// UpdateContent updates an existing note content.
+// If content was previously inline and the new content exceeds the threshold,
+// it will be uploaded to external storage.
 func (s *Service) UpdateContent(ctx context.Context, userID, noteID, contentID string, input *note.UpdateNoteContentInput) (*note.NoteContent, error) {
 	// Verify note belongs to user
 	_, err := s.repo.GetByIDAndUserID(ctx, noteID, userID)
@@ -392,7 +610,39 @@ func (s *Service) UpdateContent(ctx context.Context, userID, noteID, contentID s
 
 	// Update fields
 	if input.Content != nil {
-		content.Content = input.Content
+		// Check if new content should be moved to external storage
+		if s.storage != nil && content.StorageKey == nil && len(*input.Content) > storageThreshold {
+			ext := storage.GetExtensionForContentType(string(content.ContentType))
+			key := storage.GenerateKey(noteID, contentID, ext)
+
+			mimeType := "text/plain"
+			if content.MimeType != nil {
+				mimeType = *content.MimeType
+			}
+
+			data := []byte(*input.Content)
+			if err := s.storage.Upload(ctx, key, bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
+				return nil, fmt.Errorf("failed to upload content to storage: %w", err)
+			}
+
+			provider := note.StorageProviderMinIO
+			content.StorageProvider = &provider
+			content.StorageKey = &key
+			content.Content = nil
+		} else if content.StorageKey != nil && s.storage != nil {
+			// Content is already in storage - update the stored object
+			mimeType := "text/plain"
+			if content.MimeType != nil {
+				mimeType = *content.MimeType
+			}
+			data := []byte(*input.Content)
+			if err := s.storage.Upload(ctx, *content.StorageKey, bytes.NewReader(data), int64(len(data)), mimeType); err != nil {
+				return nil, fmt.Errorf("failed to update content in storage: %w", err)
+			}
+			content.Content = nil
+		} else {
+			content.Content = input.Content
+		}
 	}
 	if input.SortOrder != nil {
 		content.SortOrder = *input.SortOrder
@@ -414,7 +664,7 @@ func (s *Service) UpdateContent(ctx context.Context, userID, noteID, contentID s
 	return content, nil
 }
 
-// DeleteContent deletes a note content
+// DeleteContent deletes a note content and cleans up external storage if applicable
 func (s *Service) DeleteContent(ctx context.Context, userID, noteID, contentID string) error {
 	// Verify note belongs to user
 	_, err := s.repo.GetByIDAndUserID(ctx, noteID, userID)
@@ -432,6 +682,14 @@ func (s *Service) DeleteContent(ctx context.Context, userID, noteID, contentID s
 	}
 	if content == nil || content.NoteID != noteID {
 		return ErrContentNotFound
+	}
+
+	// Clean up external storage
+	if content.StorageKey != nil && s.storage != nil {
+		if err := s.storage.Delete(ctx, *content.StorageKey); err != nil {
+			// Log but don't fail - orphaned objects are less harmful than failed deletes
+			log.Warn().Err(err).Str("key", *content.StorageKey).Msg("Failed to delete storage object")
+		}
 	}
 
 	if err := s.repo.DeleteContent(ctx, contentID); err != nil {

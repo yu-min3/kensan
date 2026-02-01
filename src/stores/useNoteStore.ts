@@ -31,10 +31,6 @@ interface NoteActions {
   deleteNote: (id: string) => Promise<void>
   archiveNote: (id: string, archived: boolean) => Promise<Note>
 
-  // Convenience methods for specific types
-  createDiary: (data: Omit<CreateNoteInput, 'type'> & { date: string }) => Promise<Note>
-  createLearning: (data: Omit<CreateNoteInput, 'type'>) => Promise<Note>
-
   // Filter helpers
   setFilter: (filter: NoteFilter) => void
   clearFilter: () => void
@@ -222,15 +218,6 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
       set({ error: (error as Error).message })
       throw error
     }
-  },
-
-  // Convenience methods
-  createDiary: async (data) => {
-    return get().createNote({ ...data, type: 'diary' })
-  },
-
-  createLearning: async (data) => {
-    return get().createNote({ ...data, type: 'learning' })
   },
 
   // Filter helpers

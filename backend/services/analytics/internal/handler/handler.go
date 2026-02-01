@@ -34,13 +34,14 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// GetSummary handles GET /analytics/summary?start_date=...&end_date=...
+// GetSummary handles GET /analytics/summary?start_date=...&end_date=...&timezone=...
 func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	filter := analytics.SummaryFilter{
 		StartDate: r.URL.Query().Get("start_date"),
 		EndDate:   r.URL.Query().Get("end_date"),
+		Timezone:  r.URL.Query().Get("timezone"),
 	}
 
 	summary, err := h.service.GetSummaryByDateRange(r.Context(), userID, filter)
@@ -67,12 +68,13 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	middleware.JSON(w, r, http.StatusOK, summary)
 }
 
-// GetWeeklySummary handles GET /analytics/summary/weekly
+// GetWeeklySummary handles GET /analytics/summary/weekly?week_start=...&timezone=...
 func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	filter := analytics.WeeklySummaryFilter{
 		WeekStart: r.URL.Query().Get("week_start"),
+		Timezone:  r.URL.Query().Get("timezone"),
 	}
 
 	summary, err := h.service.GetWeeklySummary(r.Context(), userID, filter)
@@ -95,11 +97,13 @@ func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 	middleware.JSON(w, r, http.StatusOK, summary)
 }
 
-// GetMonthlySummary handles GET /analytics/summary/monthly
+// GetMonthlySummary handles GET /analytics/summary/monthly?year=...&month=...&timezone=...
 func (h *Handler) GetMonthlySummary(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
-	filter := analytics.MonthlySummaryFilter{}
+	filter := analytics.MonthlySummaryFilter{
+		Timezone: r.URL.Query().Get("timezone"),
+	}
 
 	// Parse year
 	if yearStr := r.URL.Query().Get("year"); yearStr != "" {
@@ -185,13 +189,14 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 	middleware.JSON(w, r, http.StatusOK, trends)
 }
 
-// GetDailyStudyHours handles GET /analytics/daily-study-hours
+// GetDailyStudyHours handles GET /analytics/daily-study-hours?timezone=...
 func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	filter := analytics.DailyStudyHoursFilter{
 		StartDate: r.URL.Query().Get("start_date"),
 		EndDate:   r.URL.Query().Get("end_date"),
+		Timezone:  r.URL.Query().Get("timezone"),
 	}
 
 	// Parse days (only used if start_date/end_date not provided)

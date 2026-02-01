@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import type { WeeklySummary } from '@/types'
+import type { WeeklySummary, GoalSummary, AIReviewReport } from '@/types'
 import { analyticsApi } from '@/api/services/analytics'
 
 export interface DailyStudyHour {
   date: string
   hours: number
   day: string
+  byGoal?: GoalSummary[]
 }
 
 interface AnalyticsState {
@@ -14,12 +15,23 @@ interface AnalyticsState {
   isLoading: boolean
   error: string | null
 
+  // AIレビュー状態
+  currentReview: AIReviewReport | null
+  isGeneratingReview: boolean
+  reviewStreamText: string
+
   // データ取得
   fetchWeeklySummary: (weekStart?: string) => Promise<void>
   fetchDailyStudyHours: (days?: number) => Promise<void>
 
   // 一括取得（ダッシュボード用）- 日付範囲指定対応
   fetchDashboardData: (startDate?: string, endDate?: string) => Promise<void>
+
+  // AIレビュー操作
+  setCurrentReview: (review: AIReviewReport | null) => void
+  setGeneratingReview: (generating: boolean) => void
+  setReviewStreamText: (text: string) => void
+  appendReviewStreamText: (text: string) => void
 }
 
 export const useAnalyticsStore = create<AnalyticsState>((set) => ({
@@ -27,6 +39,9 @@ export const useAnalyticsStore = create<AnalyticsState>((set) => ({
   dailyStudyHours: [],
   isLoading: false,
   error: null,
+  currentReview: null,
+  isGeneratingReview: false,
+  reviewStreamText: '',
 
   fetchWeeklySummary: async (weekStart) => {
     set({ isLoading: true, error: null })
@@ -47,6 +62,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set) => ({
         date: d.date,
         hours: d.hours,
         day: d.day ?? '',
+        byGoal: d.byGoal,
       }))
       set({ dailyStudyHours, isLoading: false })
     } catch (error) {
@@ -78,10 +94,17 @@ export const useAnalyticsStore = create<AnalyticsState>((set) => ({
         date: d.date,
         hours: d.hours,
         day: d.day ?? '',
+        byGoal: d.byGoal,
       }))
       set({ weeklySummary, dailyStudyHours, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
     }
   },
+
+  setCurrentReview: (review) => set({ currentReview: review }),
+  setGeneratingReview: (generating) => set({ isGeneratingReview: generating }),
+  setReviewStreamText: (text) => set({ reviewStreamText: text }),
+  appendReviewStreamText: (text) =>
+    set((state) => ({ reviewStreamText: state.reviewStreamText + text })),
 }))

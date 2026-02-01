@@ -26,10 +26,6 @@ def _parse_uuid(value: str | None) -> UUID | None:
     description="ベクトル類似度を使用してドキュメントを検索します。意味的に類似したコンテンツを見つけるのに適しています。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "query": {
                 "type": "string",
                 "description": "検索クエリ",
@@ -43,7 +39,7 @@ def _parse_uuid(value: str | None) -> UUID | None:
                 "description": "コンテンツタイプでフィルタ (例: 'note', 'diary')",
             },
         },
-        "required": ["user_id", "query"],
+        "required": ["query"],
     },
 )
 async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
@@ -120,10 +116,6 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
     description="キーワードベースの全文検索を行います。特定の単語やフレーズを含むドキュメントを見つけるのに適しています。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "query": {
                 "type": "string",
                 "description": "検索キーワード（スペース区切りでAND検索）",
@@ -137,7 +129,7 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "コンテンツタイプでフィルタ (例: 'note', 'diary')",
             },
         },
-        "required": ["user_id", "query"],
+        "required": ["query"],
     },
 )
 async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
@@ -216,10 +208,6 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
     description="セマンティック検索とキーワード検索を組み合わせたハイブリッド検索を行います。より精度の高い検索結果を得るのに適しています。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "query": {
                 "type": "string",
                 "description": "検索クエリ",
@@ -237,7 +225,7 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "セマンティックスコアの重み (0.0-1.0、デフォルト: 0.7)",
             },
         },
-        "required": ["user_id", "query"],
+        "required": ["query"],
     },
 )
 async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:

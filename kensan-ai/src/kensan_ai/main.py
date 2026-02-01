@@ -11,16 +11,37 @@ from kensan_ai.api import router
 from kensan_ai.config import get_settings
 from kensan_ai.db import get_pool, close_pool
 from kensan_ai.errors import ToolError
+from kensan_ai.telemetry import (
+    TelemetryConfig,
+    initialize_telemetry,
+    instrument_asyncpg,
+    instrument_fastapi,
+    instrument_httpx,
+    shutdown_telemetry,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifecycle."""
+    settings = get_settings()
+
+    # Initialize OpenTelemetry before other components
+    initialize_telemetry(TelemetryConfig(
+        enabled=settings.otel_enabled,
+        collector_url=settings.otel_collector_url,
+        service_name="kensan-ai",
+    ))
+    if settings.otel_enabled:
+        instrument_asyncpg()
+        instrument_httpx()
+
     # Startup: Initialize DB pool
     await get_pool()
     yield
     # Shutdown: Close DB pool
     await close_pool()
+    shutdown_telemetry()
 
 
 def create_app() -> FastAPI:
@@ -41,7 +62,12 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["traceparent", "tracestate"],
     )
+
+    # Instrument FastAPI with OpenTelemetry
+    if settings.otel_enabled:
+        instrument_fastapi(app)
 
     # Include API routes with /api/v1 prefix for frontend compatibility
     app.include_router(router, prefix="/api/v1")

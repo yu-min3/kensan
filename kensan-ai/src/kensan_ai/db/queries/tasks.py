@@ -159,3 +159,14 @@ async def update_task(
             "completed": task["completed"],
             "dueDate": task["due_date"].isoformat() if task["due_date"] else None,
         }
+
+
+async def delete_task(task_id: UUID, user_id: UUID) -> bool:
+    """Delete a task. Returns True if deleted."""
+    async with get_connection() as conn:
+        result = await conn.execute(
+            "DELETE FROM tasks WHERE id = $1 AND user_id = $2",
+            task_id,
+            user_id,
+        )
+        return result == "DELETE 1"

@@ -1,14 +1,33 @@
 """Base agent runner using Direct Tools with Anthropic API."""
 
+import asyncio
 import json
+import logging
+import uuid as uuid_module
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Any
+from typing import AsyncGenerator, AsyncIterator, Any
 
 import anthropic
 
 from kensan_ai.config import get_settings
-from kensan_ai.tools import get_tools_api_schema, execute_tool, format_tool_result
+from kensan_ai.tools import get_tools_api_schema, execute_tool, format_tool_result, is_readonly_tool
 from kensan_ai.agents.message_history import MessageHistory
+from kensan_ai.api.sse import sse_event, sse_keepalive
+from kensan_ai.telemetry import get_tracer
+
+logger = logging.getLogger("kensan_ai.agent")
+
+try:
+    from opentelemetry import context as otel_context, trace
+    from opentelemetry.trace import StatusCode
+
+    _has_otel = True
+except ImportError:
+    _has_otel = False
+
+_tracer = get_tracer("kensan-ai.agent")
+
+_KEEPALIVE_INTERVAL = 10  # seconds
 
 
 @dataclass
@@ -282,3 +301,393 @@ class AgentRunner:
 
             if final_message.stop_reason == "end_turn":
                 break
+
+    async def stream_sse(
+        self,
+        user_message: str,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+        history: MessageHistory | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Run the agent with SSE event output.
+
+        Readonly tools are executed immediately. Write tools are collected
+        as pending actions and yielded as an action_proposal event.
+
+        Sends periodic keepalive SSE events during tool execution and
+        Claude API wait to prevent client-side timeouts.
+
+        Args:
+            user_message: The user's input message
+            user_id: Optional user ID to inject into tool calls
+            conversation_id: Conversation ID for state tracking
+            history: Optional existing message history to continue
+
+        Yields:
+            SSE event strings
+        """
+        if history is None:
+            history = MessageHistory()
+        history.add_user_message(user_message)
+        tools = self._get_tools_schema()
+
+        conv_id = conversation_id or str(uuid_module.uuid4())
+        pending_actions: list[dict[str, Any]] = []
+        total_input_tokens = 0
+        total_output_tokens = 0
+
+        # Queue for interleaving keepalive events with normal SSE events
+        event_queue: asyncio.Queue[str | None] = asyncio.Queue()
+        keepalive_task: asyncio.Task[None] | None = None
+
+        async def _keepalive_loop() -> None:
+            """Send keepalive events at regular intervals."""
+            try:
+                while True:
+                    await asyncio.sleep(_KEEPALIVE_INTERVAL)
+                    await event_queue.put(sse_keepalive())
+            except asyncio.CancelledError:
+                pass
+
+        def _start_keepalive() -> None:
+            nonlocal keepalive_task
+            if keepalive_task is None or keepalive_task.done():
+                keepalive_task = asyncio.create_task(_keepalive_loop())
+
+        def _stop_keepalive() -> None:
+            nonlocal keepalive_task
+            if keepalive_task is not None and not keepalive_task.done():
+                keepalive_task.cancel()
+                keepalive_task = None
+
+        # Start root span (manual lifecycle for async generator)
+        stream_span = _tracer.start_span("agent.stream")
+        stream_span.set_attribute("agent.user_id", user_id or "")
+        stream_span.set_attribute("agent.conversation_id", conv_id)
+        stream_span.set_attribute("agent.user_message", user_message[:500])
+        stream_span.set_attribute("agent.model", self.model)
+        stream_span.set_attribute("agent.max_turns", self.max_turns)
+
+        if _has_otel:
+            stream_token = otel_context.attach(trace.set_span_in_context(stream_span))
+        else:
+            stream_token = None
+
+        outcome = "success"
+        actual_turns = 0
+
+        logger.info(
+            json.dumps({
+                "event": "agent.prompt",
+                "user_id": user_id or "",
+                "conversation_id": conv_id,
+                "user_message": user_message[:500],
+                "model": self.model,
+                "system_prompt_preview": self.system_prompt[:500],
+            }, ensure_ascii=False),
+        )
+
+        async def _run_agent() -> None:
+            """Main agent loop that puts SSE events into the queue."""
+            nonlocal total_input_tokens, total_output_tokens, actual_turns, outcome
+
+            try:
+                for turn in range(self.max_turns):
+                    actual_turns = turn + 1
+
+                    # Start turn span
+                    turn_span = _tracer.start_span("agent.turn")
+                    turn_span.set_attribute("agent.turn.number", turn + 1)
+                    turn_span.set_attribute("agent.turn.model", self.model)
+
+                    if _has_otel:
+                        turn_token = otel_context.attach(trace.set_span_in_context(turn_span))
+                    else:
+                        turn_token = None
+
+                    try:
+                        assistant_content: list[dict[str, Any]] = []
+                        tool_use_blocks: list[dict[str, Any]] = []
+                        current_tool_use: dict[str, Any] | None = None
+                        current_tool_input_json = ""
+
+                        # Start keepalive during API call (covers initial wait)
+                        _start_keepalive()
+
+                        async with self.client.messages.stream(
+                            model=self.model,
+                            max_tokens=4096,
+                            system=self.system_prompt,
+                            messages=history.get_messages(),
+                            tools=tools if tools else anthropic.NOT_GIVEN,
+                            temperature=self.temperature,
+                        ) as stream:
+                            async for event in stream:
+                                if event.type == "content_block_start":
+                                    # First content arriving - stop keepalive
+                                    _stop_keepalive()
+                                    if event.content_block.type == "tool_use":
+                                        current_tool_use = {
+                                            "type": "tool_use",
+                                            "id": event.content_block.id,
+                                            "name": event.content_block.name,
+                                            "input": {},
+                                        }
+                                        current_tool_input_json = ""
+                                elif event.type == "content_block_delta":
+                                    if event.delta.type == "text_delta":
+                                        await event_queue.put(
+                                            sse_event("text", {"content": event.delta.text})
+                                        )
+                                        if assistant_content and assistant_content[-1].get("type") == "text":
+                                            assistant_content[-1]["text"] += event.delta.text
+                                        else:
+                                            assistant_content.append({"type": "text", "text": event.delta.text})
+                                    elif event.delta.type == "input_json_delta":
+                                        current_tool_input_json += event.delta.partial_json
+                                elif event.type == "content_block_stop":
+                                    if current_tool_use:
+                                        if current_tool_input_json:
+                                            try:
+                                                current_tool_use["input"] = json.loads(current_tool_input_json)
+                                            except json.JSONDecodeError:
+                                                current_tool_use["input"] = {}
+                                        tool_use_blocks.append(current_tool_use)
+                                        assistant_content.append(current_tool_use)
+                                        current_tool_use = None
+                                        current_tool_input_json = ""
+
+                            final_message = await stream.get_final_message()
+
+                        _stop_keepalive()
+
+                        turn_input = final_message.usage.input_tokens
+                        turn_output = final_message.usage.output_tokens
+                        total_input_tokens += turn_input
+                        total_output_tokens += turn_output
+
+                        turn_span.set_attribute("agent.turn.stop_reason", final_message.stop_reason or "")
+                        turn_span.set_attribute("agent.turn.input_tokens", turn_input)
+                        turn_span.set_attribute("agent.turn.output_tokens", turn_output)
+                        turn_span.set_attribute("agent.turn.tool_call_count", len(tool_use_blocks))
+
+                        # Collect response text for logging
+                        response_text = "".join(
+                            b["text"] for b in assistant_content if b.get("type") == "text"
+                        )
+                        logger.info(
+                            json.dumps({
+                                "event": "agent.turn",
+                                "conversation_id": conv_id,
+                                "turn_number": turn + 1,
+                                "stop_reason": final_message.stop_reason or "",
+                                "input_tokens": turn_input,
+                                "output_tokens": turn_output,
+                                "tool_call_count": len(tool_use_blocks),
+                                "response_text": response_text[:1000],
+                            }, ensure_ascii=False),
+                        )
+
+                        history.add_assistant_message(assistant_content)
+
+                        if not tool_use_blocks:
+                            break
+
+                        # Process tool calls: readonly = execute, write = collect as proposals
+                        tool_results: list[dict[str, Any]] = []
+                        has_readonly_tools = False
+
+                        # Start keepalive during tool execution
+                        _start_keepalive()
+
+                        # Separate readonly and write tools
+                        readonly_calls: list[dict[str, Any]] = []
+                        write_calls: list[dict[str, Any]] = []
+                        for tool_use in tool_use_blocks:
+                            tool_input = dict(tool_use["input"])
+                            if user_id and "user_id" not in tool_input:
+                                tool_input["user_id"] = user_id
+                            prepared = {**tool_use, "input": tool_input}
+                            if is_readonly_tool(tool_use["name"]):
+                                readonly_calls.append(prepared)
+                            else:
+                                write_calls.append(prepared)
+
+                        # Execute readonly tools in parallel
+                        if readonly_calls:
+                            has_readonly_tools = True
+
+                            # Send all tool_call SSE events upfront
+                            for tc in readonly_calls:
+                                await event_queue.put(sse_event("tool_call", {
+                                    "id": tc["id"],
+                                    "name": tc["name"],
+                                }))
+
+                            async def _exec_readonly(tc: dict[str, Any]) -> dict[str, Any]:
+                                tool_span = _tracer.start_span("agent.tool_execution")
+                                tool_span.set_attribute("tool.name", tc["name"])
+                                tool_span.set_attribute("tool.readonly", True)
+                                try:
+                                    result = await execute_tool(tc["name"], tc["input"])
+                                    result_str = format_tool_result(result)
+                                    tool_span.set_attribute("tool.success", True)
+                                    logger.info(
+                                        json.dumps({
+                                            "event": "agent.tool_call",
+                                            "conversation_id": conv_id,
+                                            "tool_name": tc["name"],
+                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False)[:500],
+                                            "tool_output": result_str[:500],
+                                            "success": True,
+                                        }, ensure_ascii=False),
+                                    )
+                                    return {
+                                        "type": "tool_result",
+                                        "tool_use_id": tc["id"],
+                                        "content": result_str,
+                                    }
+                                except Exception as e:
+                                    tool_span.set_attribute("tool.success", False)
+                                    tool_span.set_attribute("tool.error", str(e))
+                                    if _has_otel:
+                                        tool_span.set_status(StatusCode.ERROR, str(e))
+                                        tool_span.record_exception(e)
+                                    logger.warning(
+                                        json.dumps({
+                                            "event": "agent.tool_call",
+                                            "conversation_id": conv_id,
+                                            "tool_name": tc["name"],
+                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False)[:500],
+                                            "success": False,
+                                            "error": str(e),
+                                        }, ensure_ascii=False),
+                                    )
+                                    return {
+                                        "type": "tool_result",
+                                        "tool_use_id": tc["id"],
+                                        "content": json.dumps({"error": str(e)}, ensure_ascii=False),
+                                        "is_error": True,
+                                    }
+                                finally:
+                                    tool_span.end()
+
+                            parallel_results = await asyncio.gather(
+                                *[_exec_readonly(tc) for tc in readonly_calls]
+                            )
+                            tool_results.extend(parallel_results)
+
+                            # Send all tool_result SSE events
+                            for tc in readonly_calls:
+                                await event_queue.put(sse_event("tool_result", {
+                                    "id": tc["id"],
+                                    "name": tc["name"],
+                                }))
+
+                        # Collect write tools as pending actions
+                        for tc in write_calls:
+                            action_id = str(uuid_module.uuid4())
+                            pending_actions.append({
+                                "id": action_id,
+                                "tool_name": tc["name"],
+                                "description": f"{tc['name']}({json.dumps(tc['input'], ensure_ascii=False)})",
+                                "input": tc["input"],
+                            })
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tc["id"],
+                                "content": f"この操作はユーザーの承認待ちです: {tc['name']}",
+                            })
+
+                        _stop_keepalive()
+
+                        if tool_results:
+                            history.add_tool_results(tool_results)
+
+                        # If only write tools remain (no readonly executed), break to send proposal
+                        if not has_readonly_tools:
+                            break
+
+                        if final_message.stop_reason == "end_turn":
+                            break
+
+                    finally:
+                        _stop_keepalive()
+                        if _has_otel and turn_token is not None:
+                            otel_context.detach(turn_token)
+                        turn_span.end()
+                else:
+                    # for-loop exhausted without break → max turns reached
+                    outcome = "max_turns_reached"
+
+            except Exception as exc:
+                outcome = "error"
+                if _has_otel:
+                    stream_span.set_status(StatusCode.ERROR, str(exc))
+                    stream_span.record_exception(exc)
+                raise
+            finally:
+                _stop_keepalive()
+
+        # Run the agent logic as a task so we can yield events from the queue
+        agent_task = asyncio.create_task(_run_agent())
+        agent_error: Exception | None = None
+
+        try:
+            while True:
+                # Wait for either the agent to finish or a new event
+                if agent_task.done():
+                    # Drain remaining events
+                    while not event_queue.empty():
+                        event_str = event_queue.get_nowait()
+                        if event_str is not None:
+                            yield event_str
+                    # Re-raise if agent failed
+                    agent_error = agent_task.exception()
+                    break
+
+                try:
+                    event_str = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+                    if event_str is not None:
+                        yield event_str
+                except asyncio.TimeoutError:
+                    continue
+        finally:
+            _stop_keepalive()
+
+            stream_span.set_attribute("agent.total_turns", actual_turns)
+            stream_span.set_attribute("agent.total_input_tokens", total_input_tokens)
+            stream_span.set_attribute("agent.total_output_tokens", total_output_tokens)
+            stream_span.set_attribute("agent.pending_action_count", len(pending_actions))
+            stream_span.set_attribute("agent.outcome", outcome)
+
+            logger.info(
+                json.dumps({
+                    "event": "agent.complete",
+                    "conversation_id": conv_id,
+                    "outcome": outcome,
+                    "total_turns": actual_turns,
+                    "total_input_tokens": total_input_tokens,
+                    "total_output_tokens": total_output_tokens,
+                    "pending_action_count": len(pending_actions),
+                }, ensure_ascii=False),
+            )
+
+            if _has_otel and stream_token is not None:
+                otel_context.detach(stream_token)
+            stream_span.end()
+
+        if agent_error is not None:
+            raise agent_error
+
+        # Yield action proposal if there are pending write actions
+        if pending_actions:
+            yield sse_event("action_proposal", {"actions": pending_actions})
+
+        yield sse_event("done", {
+            "conversation_id": conv_id,
+            "tokens": {
+                "input": total_input_tokens,
+                "output": total_output_tokens,
+            },
+        })

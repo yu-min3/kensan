@@ -1,6 +1,6 @@
 """Time entry queries."""
 
-from datetime import date
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,23 +9,26 @@ from kensan_ai.db.connection import get_connection
 
 async def get_time_entries(
     user_id: UUID,
-    target_date: date | None = None,
-    start_date: date | None = None,
-    end_date: date | None = None,
+    start_datetime: datetime | None = None,
+    end_datetime: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Get time entries for a user with optional date filters."""
+    """Get time entries for a user with optional datetime filters.
+
+    Args:
+        user_id: The user ID.
+        start_datetime: Filter entries starting from this datetime (inclusive, UTC).
+        end_datetime: Filter entries starting before this datetime (exclusive, UTC).
+    """
     async with get_connection() as conn:
         conditions = ["user_id = $1"]
         params: list[Any] = [user_id]
         param_idx = 2
 
-        if target_date is not None:
-            conditions.append(f"date = ${param_idx}")
-            params.append(target_date)
-            param_idx += 1
-        elif start_date is not None and end_date is not None:
-            conditions.append(f"date >= ${param_idx} AND date <= ${param_idx + 1}")
-            params.extend([start_date, end_date])
+        if start_datetime is not None and end_datetime is not None:
+            conditions.append(
+                f"start_datetime >= ${param_idx} AND start_datetime < ${param_idx + 1}"
+            )
+            params.extend([start_datetime, end_datetime])
             param_idx += 2
 
         where_clause = " AND ".join(conditions)
@@ -33,12 +36,12 @@ async def get_time_entries(
         entries = await conn.fetch(
             f"""
             SELECT
-                id, date, start_time, end_time, task_id, task_name,
+                id, start_datetime, end_datetime, task_id, task_name,
                 milestone_id, milestone_name, goal_id, goal_name, goal_color,
                 description
             FROM time_entries
             WHERE {where_clause}
-            ORDER BY date DESC, start_time DESC
+            ORDER BY start_datetime DESC
             """,
             *params,
         )
@@ -46,9 +49,8 @@ async def get_time_entries(
         return [
             {
                 "id": str(entry["id"]),
-                "date": entry["date"].isoformat(),
-                "startTime": entry["start_time"].strftime("%H:%M"),
-                "endTime": entry["end_time"].strftime("%H:%M"),
+                "startDatetime": entry["start_datetime"].isoformat(),
+                "endDatetime": entry["end_datetime"].isoformat(),
                 "taskId": str(entry["task_id"]) if entry["task_id"] else None,
                 "taskName": entry["task_name"],
                 "milestone": {

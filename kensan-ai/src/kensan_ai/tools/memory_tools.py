@@ -11,15 +11,10 @@ from kensan_ai.lib.parsers import parse_uuid
 
 @tool(
     name="get_user_memory",
-    description="ユーザーのプロフィールサマリー、好み、強み、成長領域を取得します。",
+    description="ユーザーのプロフィールサマリー、好み、強み、成長領域を取得する。",
     input_schema={
-        "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
-        },
-        "required": ["user_id"],
+        "properties": {},
+        "required": [],
     },
 )
 async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
@@ -58,13 +53,9 @@ async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     name="get_user_facts",
-    description="ユーザーに関する事実（好み、目標、強み、課題など）を取得します。",
+    description="ユーザーに関する事実（好み、目標、強み、課題など）を取得する。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "fact_type": {
                 "type": "string",
                 "description": "ファクトの種類でフィルタ (preference, goal, strength, challenge, schedule, context)",
@@ -74,7 +65,7 @@ async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "取得件数上限 (デフォルト: 20)",
             },
         },
-        "required": ["user_id"],
+        "required": [],
     },
 )
 async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
@@ -132,13 +123,10 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     name="add_user_fact",
-    description="ユーザーに関する新しい事実を記録します。会話中に明示的に言及されたことのみ記録してください。",
+    description="ユーザーに関する新しい事実を記録する。会話中に明示的に言及されたことのみ記録すること。",
+    readonly=False,
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "fact_type": {
                 "type": "string",
                 "description": "ファクトの種類 (preference, goal, strength, challenge, schedule, context)",
@@ -157,7 +145,7 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "有効期限（日数、省略時は無期限）",
             },
         },
-        "required": ["user_id", "fact_type", "content"],
+        "required": ["fact_type", "content"],
     },
 )
 async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
@@ -207,13 +195,9 @@ async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     name="get_recent_interactions",
-    description="ユーザーの最近のAIとの会話履歴を取得します。",
+    description="ユーザーの最近のAIとの会話履歴を取得する。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "limit": {
                 "type": "integer",
                 "description": "取得件数上限 (デフォルト: 5)",
@@ -223,7 +207,7 @@ async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "状況でフィルタ (chat, morning, evening, weekly)",
             },
         },
-        "required": ["user_id"],
+        "required": [],
     },
 )
 async def get_recent_interactions(args: dict[str, Any]) -> dict[str, Any]:

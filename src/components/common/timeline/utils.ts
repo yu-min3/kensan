@@ -65,6 +65,84 @@ export function calculateHeight(
 }
 
 /**
+ * Overlap layout info for a time block
+ */
+export interface OverlapLayout {
+  column: number
+  totalColumns: number
+}
+
+/**
+ * Calculate overlap layout for time blocks.
+ * Returns a map from block ID to its column position and total columns in its group.
+ * Blocks that overlap are placed side-by-side like Google Calendar.
+ */
+export function calculateOverlapLayout(
+  blocks: Array<{ id: string; startTime: string; endTime: string }>
+): Map<string, OverlapLayout> {
+  if (blocks.length === 0) return new Map()
+
+  // Sort by start time, then by duration (longer first)
+  const sorted = [...blocks].sort((a, b) => {
+    const startDiff = getMinutesFromTime(a.startTime) - getMinutesFromTime(b.startTime)
+    if (startDiff !== 0) return startDiff
+    // Longer blocks first so they get earlier columns
+    const aDuration = getMinutesFromTime(a.endTime) - getMinutesFromTime(a.startTime)
+    const bDuration = getMinutesFromTime(b.endTime) - getMinutesFromTime(b.startTime)
+    return bDuration - aDuration
+  })
+
+  // For each block, find which column it can go in
+  const columnEnds: number[] = [] // end time (in minutes) of the last block in each column
+  const blockColumns = new Map<string, number>()
+
+  for (const block of sorted) {
+    const blockStart = getMinutesFromTime(block.startTime)
+    // Find the first column where this block fits (no overlap)
+    let placed = false
+    for (let col = 0; col < columnEnds.length; col++) {
+      if (columnEnds[col] <= blockStart) {
+        columnEnds[col] = getMinutesFromTime(block.endTime)
+        blockColumns.set(block.id, col)
+        placed = true
+        break
+      }
+    }
+    if (!placed) {
+      blockColumns.set(block.id, columnEnds.length)
+      columnEnds.push(getMinutesFromTime(block.endTime))
+    }
+  }
+
+  // Now determine how many columns each block's group actually has.
+  // A block's totalColumns = max columns among all blocks that overlap with it (including itself).
+  const result = new Map<string, OverlapLayout>()
+
+  for (const block of sorted) {
+    const blockStart = getMinutesFromTime(block.startTime)
+    const blockEnd = getMinutesFromTime(block.endTime)
+    let maxCol = blockColumns.get(block.id)!
+
+    for (const other of sorted) {
+      if (other.id === block.id) continue
+      const otherStart = getMinutesFromTime(other.startTime)
+      const otherEnd = getMinutesFromTime(other.endTime)
+      // Check overlap
+      if (otherStart < blockEnd && otherEnd > blockStart) {
+        maxCol = Math.max(maxCol, blockColumns.get(other.id)!)
+      }
+    }
+
+    result.set(block.id, {
+      column: blockColumns.get(block.id)!,
+      totalColumns: maxCol + 1,
+    })
+  }
+
+  return result
+}
+
+/**
  * Calculate time from Y position
  */
 export function calculateTimeFromY(

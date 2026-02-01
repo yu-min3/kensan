@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/shared/config"
 )
@@ -28,6 +29,11 @@ func NewPostgresPool(ctx context.Context, cfg config.DatabaseConfig) (*pgxpool.P
 	// Connection pool settings
 	poolConfig.MaxConns = 25
 	poolConfig.MinConns = 5
+
+	// OTel DB tracing (sends to noop provider when OTel is disabled)
+	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
+		otelpgx.WithTrimSQLInSpanName(),
+	)
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

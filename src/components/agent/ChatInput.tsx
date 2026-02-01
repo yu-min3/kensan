@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 interface ChatInputProps {
   onSend: (message: string) => void
   disabled?: boolean
+  placeholder?: string
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -43,7 +44,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         value={input}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        placeholder="メッセージを入力..."
+        placeholder={placeholder || 'メッセージを入力...'}
         disabled={disabled}
         rows={1}
         className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"

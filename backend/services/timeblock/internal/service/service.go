@@ -19,7 +19,7 @@ var (
 	ErrTimerAlreadyRunning  = repository.ErrTimerAlreadyRunning
 	ErrInvalidInput         = errors.ErrInvalidInput
 	ErrInvalidDate          = errors.ErrInvalidDate
-	ErrInvalidTime          = errors.ErrInvalidTime
+	ErrInvalidDatetime      = fmt.Errorf("invalid datetime: %w", errors.ErrInvalidInput)
 )
 
 // Service handles business logic for time blocks and time entries
@@ -37,58 +37,19 @@ func validateDate(date string) bool {
 	return validation.IsValidDate(date)
 }
 
-// validateTime validates that a time string is in HH:mm format
-func validateTime(t string) bool {
-	return validation.IsValidTime(t)
-}
-
-// convertUTCToLocalDateTime converts UTC date and time to local timezone
-// utcDate format: "YYYY-MM-DD", utcTime format: "HH:mm:ss"
-// Returns localDate, localTime in the same formats
-func convertUTCToLocalDateTime(utcDate, utcTime, timezone string) (string, string, error) {
-	loc, err := time.LoadLocation(timezone)
+// validateDatetime validates that a datetime string is in RFC3339 format and returns the parsed time
+func validateDatetime(datetime string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339, datetime)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid timezone: %w", err)
+		return time.Time{}, ErrInvalidDatetime
 	}
-
-	// Parse UTC date and time (handle both HH:mm:ss and HH:mm formats)
-	timeStr := utcTime
-	if len(timeStr) == 5 {
-		timeStr += ":00" // Add seconds if not present
-	}
-
-	utcTimeStr := fmt.Sprintf("%sT%sZ", utcDate, timeStr)
-	utcParsed, err := time.Parse(time.RFC3339, utcTimeStr)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse UTC datetime: %w", err)
-	}
-
-	// Convert to local timezone
-	localTime := utcParsed.In(loc)
-
-	localDate := localTime.Format("2006-01-02")
-	localTimeStr := localTime.Format("15:04:05")
-
-	return localDate, localTimeStr, nil
+	return t, nil
 }
 
 // ========== TimeBlock Operations ==========
 
 // ListTimeBlocks returns all time blocks for a user with optional filters
-// If timezone is provided (non-empty), date/time in the response will be converted to local time.
-// If timezone is empty, date/time will be returned as stored (UTC).
-func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter, timezone string) ([]timeblock.TimeBlock, error) {
-	// Validate date filters
-	if filter.Date != nil && !validateDate(*filter.Date) {
-		return nil, ErrInvalidDate
-	}
-	if filter.StartDate != nil && !validateDate(*filter.StartDate) {
-		return nil, ErrInvalidDate
-	}
-	if filter.EndDate != nil && !validateDate(*filter.EndDate) {
-		return nil, ErrInvalidDate
-	}
-
+func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error) {
 	blocks, err := s.repo.ListTimeBlocks(ctx, userID, filter)
 	if err != nil {
 		return nil, err
@@ -96,23 +57,6 @@ func (s *Service) ListTimeBlocks(ctx context.Context, userID string, filter time
 
 	if blocks == nil {
 		return []timeblock.TimeBlock{}, nil
-	}
-
-	// Convert to local timezone if specified
-	if timezone != "" {
-		for i := range blocks {
-			localDate, localStartTime, err := convertUTCToLocalDateTime(blocks[i].Date, blocks[i].StartTime, timezone)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert start time: %w", err)
-			}
-			_, localEndTime, err := convertUTCToLocalDateTime(blocks[i].Date, blocks[i].EndTime, timezone)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert end time: %w", err)
-			}
-			blocks[i].Date = localDate
-			blocks[i].StartTime = localStartTime
-			blocks[i].EndTime = localEndTime
-		}
 	}
 
 	return blocks, nil
@@ -139,16 +83,19 @@ func (s *Service) CreateTimeBlock(ctx context.Context, userID string, input time
 		return nil, ErrInvalidInput
 	}
 
-	if input.Date == "" || !validateDate(input.Date) {
-		return nil, ErrInvalidDate
+	startDt, err := validateDatetime(input.StartDatetime)
+	if err != nil {
+		return nil, err
 	}
 
-	if input.StartTime == "" || !validateTime(input.StartTime) {
-		return nil, ErrInvalidTime
+	endDt, err := validateDatetime(input.EndDatetime)
+	if err != nil {
+		return nil, err
 	}
 
-	if input.EndTime == "" || !validateTime(input.EndTime) {
-		return nil, ErrInvalidTime
+	// end must be after start
+	if !endDt.After(startDt) {
+		return nil, ErrInvalidDatetime
 	}
 
 	return s.repo.CreateTimeBlock(ctx, userID, input)
@@ -165,17 +112,17 @@ func (s *Service) UpdateTimeBlock(ctx context.Context, userID, timeBlockID strin
 		return nil, ErrTimeBlockNotFound
 	}
 
-	// Validate optional fields if provided
-	if input.Date != nil && !validateDate(*input.Date) {
-		return nil, ErrInvalidDate
+	// Validate optional datetime fields if provided
+	if input.StartDatetime != nil {
+		if _, err := validateDatetime(*input.StartDatetime); err != nil {
+			return nil, err
+		}
 	}
 
-	if input.StartTime != nil && !validateTime(*input.StartTime) {
-		return nil, ErrInvalidTime
-	}
-
-	if input.EndTime != nil && !validateTime(*input.EndTime) {
-		return nil, ErrInvalidTime
+	if input.EndDatetime != nil {
+		if _, err := validateDatetime(*input.EndDatetime); err != nil {
+			return nil, err
+		}
 	}
 
 	tb, err := s.repo.UpdateTimeBlock(ctx, userID, timeBlockID, input)
@@ -226,20 +173,7 @@ func (s *Service) GenerateFromRoutines(ctx context.Context, userID string, input
 // ========== TimeEntry Operations ==========
 
 // ListTimeEntries returns all time entries for a user with optional filters
-// If timezone is provided (non-empty), date/time in the response will be converted to local time.
-// If timezone is empty, date/time will be returned as stored (UTC).
-func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter, timezone string) ([]timeblock.TimeEntry, error) {
-	// Validate date filters
-	if filter.Date != nil && !validateDate(*filter.Date) {
-		return nil, ErrInvalidDate
-	}
-	if filter.StartDate != nil && !validateDate(*filter.StartDate) {
-		return nil, ErrInvalidDate
-	}
-	if filter.EndDate != nil && !validateDate(*filter.EndDate) {
-		return nil, ErrInvalidDate
-	}
-
+func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error) {
 	entries, err := s.repo.ListTimeEntries(ctx, userID, filter)
 	if err != nil {
 		return nil, err
@@ -247,23 +181,6 @@ func (s *Service) ListTimeEntries(ctx context.Context, userID string, filter tim
 
 	if entries == nil {
 		return []timeblock.TimeEntry{}, nil
-	}
-
-	// Convert to local timezone if specified
-	if timezone != "" {
-		for i := range entries {
-			localDate, localStartTime, err := convertUTCToLocalDateTime(entries[i].Date, entries[i].StartTime, timezone)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert start time: %w", err)
-			}
-			_, localEndTime, err := convertUTCToLocalDateTime(entries[i].Date, entries[i].EndTime, timezone)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert end time: %w", err)
-			}
-			entries[i].Date = localDate
-			entries[i].StartTime = localStartTime
-			entries[i].EndTime = localEndTime
-		}
 	}
 
 	return entries, nil
@@ -290,16 +207,19 @@ func (s *Service) CreateTimeEntry(ctx context.Context, userID string, input time
 		return nil, ErrInvalidInput
 	}
 
-	if input.Date == "" || !validateDate(input.Date) {
-		return nil, ErrInvalidDate
+	startDt, err := validateDatetime(input.StartDatetime)
+	if err != nil {
+		return nil, err
 	}
 
-	if input.StartTime == "" || !validateTime(input.StartTime) {
-		return nil, ErrInvalidTime
+	endDt, err := validateDatetime(input.EndDatetime)
+	if err != nil {
+		return nil, err
 	}
 
-	if input.EndTime == "" || !validateTime(input.EndTime) {
-		return nil, ErrInvalidTime
+	// end must be after start
+	if !endDt.After(startDt) {
+		return nil, ErrInvalidDatetime
 	}
 
 	return s.repo.CreateTimeEntry(ctx, userID, input)
@@ -316,17 +236,17 @@ func (s *Service) UpdateTimeEntry(ctx context.Context, userID, timeEntryID strin
 		return nil, ErrTimeEntryNotFound
 	}
 
-	// Validate optional fields if provided
-	if input.Date != nil && !validateDate(*input.Date) {
-		return nil, ErrInvalidDate
+	// Validate optional datetime fields if provided
+	if input.StartDatetime != nil {
+		if _, err := validateDatetime(*input.StartDatetime); err != nil {
+			return nil, err
+		}
 	}
 
-	if input.StartTime != nil && !validateTime(*input.StartTime) {
-		return nil, ErrInvalidTime
-	}
-
-	if input.EndTime != nil && !validateTime(*input.EndTime) {
-		return nil, ErrInvalidTime
+	if input.EndDatetime != nil {
+		if _, err := validateDatetime(*input.EndDatetime); err != nil {
+			return nil, err
+		}
 	}
 
 	te, err := s.repo.UpdateTimeEntry(ctx, userID, timeEntryID, input)

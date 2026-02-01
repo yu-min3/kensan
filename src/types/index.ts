@@ -74,9 +74,8 @@ export interface Task {
 // ============================================
 export interface TimeBlock {
   id: string
-  date: string // YYYY-MM-DD
-  startTime: string // HH:mm
-  endTime: string // HH:mm
+  startDatetime: string // ISO 8601 UTC (e.g., "2026-01-20T15:00:00Z")
+  endDatetime: string // ISO 8601 UTC
   taskId?: string
   taskName: string
   // 非正規化フィールド（表示用）
@@ -93,9 +92,8 @@ export interface TimeBlock {
 // ============================================
 export interface TimeEntry {
   id: string
-  date: string // YYYY-MM-DD
-  startTime: string // HH:mm
-  endTime: string // HH:mm
+  startDatetime: string // ISO 8601 UTC (e.g., "2026-01-20T15:00:00Z")
+  endDatetime: string // ISO 8601 UTC
   taskId?: string
   taskName: string
   // 非正規化フィールド（表示用）
@@ -143,10 +141,44 @@ export interface TodoCompletion {
 }
 
 // ============================================
-// Note (統合ノート - 日記・学習記録)
+// Note (統合ノート - 日記・学習記録・一般・読書レビュー等)
 // ============================================
-export type NoteType = 'diary' | 'learning'
+export type NoteType = string
 export type NoteFormat = 'markdown' | 'drawio'
+
+// ============================================
+// NoteTypeConfig (ノートタイプ設定 - DB駆動)
+// ============================================
+export interface TypeConstraints {
+  dateRequired: boolean
+  titleRequired: boolean
+  contentRequired: boolean
+  dailyUnique: boolean
+}
+
+export interface FieldSchema {
+  key: string
+  label: string
+  labelEn?: string
+  type: 'string' | 'integer' | 'float' | 'boolean' | 'enum' | 'date' | 'url'
+  required: boolean
+  constraints?: Record<string, unknown>
+}
+
+export interface NoteTypeConfig {
+  id: string
+  slug: string
+  displayName: string
+  displayNameEn?: string
+  description?: string
+  icon: string
+  color: string
+  constraints: TypeConstraints
+  metadataSchema: FieldSchema[]
+  sortOrder: number
+  isSystem: boolean
+  isActive: boolean
+}
 
 // ============================================
 // NoteMetadata (ノートメタデータ)
@@ -301,14 +333,35 @@ export interface WeeklySummary {
 // ============================================
 // AIReviewReport (AI振り返り)
 // ============================================
+export type TaskEvaluationStatus = 'achieved' | 'good' | 'partial' | 'missed'
+
+export interface TaskEvaluation {
+  taskName: string
+  status: TaskEvaluationStatus
+  comment: string
+}
+
+export interface TimeEvaluation {
+  goalName: string
+  goalColor?: string
+  actualMinutes: number
+  targetMinutes: number
+  comment: string
+}
+
 export interface AIReviewReport {
   id: string
   weekStart: string
   weekEnd: string
-  summary: string
+  // 4セクション構造
+  taskEvaluations: TaskEvaluation[]
+  timeEvaluations: TimeEvaluation[]
+  learningSummary: string
   goodPoints: string[]
   improvementPoints: string[]
   advice: string[]
+  // 後方互換
+  summary: string
   createdAt: Date
 }
 

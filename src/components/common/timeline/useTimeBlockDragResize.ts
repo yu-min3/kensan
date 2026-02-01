@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TimeBlock } from '@/types'
 import type { ResizeState, DragState, PreviewTime, ResizeEdge } from './types'
 import { getMinutesFromTime, minutesToTimeString, snapToInterval, getDurationMinutes } from './utils'
+import { getLocalTime } from '@/lib/timezone'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 
 interface UseTimeBlockDragResizeProps {
   startHour: number
@@ -33,6 +35,17 @@ export function useTimeBlockDragResize({
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewTime, setPreviewTime] = useState<PreviewTime | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
+
+  // Helper to get local HH:mm from a TimeBlock's ISO datetime
+  const blockStartTime = useCallback(
+    (block: TimeBlock) => getLocalTime(block.startDatetime, timezone),
+    [timezone]
+  )
+  const blockEndTime = useCallback(
+    (block: TimeBlock) => getLocalTime(block.endDatetime, timezone),
+    [timezone]
+  )
 
   // Convert Y position to minutes
   const yToMinutes = useCallback(
@@ -52,19 +65,21 @@ export function useTimeBlockDragResize({
     (e: React.MouseEvent, block: TimeBlock, edge: ResizeEdge) => {
       e.preventDefault()
       e.stopPropagation()
+      const st = blockStartTime(block)
+      const et = blockEndTime(block)
       setResizeState({
         blockId: block.id,
         edge,
         initialY: e.clientY,
-        initialStartTime: block.startTime,
-        initialEndTime: block.endTime,
+        initialStartTime: st,
+        initialEndTime: et,
       })
       setPreviewTime({
-        startTime: block.startTime,
-        endTime: block.endTime,
+        startTime: st,
+        endTime: et,
       })
     },
-    []
+    [blockStartTime, blockEndTime]
   )
 
   // Handle drag start
@@ -72,20 +87,22 @@ export function useTimeBlockDragResize({
     (e: React.MouseEvent, block: TimeBlock) => {
       e.preventDefault()
       e.stopPropagation()
-      const duration = getDurationMinutes(block.startTime, block.endTime)
+      const st = blockStartTime(block)
+      const et = blockEndTime(block)
+      const duration = getDurationMinutes(st, et)
       setDragState({
         blockId: block.id,
         initialY: e.clientY,
-        initialStartTime: block.startTime,
-        initialEndTime: block.endTime,
+        initialStartTime: st,
+        initialEndTime: et,
         duration,
       })
       setPreviewTime({
-        startTime: block.startTime,
-        endTime: block.endTime,
+        startTime: st,
+        endTime: et,
       })
     },
-    []
+    [blockStartTime, blockEndTime]
   )
 
   // Handle resize move
@@ -207,15 +224,15 @@ export function useTimeBlockDragResize({
     }
   }, [dragState, handleDragMove, handleDragEnd])
 
-  // Get display times for a block (use preview if resizing or dragging)
+  // Get display times for a block (use preview if resizing or dragging, else local time)
   const getDisplayTimes = useCallback(
     (block: TimeBlock) => {
       if ((resizeState?.blockId === block.id || dragState?.blockId === block.id) && previewTime) {
         return previewTime
       }
-      return { startTime: block.startTime, endTime: block.endTime }
+      return { startTime: blockStartTime(block), endTime: blockEndTime(block) }
     },
-    [resizeState, dragState, previewTime]
+    [resizeState, dragState, previewTime, blockStartTime, blockEndTime]
   )
 
   return {

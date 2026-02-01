@@ -150,8 +150,9 @@ svc.Run()
 - 環境変数からの設定読み込み
 - データベース接続プーリング（pgxpool）
 - JWTマネージャー設定
-- ミドルウェアチェーン（RequestID、Logger、CORS、Auth）
-- グレースフルシャットダウン
+- ミドルウェアチェーン（RequestID、OTelTrace、Logger、CORS、Auth）
+- OpenTelemetry自動初期化（`OTEL_ENABLED=true`で有効化）
+- グレースフルシャットダウン（OTelプロバイダー含む）
 - `/health`エンドポイント
 
 ### Config (`config/config.go`)
@@ -160,11 +161,17 @@ svc.Run()
 
 ```go
 type Config struct {
-    Server   ServerConfig   // Host, Port, Env
-    Database DatabaseConfig // Host, Port, User, Password, DBName, SSLMode
-    JWT      JWTConfig      // Secret, Issuer, ExpireHour
+    Server    ServerConfig    // Host, Port, Env
+    Database  DatabaseConfig  // Host, Port, User, Password, DBName, SSLMode
+    JWT       JWTConfig       // Secret, Issuer, ExpireHour
+    Telemetry TelemetryConfig // Enabled, CollectorURL
 }
 ```
+
+| 環境変数 | デフォルト | 説明 |
+|---------|-----------|------|
+| `OTEL_ENABLED` | `false` | OpenTelemetryの有効化 |
+| `OTEL_COLLECTOR_URL` | `localhost:4318` | OTel Collector OTLP HTTPエンドポイント |
 
 ### Auth (`auth/jwt.go`)
 
@@ -189,8 +196,28 @@ claims, err := jwtManager.ValidateToken(tokenString)
 
 **リクエスト処理：**
 - `RequestID` - リクエストごとのUUID（またはX-Request-IDヘッダーから取得）
-- `Logger` - zerologによる構造化ログ
+- `OTelTrace` - OpenTelemetry HTTPスパン計装（otelhttp）
+- `Logger` - zerologによる構造化ログ（trace_id/span_id自動注入）
 - `Auth` - JWT検証、ユーザーID抽出
+
+### Telemetry (`telemetry/telemetry.go`)
+
+OpenTelemetryプロバイダー初期化：
+
+```go
+provider, err := telemetry.Initialize(ctx, telemetry.Config{
+    ServiceName:  "task-service",
+    CollectorURL: "otel-collector:4318",
+    Enabled:      true,
+})
+defer provider.Shutdown(ctx)
+```
+
+**機能：**
+- OTLP HTTPエクスポーター（トレース＋メトリクス）
+- W3C TraceContext + Baggageプロパゲーター
+- `Enabled=false`の場合はno-op（パフォーマンス影響なし）
+- pgx DBトレーシング（otelpgx）自動設定
 
 **レスポンスヘルパー：**
 ```go
@@ -424,12 +451,70 @@ erDiagram
     users ||--o{ documents : "owns"
     users ||--o{ ai_review_reports : "has"
 
+    note_types ||--o{ notes : "defines type"
     goals ||--o{ milestones : "contains"
     milestones ||--o{ tasks : "contains"
     tasks ||--o{ tasks : "has subtasks"
     tasks }o--o{ tags : "task_tags"
     notes }o--o{ tags : "note_tags"
 ```
+
+### note_types テーブル（データ駆動ノートタイプ）
+
+ノートタイプをハードコードではなくデータベースで管理。新しいタイプはマイグレーションでシードするだけで追加可能。
+
+```sql
+CREATE TABLE note_types (
+    id UUID PRIMARY KEY,
+    slug VARCHAR(50) NOT NULL UNIQUE,          -- 'diary', 'learning', 'general', 'book_review'
+    display_name VARCHAR(100) NOT NULL,        -- 日本語表示名
+    display_name_en VARCHAR(100),              -- 英語表示名
+    description TEXT,
+    icon VARCHAR(50) NOT NULL DEFAULT 'file-text',  -- Lucideアイコン名
+    color VARCHAR(7) DEFAULT '#6B7280',
+    constraints JSONB NOT NULL DEFAULT '{}',   -- {dateRequired, titleRequired, contentRequired, dailyUnique}
+    metadata_schema JSONB NOT NULL DEFAULT '[]', -- [{key, label, labelEn, type, required, constraints}]
+    sort_order INT DEFAULT 0,
+    is_system BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+```
+
+**制約 (`constraints` JSONB):**
+- `dateRequired` - 日付フィールドの必須化（diary, learning）
+- `titleRequired` - タイトルの必須化
+- `contentRequired` - コンテンツの必須化
+- `dailyUnique` - 1日1件制約（diary, learning）
+
+**メタデータスキーマ (`metadata_schema` JSONB配列):**
+タイプごとに追加フィールドを定義。例: book_reviewの著者、評価、ISBN等。
+
+| key | type | 説明 |
+|-----|------|------|
+| string | テキスト入力 | |
+| integer | 数値入力 | min/max制約可 |
+| float | 小数入力 | min/max制約可 |
+| boolean | チェックボックス | |
+| enum | 選択リスト | values制約で選択肢定義 |
+| date | 日付入力 | |
+| url | URL入力 | |
+
+**初期シードデータ:**
+
+| slug | display_name | icon | dateRequired | dailyUnique | metadata_schema |
+|------|-------------|------|:---:|:---:|---|
+| diary | 日記 | calendar-days | Yes | Yes | [] |
+| learning | 学習記録 | book-open | Yes | Yes | [] |
+| general | 一般ノート | file-text | No | No | [] |
+| book_review | 読書レビュー | book-open-check | No | No | author, rating, isbn, publisher, finished_date, category |
+
+**note-service での活用:**
+- 起動時にキャッシュ（`sync.RWMutex`で保護）
+- `validateCreateInput()` で制約をデータ駆動チェック
+- `validateMetadata()` でメタデータスキーマに基づくバリデーション
+- `GET /note-types` エンドポイントでフロントエンドに提供
 
 ### 主要な設計原則
 

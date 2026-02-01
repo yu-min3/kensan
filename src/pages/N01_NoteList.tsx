@@ -8,7 +8,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { Badge } from '@/components/ui/badge'
 import { useNoteStore } from '@/stores/useNoteStore'
+import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useTaskStore } from '@/stores/useTaskStore'
+import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { formatDateIso } from '@/lib/dateFormat'
 import type { NoteType } from '@/types'
 import {
@@ -17,24 +19,13 @@ import {
   Plus,
   Search,
   StickyNote,
-  BookOpen,
-  CalendarDays,
   Archive,
 } from 'lucide-react'
-
-const NOTE_TYPE_ICONS: Record<NoteType, React.ComponentType<{ className?: string }>> = {
-  diary: CalendarDays,
-  learning: BookOpen,
-}
-
-const NOTE_TYPE_LABELS: Record<NoteType, string> = {
-  diary: '日記',
-  learning: '学習記録',
-}
 
 export function N01NoteList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { items, isLoading, fetchNotes, search, searchResults, clearSearchResults } = useNoteStore()
+  const { types } = useNoteTypeStore()
   const { goals, tags } = useTaskStore()
 
   // Get initial filter from URL
@@ -96,6 +87,17 @@ export function N01NoteList() {
     return `/notes/new?type=${typeFilter}`
   }
 
+  // Get display info for a note type
+  const getTypeDisplayName = (slug: string) => {
+    const config = types.find((t) => t.slug === slug)
+    return config?.displayName ?? slug
+  }
+
+  const getTypeIcon = (slug: string) => {
+    const config = types.find((t) => t.slug === slug)
+    return getNoteTypeIcon(config?.icon ?? 'file-text')
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -112,18 +114,19 @@ export function N01NoteList() {
         </Link>
       </div>
 
-      {/* Type tabs */}
+      {/* Type tabs - dynamically generated */}
       <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as NoteType | 'all')}>
         <TabsList>
           <TabsTrigger value="all">すべて</TabsTrigger>
-          <TabsTrigger value="diary" className="gap-2">
-            <CalendarDays className="h-4 w-4" />
-            日記
-          </TabsTrigger>
-          <TabsTrigger value="learning" className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            学習記録
-          </TabsTrigger>
+          {types.map((noteType) => {
+            const Icon = getNoteTypeIcon(noteType.icon)
+            return (
+              <TabsTrigger key={noteType.slug} value={noteType.slug} className="gap-2">
+                <Icon className="h-4 w-4" />
+                {noteType.displayName}
+              </TabsTrigger>
+            )
+          })}
         </TabsList>
       </Tabs>
 
@@ -182,7 +185,7 @@ export function N01NoteList() {
       {!isLoading && displayItems.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {displayItems.map((note) => {
-            const TypeIcon = NOTE_TYPE_ICONS[note.type]
+            const TypeIcon = getTypeIcon(note.type)
             const FormatIcon = note.format === 'markdown' ? FileText : Shapes
 
             return (
@@ -197,7 +200,7 @@ export function N01NoteList() {
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="secondary" className="text-xs gap-1">
                             <TypeIcon className="h-3 w-3" />
-                            {NOTE_TYPE_LABELS[note.type]}
+                            {getTypeDisplayName(note.type)}
                           </Badge>
                           {note.archived && (
                             <Badge variant="outline" className="text-xs">

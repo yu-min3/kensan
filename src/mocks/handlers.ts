@@ -4,7 +4,6 @@ import { taskHandlers } from './handlers/tasks'
 import { timeblockHandlers } from './handlers/timeblocks'
 import { timerHandlers } from './handlers/timer'
 import { analyticsHandlers } from './handlers/analytics'
-import { aiHandlers } from './handlers/ai'
 import { memoHandlers } from './handlers/memos'
 import { noteHandlers } from './handlers/notes'
 import { agentHandlers } from './handlers/agent'
@@ -15,7 +14,6 @@ export const handlers = [
   ...timeblockHandlers,
   ...timerHandlers,
   ...analyticsHandlers,
-  ...aiHandlers,
   ...memoHandlers,
   ...noteHandlers,
   ...agentHandlers,

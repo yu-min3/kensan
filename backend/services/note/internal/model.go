@@ -9,18 +9,54 @@ import (
 // NoteType represents the type of note
 type NoteType string
 
+// Well-known note type constants (for backward compatibility)
 const (
 	NoteTypeDiary    NoteType = "diary"
 	NoteTypeLearning NoteType = "learning"
 )
 
-// IsValid checks if the note type is valid
+// IsValid is deprecated: use Service.IsValidNoteType() for dynamic validation.
+// Kept for backward compatibility with existing code that doesn't have service access.
 func (t NoteType) IsValid() bool {
-	switch t {
-	case NoteTypeDiary, NoteTypeLearning:
-		return true
-	}
-	return false
+	return t != ""
+}
+
+// ============================================
+// NoteTypeConfig - データ駆動型ノートタイプ定義
+// ============================================
+
+// NoteTypeConfig represents a note type configuration from the database
+type NoteTypeConfig struct {
+	ID             string          `json:"id"`
+	Slug           string          `json:"slug"`
+	DisplayName    string          `json:"displayName"`
+	DisplayNameEn  *string         `json:"displayNameEn,omitempty"`
+	Description    *string         `json:"description,omitempty"`
+	Icon           string          `json:"icon"`
+	Color          string          `json:"color"`
+	Constraints    TypeConstraints `json:"constraints"`
+	MetadataSchema []FieldSchema   `json:"metadataSchema"`
+	SortOrder      int             `json:"sortOrder"`
+	IsSystem       bool            `json:"isSystem"`
+	IsActive       bool            `json:"isActive"`
+}
+
+// TypeConstraints defines the constraints for a note type
+type TypeConstraints struct {
+	DateRequired    bool `json:"dateRequired"`
+	TitleRequired   bool `json:"titleRequired"`
+	ContentRequired bool `json:"contentRequired"`
+	DailyUnique     bool `json:"dailyUnique"`
+}
+
+// FieldSchema defines a metadata field schema
+type FieldSchema struct {
+	Key         string            `json:"key"`
+	Label       string            `json:"label"`
+	LabelEn     *string           `json:"labelEn,omitempty"`
+	Type        string            `json:"type"` // string, integer, float, boolean, enum, date, url
+	Required    bool              `json:"required"`
+	Constraints map[string]any    `json:"constraints,omitempty"`
 }
 
 // NoteFormat represents the format of note content

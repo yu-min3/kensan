@@ -101,10 +101,7 @@ export function DailyPage() {
         const { startTime, endTime } = calculateTimeFromY(dragOverY, rect, actualStartHour, actualEndHour, 15)
 
         // タイムブロックを作成（選択中の日付を使用）
-        await addTimeBlock({
-          date: selectedDateIso,
-          startTime,
-          endTime,
+        await addTimeBlock(selectedDateIso, startTime, endTime, {
           taskId: activeDragData.taskId,
           taskName: activeDragData.taskName,
           milestoneId: activeDragData.milestoneId,
@@ -147,7 +144,7 @@ export function DailyPage() {
               {isToday && <p className="text-muted-foreground">{formatDateJa(new Date())}</p>}
             </div>
           </div>
-          <DailySummary mode="compact" />
+          <DailySummary mode="compact" selectedDate={selectedDateIso} />
         </div>
 
         {/* メモ + 作業 */}

@@ -4,7 +4,7 @@ import { httpClient } from '../client'
 
 // Types
 export interface AgentStreamEvent {
-  type: 'text' | 'tool_call' | 'tool_result' | 'action_proposal' | 'done' | 'error'
+  type: 'text' | 'tool_call' | 'tool_result' | 'action_proposal' | 'done' | 'error' | 'keepalive'
   data: Record<string, unknown>
 }
 
@@ -12,6 +12,7 @@ export interface AgentStreamRequest {
   message: string
   conversation_id?: string | null
   situation?: 'auto' | 'morning' | 'evening' | 'weekly' | 'chat'
+  context?: Record<string, string> | null
 }
 
 export interface AgentApproveRequest {
@@ -77,12 +78,30 @@ export async function* streamAgentChat(
     headers['Authorization'] = `Bearer ${authToken}`
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-    signal,
-  })
+  // Create a timeout signal (60s) combined with the caller's signal
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), 60_000)
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutController.signal])
+    : timeoutController.signal
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+      signal: combinedSignal,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (timeoutController.signal.aborted) {
+      throw new Error('リクエストがタイムアウトしました')
+    }
+    throw err
+  }
+
+  clearTimeout(timeoutId)
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error')
@@ -97,9 +116,22 @@ export async function* streamAgentChat(
   const decoder = new TextDecoder()
   let buffer = ''
 
+  // Per-chunk timeout: reset on each chunk received (30s between chunks)
+  const chunkTimeoutMs = 120_000
+  let chunkTimeoutId: ReturnType<typeof setTimeout> | undefined
+
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      const readPromise = reader.read()
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        chunkTimeoutId = setTimeout(
+          () => reject(new Error('ストリームがタイムアウトしました')),
+          chunkTimeoutMs
+        )
+      })
+
+      const { done, value } = await Promise.race([readPromise, timeoutPromise])
+      clearTimeout(chunkTimeoutId)
 
       if (done) {
         // Process any remaining data in the buffer
@@ -129,13 +161,150 @@ export async function* streamAgentChat(
       }
     }
   } finally {
+    clearTimeout(chunkTimeoutId)
     reader.releaseLock()
   }
 }
 
 /**
- * Approve proposed agent actions.
+ * Stream approved agent action results via SSE.
+ * Uses the /agent/approve endpoint which returns SSE events for each action execution.
  */
-export async function approveActions(request: AgentApproveRequest): Promise<void> {
-  await httpClient.post<void>(API_CONFIG.baseUrls.ai, '/agent/approve', request)
+export async function* streamApproveActions(
+  request: AgentApproveRequest,
+  signal?: AbortSignal
+): AsyncGenerator<AgentStreamEvent> {
+  const url = `${API_CONFIG.baseUrls.ai}/api/v1/agent/approve`
+  const authToken = httpClient.getAuthToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
+
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), 60_000)
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutController.signal])
+    : timeoutController.signal
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+      signal: combinedSignal,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (timeoutController.signal.aborted) {
+      throw new Error('リクエストがタイムアウトしました')
+    }
+    throw err
+  }
+
+  clearTimeout(timeoutId)
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error')
+    throw new Error(`Agent approve request failed [${response.status}]: ${errorText}`)
+  }
+
+  if (!response.body) {
+    throw new Error('Response body is not available for streaming')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const chunkTimeoutMs = 120_000
+  let chunkTimeoutId: ReturnType<typeof setTimeout> | undefined
+
+  try {
+    while (true) {
+      const readPromise = reader.read()
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        chunkTimeoutId = setTimeout(
+          () => reject(new Error('ストリームがタイムアウトしました')),
+          chunkTimeoutMs
+        )
+      })
+
+      const { done, value } = await Promise.race([readPromise, timeoutPromise])
+      clearTimeout(chunkTimeoutId)
+
+      if (done) {
+        if (buffer.trim()) {
+          const events = parseSSEEvents(buffer)
+          for (const event of events) {
+            yield event
+          }
+        }
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
+
+      const completePart = parts.join('\n\n')
+      if (completePart.trim()) {
+        const events = parseSSEEvents(completePart)
+        for (const event of events) {
+          yield event
+        }
+      }
+    }
+  } finally {
+    clearTimeout(chunkTimeoutId)
+    reader.releaseLock()
+  }
+}
+
+// Conversations history API
+
+export interface Conversation {
+  id: string
+  lastMessage: string
+  lastMessageAt: string
+  messageCount: number
+}
+
+export interface ConversationMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  situation: string
+  toolCalls: Array<Record<string, unknown>>
+  createdAt: string
+}
+
+/**
+ * Get list of past conversations.
+ */
+export async function getConversations(
+  limit = 20,
+  offset = 0
+): Promise<{ conversations: Conversation[] }> {
+  return httpClient.get<{ conversations: Conversation[] }>(
+    API_CONFIG.baseUrls.ai,
+    `/conversations?limit=${limit}&offset=${offset}`
+  )
+}
+
+/**
+ * Get messages for a specific conversation.
+ */
+export async function getConversationMessages(
+  conversationId: string
+): Promise<{ messages: ConversationMessage[] }> {
+  return httpClient.get<{ messages: ConversationMessage[] }>(
+    API_CONFIG.baseUrls.ai,
+    `/conversations/${conversationId}`
+  )
 }

@@ -28,7 +28,7 @@ type Client struct {
 	publicURL string
 }
 
-// NewClient creates a new storage client
+// NewClient creates a new storage client and ensures the bucket exists
 func NewClient(cfg Config) (*Client, error) {
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
@@ -36,6 +36,18 @@ func NewClient(cfg Config) (*Client, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
+	}
+
+	// Ensure bucket exists
+	ctx := context.Background()
+	exists, err := client.BucketExists(ctx, cfg.Bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check bucket existence: %w", err)
+	}
+	if !exists {
+		if err := client.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{}); err != nil {
+			return nil, fmt.Errorf("failed to create bucket %s: %w", cfg.Bucket, err)
+		}
 	}
 
 	return &Client{

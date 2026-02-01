@@ -56,38 +56,16 @@ func (h *Handler) ListTimeBlocks(w http.ResponseWriter, r *http.Request) {
 
 	filter := timeblock.TimeBlockFilter{}
 
-	// Parse UTC timestamp filters (take precedence)
-	if startTs := r.URL.Query().Get("start_timestamp"); startTs != "" {
-		filter.StartTimestamp = &startTs
+	// Parse start_datetime and end_datetime (UTC ISO 8601 range)
+	if startDt := r.URL.Query().Get("start_datetime"); startDt != "" {
+		filter.StartDatetime = &startDt
 	}
-	if endTs := r.URL.Query().Get("end_timestamp"); endTs != "" {
-		filter.EndTimestamp = &endTs
-	}
-
-	// Parse date filter (exact match) - only used if no timestamp filters
-	if date := r.URL.Query().Get("date"); date != "" {
-		filter.Date = &date
+	if endDt := r.URL.Query().Get("end_datetime"); endDt != "" {
+		filter.EndDatetime = &endDt
 	}
 
-	// Parse start_date filter (range)
-	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
-		filter.StartDate = &startDate
-	}
-
-	// Parse end_date filter (range)
-	if endDate := r.URL.Query().Get("end_date"); endDate != "" {
-		filter.EndDate = &endDate
-	}
-
-	// Parse timezone parameter for response conversion
-	timezone := r.URL.Query().Get("timezone")
-
-	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter, timezone)
+	blocks, err := h.service.ListTimeBlocks(r.Context(), userID, filter)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to list time blocks")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list time blocks")
 		return
@@ -112,19 +90,14 @@ func (h *Handler) CreateTimeBlock(w http.ResponseWriter, r *http.Request) {
 			Field: "taskName", Message: "Task name is required",
 		})
 	}
-	if input.Date == "" {
+	if input.StartDatetime == "" {
 		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "date", Message: "Date is required",
+			Field: "startDatetime", Message: "Start datetime is required",
 		})
 	}
-	if input.StartTime == "" {
+	if input.EndDatetime == "" {
 		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "startTime", Message: "Start time is required",
-		})
-	}
-	if input.EndTime == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "endTime", Message: "End time is required",
+			Field: "endDatetime", Message: "End datetime is required",
 		})
 	}
 	if len(validationErrors) > 0 {
@@ -134,12 +107,8 @@ func (h *Handler) CreateTimeBlock(w http.ResponseWriter, r *http.Request) {
 
 	tb, err := h.service.CreateTimeBlock(r.Context(), userID, input)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidTime) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
+		if errors.Is(err, service.ErrInvalidDatetime) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATETIME", "Invalid datetime format (expected ISO 8601, e.g., 2026-01-20T15:00:00Z)")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidInput) {
@@ -169,12 +138,8 @@ func (h *Handler) UpdateTimeBlock(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "TIME_BLOCK_NOT_FOUND", "Time block not found")
 			return
 		}
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidTime) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
+		if errors.Is(err, service.ErrInvalidDatetime) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATETIME", "Invalid datetime format (expected ISO 8601)")
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update time block")
@@ -239,38 +204,16 @@ func (h *Handler) ListTimeEntries(w http.ResponseWriter, r *http.Request) {
 
 	filter := timeblock.TimeEntryFilter{}
 
-	// Parse UTC timestamp filters (take precedence)
-	if startTs := r.URL.Query().Get("start_timestamp"); startTs != "" {
-		filter.StartTimestamp = &startTs
+	// Parse start_datetime and end_datetime (UTC ISO 8601 range)
+	if startDt := r.URL.Query().Get("start_datetime"); startDt != "" {
+		filter.StartDatetime = &startDt
 	}
-	if endTs := r.URL.Query().Get("end_timestamp"); endTs != "" {
-		filter.EndTimestamp = &endTs
-	}
-
-	// Parse date filter (exact match) - only used if no timestamp filters
-	if date := r.URL.Query().Get("date"); date != "" {
-		filter.Date = &date
+	if endDt := r.URL.Query().Get("end_datetime"); endDt != "" {
+		filter.EndDatetime = &endDt
 	}
 
-	// Parse start_date filter (range)
-	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
-		filter.StartDate = &startDate
-	}
-
-	// Parse end_date filter (range)
-	if endDate := r.URL.Query().Get("end_date"); endDate != "" {
-		filter.EndDate = &endDate
-	}
-
-	// Parse timezone parameter for response conversion
-	timezone := r.URL.Query().Get("timezone")
-
-	entries, err := h.service.ListTimeEntries(r.Context(), userID, filter, timezone)
+	entries, err := h.service.ListTimeEntries(r.Context(), userID, filter)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list time entries")
 		return
 	}
@@ -294,19 +237,14 @@ func (h *Handler) CreateTimeEntry(w http.ResponseWriter, r *http.Request) {
 			Field: "taskName", Message: "Task name is required",
 		})
 	}
-	if input.Date == "" {
+	if input.StartDatetime == "" {
 		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "date", Message: "Date is required",
+			Field: "startDatetime", Message: "Start datetime is required",
 		})
 	}
-	if input.StartTime == "" {
+	if input.EndDatetime == "" {
 		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "startTime", Message: "Start time is required",
-		})
-	}
-	if input.EndTime == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "endTime", Message: "End time is required",
+			Field: "endDatetime", Message: "End datetime is required",
 		})
 	}
 	if len(validationErrors) > 0 {
@@ -316,12 +254,8 @@ func (h *Handler) CreateTimeEntry(w http.ResponseWriter, r *http.Request) {
 
 	te, err := h.service.CreateTimeEntry(r.Context(), userID, input)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidTime) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
+		if errors.Is(err, service.ErrInvalidDatetime) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATETIME", "Invalid datetime format (expected ISO 8601, e.g., 2026-01-20T15:00:00Z)")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidInput) {
@@ -351,12 +285,8 @@ func (h *Handler) UpdateTimeEntry(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "TIME_ENTRY_NOT_FOUND", "Time entry not found")
 			return
 		}
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidTime) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_TIME", "Invalid time format (expected HH:mm)")
+		if errors.Is(err, service.ErrInvalidDatetime) {
+			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATETIME", "Invalid datetime format (expected ISO 8601)")
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update time entry")

@@ -60,3 +60,6 @@ kensan-ai/.pytest_cache/
 kensan-ai/.ruff_cache/
 kensan-ai/.mypy_cache/
 kensan-ai/*.egg-info/
+
+docs/*
+mydocs/*

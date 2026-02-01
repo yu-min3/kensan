@@ -9,4 +9,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/loki': {
+        target: 'http://localhost:3100',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/loki/, ''),
+      },
+      '/tempo': {
+        target: 'http://localhost:3200',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tempo/, ''),
+      },
+    },
+  },
 })

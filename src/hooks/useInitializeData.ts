@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useNoteStore } from '@/stores/useNoteStore'
+import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { getTodayInTimezone } from '@/lib/timezone'
@@ -25,6 +26,9 @@ export function useInitializeData() {
 
   // Notes store (unified diary + learning records)
   const fetchNotes = useNoteStore((state) => state.fetchNotes)
+
+  // Note types store
+  const fetchNoteTypes = useNoteTypeStore((state) => state.fetchTypes)
 
   // Settings store
   const fetchSettings = useSettingsStore((state) => state.fetchSettings)
@@ -62,11 +66,12 @@ export function useInitializeData() {
           fetchTimeEntriesForLocalDate(todayLocal, currentTimezone),
           fetchNotes(),
           fetchCurrentTimer(),
+          fetchNoteTypes(),
         ])
 
         // Log any failures but don't block initialization
         const failures = results
-          .map((r, i) => ({ result: r, name: ['tasks', 'timeBlocks', 'timeEntries', 'notes', 'timer'][i] }))
+          .map((r, i) => ({ result: r, name: ['tasks', 'timeBlocks', 'timeEntries', 'notes', 'timer', 'noteTypes'][i] }))
           .filter((r) => r.result.status === 'rejected')
 
         if (failures.length > 0) {
@@ -90,7 +95,7 @@ export function useInitializeData() {
       }
     }
     init()
-  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, timezone])
+  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, fetchNoteTypes, timezone])
 
   return { initialized, isLoading, error }
 }

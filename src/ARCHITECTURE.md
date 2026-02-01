@@ -66,11 +66,12 @@ src/
 │   ├── editor/                   # Markdown, Drawioエディタ
 │   ├── task/                     # Goal, Milestone, Taskダイアログ
 │   ├── daily/                    # デイリーページセクション
-│   └── note/                     # ノートエディタコンポーネント
+│   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm)
+│   └── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
 ├── pages/                        # ページコンポーネント（10ファイル）
 ├── stores/                       # Zustandストア（12ストア）
 ├── hooks/                        # カスタムReactフック
-├── lib/                          # ユーティリティ（timezone, dateFormat, utils）
+├── lib/                          # ユーティリティ（timezone, dateFormat, noteTypeIcons, actionFormatter, utils）
 ├── mocks/                        # MSWハンドラとモックデータ
 ├── types/                        # TypeScript型定義
 ├── config/                       # アプリ設定
@@ -441,16 +442,38 @@ getChildTasks(parentId): Task[]
 timeBlocks: TimeBlock[]
 timeEntries: TimeEntry[]
 
-// タイムゾーン対応アクション
-fetchTimeBlocksForLocalDate(date, timezone): Promise<void>
-fetchTimeEntriesForLocalDate(date, timezone): Promise<void>
-addTimeBlock(data, timezone): Promise<TimeBlock>
-updateTimeBlock(id, data, timezone): Promise<TimeBlock>
+// タイムゾーン対応フェッチ
+fetchTimeBlocksForLocalDate(localDate, timezone): Promise<void>
+fetchTimeEntriesForLocalDate(localDate, timezone): Promise<void>
+
+// CRUD（ローカル日時 → UTC変換をAPI層で実行）
+addTimeBlock(localDate, localStartTime, localEndTime, data): Promise<void>
+updateTimeBlock(id, localDate, localStartTime?, localEndTime?, data?): Promise<void>
+addTimeEntry(localDate, localStartTime, localEndTime, data): Promise<void>
+updateTimeEntry(id, localDate, localStartTime?, localEndTime?, data?): Promise<void>
 
 // クエリ
-getTimeBlocksByDate(date): TimeBlock[]
+getTimeBlocksByDate(localDate): TimeBlock[]  // getLocalDate()でフィルタ
 getTodayTimeBlocks(): TimeBlock[]
 getTodayTimeEntries(): TimeEntry[]
+```
+
+#### useNoteTypeStore
+```typescript
+// 状態
+types: NoteTypeConfig[]        // note_types一覧
+isLoaded: boolean              // キャッシュ済みフラグ
+
+// アクション
+fetchTypes(): Promise<void>    // APIから取得（isLoaded時はスキップ）
+
+// ゲッター
+getBySlug(slug): NoteTypeConfig | undefined
+getDisplayName(slug): string
+getIcon(slug): string
+getColor(slug): string
+getConstraints(slug): TypeConstraints | undefined
+getMetadataSchema(slug): FieldSchema[]
 ```
 
 #### useNoteStore
@@ -467,10 +490,6 @@ createNote(data): Promise<Note>
 updateNote(id, data): Promise<Note>
 deleteNote(id): Promise<void>
 search(query, filter?): Promise<void>
-
-// 便利メソッド
-createDiary(data): Promise<Note>
-createLearning(data): Promise<Note>
 
 // クエリ
 getById(id): NoteListItem | undefined
@@ -538,6 +557,7 @@ class HttpClient {
 
 **機能:**
 - 自動`Authorization: Bearer <token>`ヘッダー
+- W3C `traceparent`ヘッダー自動生成（OpenTelemetryトレース伝搬）
 - レスポンスエンベロープのアンラップ（`{data}` → `data`）
 - 401検出 → ログアウトコールバック
 - エラー時のToast通知
@@ -580,12 +600,18 @@ tasksApi.list({milestoneId, completed}), tasksApi.toggleComplete(id), ...
 
 **timeblocks.ts** - タイムゾーン対応操作
 ```typescript
-// 送信前にローカル → UTC変換
-timeblocksApi.listByLocalDate(date, timezone): Promise<TimeBlock[]>
-timeblocksApi.createWithTimezone(input, timezone): Promise<TimeBlock>
+// フェッチ: ローカル日付 → UTC範囲に変換してクエリ
+timeblocksApi.listByLocalDate(localDate, timezone): Promise<TimeBlock[]>
+timeblocksApi.listByDateRange(startDate, endDate, timezone): Promise<TimeBlock[]>
 
-timeentriesApi.listByLocalDate(date, timezone): Promise<TimeEntry[]>
-timeentriesApi.createWithTimezone(input, timezone): Promise<TimeEntry>
+// 作成/更新: ローカル日時 → UTC ISO変換
+timeblocksApi.createFromLocal(localDate, localStartTime, localEndTime, data, timezone): Promise<TimeBlock>
+timeblocksApi.updateFromLocal(id, localDate, localStartTime?, localEndTime?, data, timezone): Promise<TimeBlock>
+
+// TimeEntries も同様のAPI
+timeentriesApi.listByLocalDate(localDate, timezone): Promise<TimeEntry[]>
+timeentriesApi.createFromLocal(localDate, localStartTime, localEndTime, data, timezone): Promise<TimeEntry>
+timeentriesApi.updateFromLocal(id, localDate, localStartTime?, localEndTime?, data, timezone): Promise<TimeEntry>
 ```
 
 **notes.ts** - 統合ノート
@@ -595,6 +621,7 @@ notesApi.get(id): Promise<Note>
 notesApi.create({type, format, title, content, ...}): Promise<Note>
 notesApi.search(query, filter): Promise<NoteSearchResult[]>
 notesApi.archive(id, archived): Promise<Note>
+noteTypesApi.list(): Promise<NoteTypeConfig[]>   // ノートタイプ設定取得
 ```
 
 ### 設定 (`api/config.ts`)
@@ -698,9 +725,8 @@ interface Task {
 
 interface TimeBlock {
   id: string
-  date: string          // YYYY-MM-DD
-  startTime: string     // HH:mm
-  endTime: string
+  startDatetime: string  // ISO 8601 UTC (e.g., "2026-01-20T00:00:00.000Z")
+  endDatetime: string    // ISO 8601 UTC
   taskName: string
   taskId?: string
   goalId?: string
@@ -708,26 +734,58 @@ interface TimeBlock {
   goalColor?: string
   milestoneId?: string
   milestoneName?: string
-  tagIds: string[]
-  isRoutine: boolean
+  tagIds?: string[]
 }
 
 interface Note {
   id: string
-  type: 'diary' | 'learning'
+  type: string          // データ駆動（note_typesテーブルで定義）
   format: 'markdown' | 'drawio'
   title?: string
   content: string
-  date?: string         // diary type用
+  date?: string         // constraints.dateRequired=true のタイプ用
   goalId?: string
   goalName?: string
   goalColor?: string
   milestoneId?: string
   milestoneName?: string
   tagIds: string[]
+  metadata?: NoteMetadata[]  // タイプ固有メタデータ
   archived: boolean
   createdAt: string
   updatedAt: string
+}
+
+// ノートタイプ設定（APIから取得）
+interface NoteTypeConfig {
+  id: string
+  slug: string           // 'diary', 'learning', 'general', 'book_review'
+  displayName: string
+  displayNameEn?: string
+  description?: string
+  icon: string           // Lucideアイコン名
+  color: string
+  constraints: TypeConstraints
+  metadataSchema: FieldSchema[]
+  sortOrder: number
+  isSystem: boolean
+  isActive: boolean
+}
+
+interface TypeConstraints {
+  dateRequired: boolean
+  titleRequired: boolean
+  contentRequired: boolean
+  dailyUnique: boolean
+}
+
+interface FieldSchema {
+  key: string
+  label: string
+  labelEn?: string
+  type: 'string' | 'integer' | 'float' | 'boolean' | 'enum' | 'date' | 'url'
+  required: boolean
+  constraints?: Record<string, any>  // min, max, values等
 }
 ```
 
@@ -736,7 +794,7 @@ interface Note {
 ```typescript
 type MilestoneStatus = 'active' | 'completed' | 'archived'
 type RoutineFrequency = 'daily' | 'weekly' | 'monthly' | 'custom'
-type NoteType = 'diary' | 'learning'
+type NoteType = string  // データ駆動（例: 'diary', 'learning', 'general', 'book_review'）
 type NoteFormat = 'markdown' | 'drawio'
 type Theme = 'light' | 'dark' | 'system'
 ```
@@ -842,6 +900,7 @@ graph TB
         TagStore[useTagStore]
         TaskStore[useTaskStore]
         TimeBlockStore[useTimeBlockStore]
+        NoteTypeStore[useNoteTypeStore]
         NoteStore[useNoteStore]
         MemoStore[useMemoStore]
         TimerStore[useTimerStore]
@@ -855,6 +914,7 @@ graph TB
     AuthStore -->|isAuthenticated| InitHook
 
     InitHook -->|fetchSettings| SettingsStore
+    InitHook -->|fetchNoteTypes| NoteTypeStore
     InitHook -->|fetchGoals| GoalStore
     InitHook -->|fetchMilestones| MilestoneStore
     InitHook -->|fetchTags| TagStore
@@ -869,6 +929,11 @@ graph TB
 
 ### タイムゾーン変換フロー
 
+**設計方針:**
+- DBは `TIMESTAMPTZ` でUTC保存
+- APIはUTC ISO 8601文字列をそのまま返す（例: `"2026-01-27T00:00:00.000Z"`）
+- タイムゾーン変換はフロントエンドに統一（表示時にgetLocalTime/getLocalDateで変換）
+
 **シーケンス図: TimeBlock作成時のタイムゾーン変換**
 
 ```mermaid
@@ -879,28 +944,28 @@ sequenceDiagram
     participant API as timeblocksApi
     participant BE as timeblock-service
 
-    UI->>Store: addTimeBlock({date: "2026-01-27", startTime: "09:00", endTime: "10:00"})
+    UI->>Store: addTimeBlock("2026-01-27", "09:00", "10:00", {taskName: "..."})
     Store->>Settings: getState().timezone
     Settings-->>Store: "Asia/Tokyo"
-    Store->>API: createWithTimezone(input, "Asia/Tokyo")
+    Store->>API: createFromLocal("2026-01-27", "09:00", "10:00", data, "Asia/Tokyo")
 
     Note over API: ローカル → UTC変換
-    API->>API: localToUtcDateTime("2026-01-27", "09:00", "Asia/Tokyo")
-    Note over API: 結果: "2026-01-27T00:00:00Z"
-    API->>API: localToUtcDateTime("2026-01-27", "10:00", "Asia/Tokyo")
-    Note over API: 結果: "2026-01-27T01:00:00Z"
+    API->>API: localToUtcDatetime("2026-01-27", "09:00", "Asia/Tokyo")
+    Note over API: 結果: "2026-01-27T00:00:00.000Z"
+    API->>API: localToUtcDatetime("2026-01-27", "10:00", "Asia/Tokyo")
+    Note over API: 結果: "2026-01-27T01:00:00.000Z"
 
-    API->>BE: POST /timeblocks {date, startTime, endTime} (UTC)
-    BE->>BE: PostgreSQLに保存 (UTC)
-    BE-->>API: {id, date, startTime, endTime, ...} (UTC)
+    API->>BE: POST /timeblocks {startDatetime, endDatetime} (UTC ISO 8601)
+    BE->>BE: PostgreSQLに保存 (TIMESTAMPTZ)
+    BE-->>API: {id, startDatetime, endDatetime, ...} (UTC ISO 8601)
 
-    Note over API: UTC → ローカル変換
-    API->>API: utcToLocalDateTime(response, "Asia/Tokyo")
-    Note over API: 結果: date="2026-01-27", startTime="09:00"
-
-    API-->>Store: ローカル時刻のTimeBlock
+    API-->>Store: UTC時刻のTimeBlock（変換不要）
     Store->>Store: set({timeBlocks: [...state.timeBlocks, newBlock]})
     Store-->>UI: 更新された状態で再レンダリング
+
+    Note over UI: 表示時にローカル変換
+    UI->>UI: getLocalTime(block.startDatetime, "Asia/Tokyo")
+    Note over UI: 結果: "09:00"
 ```
 
 **ユーティリティ関数:**
@@ -912,13 +977,17 @@ sequenceDiagram
 localDateToUtcRange('2026-01-23', 'Asia/Tokyo')
 // → { startUtc: '2026-01-22T15:00:00.000Z', endUtc: '2026-01-23T15:00:00.000Z' }
 
-// UTCレスポンスをローカル表示に変換
-utcToLocalDateTime(utcDate, utcTime, timezone)
-// → { date: '2026-01-23', time: '09:00' }
+// UTC ISO文字列からローカル日付を取得
+getLocalDate('2026-01-22T15:00:00.000Z', 'Asia/Tokyo')
+// → '2026-01-23'
 
-// ローカル入力をバックエンド用UTCに変換
-localToUtcDateTime('2026-01-23', '09:00', 'Asia/Tokyo')
-// → { date: '2026-01-23', time: '00:00' }
+// UTC ISO文字列からローカル時刻を取得
+getLocalTime('2026-01-27T00:00:00.000Z', 'Asia/Tokyo')
+// → '09:00'
+
+// ローカル日時をUTC ISO文字列に変換
+localToUtcDatetime('2026-01-27', '09:00', 'Asia/Tokyo')
+// → '2026-01-27T00:00:00.000Z'
 ```
 
 ### ストア初期化
@@ -1163,6 +1232,8 @@ import { useTaskStore } from '@/stores/useTaskStore'
   "date-fns": "^4.1.0",
   "lucide-react": "^0.562.0",
   "sonner": "^2.0.0",
-  "msw": "^2.12.7"
+  "msw": "^2.12.7",
+  "react-markdown": "^9.x",
+  "remark-gfm": "^4.x"
 }
 ```

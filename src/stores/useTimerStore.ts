@@ -1,8 +1,6 @@
 import { create } from 'zustand'
 import { timerApi, type RunningTimer, type StartTimerInput } from '@/api/services/timer'
 import { useTimeBlockStore } from './useTimeBlockStore'
-import { useSettingsStore } from './useSettingsStore'
-import { utcToLocalDateTime } from '@/lib/timezone'
 
 interface TimerState {
   currentTimer: RunningTimer | null
@@ -67,29 +65,10 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       // Stop interval
       stopElapsedInterval()
 
-      // Convert the returned time entry from UTC to local time and add to store
+      // The returned time entry already has startDatetime/endDatetime in UTC
+      // Add directly to the store without conversion
       if (result?.timeEntry) {
-        const timezone = useSettingsStore.getState().timezone || 'Asia/Tokyo'
-        const entry = result.timeEntry
-        const { date: localDate, time: localStartTime } = utcToLocalDateTime(
-          entry.date,
-          entry.startTime,
-          timezone
-        )
-        const { time: localEndTime } = utcToLocalDateTime(
-          entry.date,
-          entry.endTime,
-          timezone
-        )
-
-        const localEntry = {
-          ...entry,
-          date: localDate,
-          startTime: localStartTime,
-          endTime: localEndTime,
-        }
-
-        useTimeBlockStore.getState().insertTimeEntryLocal(localEntry)
+        useTimeBlockStore.getState().insertTimeEntryLocal(result.timeEntry)
       }
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })

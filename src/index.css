@@ -294,3 +294,10 @@ body {
 .tiptap-editor input[type="checkbox"] {
   margin-right: 0.5rem;
 }
+
+.tiptap-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+}

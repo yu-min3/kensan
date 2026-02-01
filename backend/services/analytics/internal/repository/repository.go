@@ -28,21 +28,19 @@ func wrapDBError(msg string, err error) error {
 	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
 }
 
-// GetTimeBlocksAggregated returns aggregated time blocks (planned time) for a date range
-func (r *PostgresRepository) GetTimeBlocksAggregated(ctx context.Context, userID, startDate, endDate string) (int, error) {
+// GetTimeBlocksAggregated returns aggregated time blocks (planned time) for a datetime range
+func (r *PostgresRepository) GetTimeBlocksAggregated(ctx context.Context, userID, startDatetime, endDatetime string) (int, error) {
 	query := `
 		SELECT COALESCE(SUM(
-			EXTRACT(EPOCH FROM (
-				(date || ' ' || end_time)::timestamp -
-				(date || ' ' || start_time)::timestamp
-			)) / 60
+			EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 		)::integer, 0) AS total_minutes
 		FROM time_blocks
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
+		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
+			AND goal_id IS NOT NULL
 	`
 
 	var totalMinutes int
-	err := r.pool.QueryRow(ctx, query, userID, startDate, endDate).Scan(&totalMinutes)
+	err := r.pool.QueryRow(ctx, query, userID, startDatetime, endDatetime).Scan(&totalMinutes)
 	if err != nil {
 		return 0, wrapDBError("failed to query time blocks", err)
 	}
@@ -72,21 +70,19 @@ func (r *PostgresRepository) GetCompletedTasksCount(ctx context.Context, userID,
 	return count, nil
 }
 
-// GetTotalMinutesByDateRange returns total minutes for a date range
-func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, userID, startDate, endDate string) (int, error) {
+// GetTotalMinutesByDateRange returns total minutes for a datetime range
+func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, userID, startDatetime, endDatetime string) (int, error) {
 	query := `
 		SELECT COALESCE(SUM(
-			EXTRACT(EPOCH FROM (
-				(date || ' ' || end_time)::timestamp -
-				(date || ' ' || start_time)::timestamp
-			)) / 60
+			EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 		)::integer, 0) AS total_minutes
 		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
+		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
+			AND goal_id IS NOT NULL
 	`
 
 	var totalMinutes int
-	err := r.pool.QueryRow(ctx, query, userID, startDate, endDate).Scan(&totalMinutes)
+	err := r.pool.QueryRow(ctx, query, userID, startDatetime, endDatetime).Scan(&totalMinutes)
 	if err != nil {
 		return 0, wrapDBError("failed to get total minutes", err)
 	}
@@ -94,24 +90,21 @@ func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, use
 	return totalMinutes, nil
 }
 
-// GetDailyBreakdown returns daily minutes for a date range
-func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error) {
+// GetDailyBreakdown returns daily minutes for a datetime range, grouped by local date
+func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, startDatetime, endDatetime, timezone string) ([]analytics.DailyBreakdown, error) {
 	query := `
 		SELECT
-			date::text,
+			(start_datetime AT TIME ZONE $4)::date::text AS local_date,
 			SUM(
-				EXTRACT(EPOCH FROM (
-					(date || ' ' || end_time)::timestamp -
-					(date || ' ' || start_time)::timestamp
-				)) / 60
+				EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 			)::integer AS minutes
 		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
-		GROUP BY date
-		ORDER BY date ASC
+		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
+		GROUP BY (start_datetime AT TIME ZONE $4)::date
+		ORDER BY local_date ASC
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
+	rows, err := r.pool.Query(ctx, query, userID, startDatetime, endDatetime, timezone)
 	if err != nil {
 		return nil, wrapDBError("failed to query daily breakdown", err)
 	}
@@ -133,24 +126,21 @@ func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, star
 	return result, nil
 }
 
-// GetWeeklyBreakdown returns weekly minutes for a date range (for monthly summary)
-func (r *PostgresRepository) GetWeeklyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error) {
+// GetWeeklyBreakdown returns weekly minutes for a datetime range (for monthly summary)
+func (r *PostgresRepository) GetWeeklyBreakdown(ctx context.Context, userID, startDatetime, endDatetime, timezone string) ([]analytics.DailyBreakdown, error) {
 	query := `
 		SELECT
-			date_trunc('week', date::date)::date as week_start,
+			date_trunc('week', (start_datetime AT TIME ZONE $4)::date)::date AS week_start,
 			SUM(
-				EXTRACT(EPOCH FROM (
-					(date || ' ' || end_time)::timestamp -
-					(date || ' ' || start_time)::timestamp
-				)) / 60
+				EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
 			)::integer AS minutes
 		FROM time_entries
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
-		GROUP BY date_trunc('week', date::date)
+		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
+		GROUP BY date_trunc('week', (start_datetime AT TIME ZONE $4)::date)
 		ORDER BY week_start ASC
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
+	rows, err := r.pool.Query(ctx, query, userID, startDatetime, endDatetime, timezone)
 	if err != nil {
 		return nil, wrapDBError("failed to query weekly breakdown", err)
 	}
@@ -200,27 +190,24 @@ type TagWithMinutes struct {
 	Minutes int
 }
 
-// GetMinutesByGoal returns minutes aggregated by goal for a date range
-func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, startDate, endDate string) ([]GoalWithMinutes, error) {
+// GetMinutesByGoal returns minutes aggregated by goal for a datetime range
+func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, startDatetime, endDatetime string) ([]GoalWithMinutes, error) {
 	query := `
 		SELECT
 			te.goal_id::text as goal_id,
 			COALESCE(te.goal_name, g.name, 'Unknown') as goal_name,
 			COALESCE(te.goal_color, g.color, '#6B7280') as goal_color,
 			SUM(
-				EXTRACT(EPOCH FROM (
-					(te.date || ' ' || te.end_time)::timestamp -
-					(te.date || ' ' || te.start_time)::timestamp
-				)) / 60
+				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60
 			)::integer AS minutes
 		FROM time_entries te
 		LEFT JOIN goals g ON te.goal_id = g.id
-		WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3 AND te.goal_id IS NOT NULL
+		WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.goal_id IS NOT NULL
 		GROUP BY te.goal_id, COALESCE(te.goal_name, g.name, 'Unknown'), COALESCE(te.goal_color, g.color, '#6B7280')
 		ORDER BY minutes DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
+	rows, err := r.pool.Query(ctx, query, userID, startDatetime, endDatetime)
 	if err != nil {
 		return nil, wrapDBError("failed to query minutes by goal", err)
 	}
@@ -242,27 +229,24 @@ func (r *PostgresRepository) GetMinutesByGoal(ctx context.Context, userID, start
 	return result, nil
 }
 
-// GetMinutesByMilestone returns minutes aggregated by milestone for a date range
-func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, startDate, endDate string) ([]MilestoneWithMinutes, error) {
+// GetMinutesByMilestone returns minutes aggregated by milestone for a datetime range
+func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, startDatetime, endDatetime string) ([]MilestoneWithMinutes, error) {
 	query := `
 		SELECT
 			te.milestone_id::text as milestone_id,
 			COALESCE(te.milestone_name, m.name, 'Unknown') as milestone_name,
 			COALESCE(te.goal_id::text, m.goal_id::text, '') as goal_id,
 			SUM(
-				EXTRACT(EPOCH FROM (
-					(te.date || ' ' || te.end_time)::timestamp -
-					(te.date || ' ' || te.start_time)::timestamp
-				)) / 60
+				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60
 			)::integer AS minutes
 		FROM time_entries te
 		LEFT JOIN milestones m ON te.milestone_id = m.id
-		WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3 AND te.milestone_id IS NOT NULL
+		WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.milestone_id IS NOT NULL
 		GROUP BY te.milestone_id, COALESCE(te.milestone_name, m.name, 'Unknown'), COALESCE(te.goal_id::text, m.goal_id::text, '')
 		ORDER BY minutes DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
+	rows, err := r.pool.Query(ctx, query, userID, startDatetime, endDatetime)
 	if err != nil {
 		return nil, wrapDBError("failed to query minutes by milestone", err)
 	}
@@ -284,18 +268,15 @@ func (r *PostgresRepository) GetMinutesByMilestone(ctx context.Context, userID, 
 	return result, nil
 }
 
-// GetMinutesByTag returns minutes aggregated by tag for a date range
-func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startDate, endDate string) ([]TagWithMinutes, error) {
+// GetMinutesByTag returns minutes aggregated by tag for a datetime range
+func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startDatetime, endDatetime string) ([]TagWithMinutes, error) {
 	query := `
 		WITH tag_entries AS (
 			SELECT
 				unnest(te.tag_ids) as tag_id,
-				EXTRACT(EPOCH FROM (
-					(te.date || ' ' || te.end_time)::timestamp -
-					(te.date || ' ' || te.start_time)::timestamp
-				)) / 60 AS minutes
+				EXTRACT(EPOCH FROM (te.end_datetime - te.start_datetime)) / 60 AS minutes
 			FROM time_entries te
-			WHERE te.user_id = $1 AND te.date >= $2 AND te.date <= $3 AND te.tag_ids IS NOT NULL AND array_length(te.tag_ids, 1) > 0
+			WHERE te.user_id = $1 AND te.start_datetime >= $2::timestamptz AND te.start_datetime < $3::timestamptz AND te.tag_ids IS NOT NULL AND array_length(te.tag_ids, 1) > 0
 		)
 		SELECT
 			tg.id,
@@ -308,7 +289,7 @@ func (r *PostgresRepository) GetMinutesByTag(ctx context.Context, userID, startD
 		ORDER BY minutes DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID, startDate, endDate)
+	rows, err := r.pool.Query(ctx, query, userID, startDatetime, endDatetime)
 	if err != nil {
 		return nil, wrapDBError("failed to query minutes by tag", err)
 	}

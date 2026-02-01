@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
+import { getLocalTime } from '@/lib/timezone'
 import type { TimeBlock } from '@/types'
 
 export type TaskInputMode = 'manual' | 'existing'
@@ -24,6 +26,7 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
   const { defaultDate } = options
   const { addTimeBlock, updateTimeBlock, deleteTimeBlock } = useTimeBlockStore()
   const { getMilestoneById, getGoalById } = useTaskStore()
+  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
 
   const [state, setState] = useState<TimeBlockDialogState>({
     isOpen: false,
@@ -70,13 +73,13 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
       isOpen: true,
       editingBlockId: block.id,
       taskName: block.taskName,
-      startTime: block.startTime.slice(0, 5), // Normalize HH:mm:ss to HH:mm
-      endTime: block.endTime.slice(0, 5),
+      startTime: getLocalTime(block.startDatetime, timezone),
+      endTime: getLocalTime(block.endDatetime, timezone),
       taskId: block.taskId,
       milestoneId: block.milestoneId,
       taskInputMode: block.taskId ? 'existing' : 'manual',
     })
-  }, [])
+  }, [timezone])
 
   // 指定した時刻でダイアログを開く（空きエリアダブルクリック用）
   const openDialogWithTime = useCallback((startTime: string, endTime: string) => {
@@ -107,9 +110,7 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
     if (!state.taskName || !state.startTime || !state.endTime) return false
 
     const date = targetDate || defaultDate
-    const blockData = {
-      startTime: state.startTime,
-      endTime: state.endTime,
+    const data = {
       taskName: state.taskName,
       taskId: state.taskId,
       milestoneId: state.milestoneId,
@@ -120,12 +121,9 @@ export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
     }
 
     if (state.editingBlockId) {
-      await updateTimeBlock(state.editingBlockId, blockData)
+      await updateTimeBlock(state.editingBlockId, date, state.startTime, state.endTime, data)
     } else {
-      await addTimeBlock({
-        ...blockData,
-        date,
-      })
+      await addTimeBlock(date, state.startTime, state.endTime, data)
     }
 
     closeDialog()

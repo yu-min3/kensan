@@ -24,6 +24,7 @@ class InteractionLogger:
         tokens_output: int | None = None,
         latency_ms: int | None = None,
         context_id: UUID | None = None,
+        conversation_id: UUID | None = None,
     ) -> UUID:
         """Log an AI interaction to the database.
 
@@ -38,6 +39,7 @@ class InteractionLogger:
             tokens_output: Number of output tokens used
             latency_ms: Response latency in milliseconds
             context_id: The context ID used for this interaction
+            conversation_id: The conversation ID for grouping messages
 
         Returns:
             The interaction ID
@@ -57,9 +59,10 @@ class InteractionLogger:
                 """
                 INSERT INTO ai_interactions (
                     user_id, session_id, situation, user_input, ai_output,
-                    tool_calls, tokens_input, tokens_output, latency_ms, context_id
+                    tool_calls, tokens_input, tokens_output, latency_ms, context_id,
+                    conversation_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING id
                 """,
                 user_id,
@@ -72,6 +75,7 @@ class InteractionLogger:
                 tokens_output,
                 latency_ms,
                 context_id,
+                conversation_id,
             )
             return row["id"]
 

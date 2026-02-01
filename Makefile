@@ -19,6 +19,7 @@ up:
 	@echo "  - task-service:      http://localhost:8082/health"
 	@echo "  - timeblock-service: http://localhost:8084/health"
 	@echo "  - analytics-service: http://localhost:8088/health"
+	@echo "  - ai-service:        http://localhost:8089/health"
 	@echo "  - memo-service:      http://localhost:8090/health"
 	@echo "  - note-service:      http://localhost:8091/health"
 	@echo ""
@@ -83,7 +84,7 @@ storage:
 
 ## Start only backend services (requires db and storage)
 backend: db storage
-	docker compose up -d user-service task-service timeblock-service analytics-service memo-service note-service
+	docker compose up -d user-service task-service timeblock-service analytics-service ai-service memo-service note-service
 	@echo "All backend services started"
 
 # =============================================================================

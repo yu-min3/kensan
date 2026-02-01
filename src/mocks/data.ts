@@ -24,6 +24,16 @@ const today = getToday()
 const yesterday = getYesterday()
 const tomorrow = getTomorrow()
 
+// Helper to create UTC ISO datetime from local date (YYYY-MM-DD) and time (HH:mm) in Asia/Tokyo
+function toUtcIso(localDate: string, localTime: string): string {
+  const [year, month, day] = localDate.split('-').map(Number)
+  const [hours, minutes] = localTime.split(':').map(Number)
+  // Asia/Tokyo is UTC+9
+  const localMs = Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
+  const utcMs = localMs - 9 * 60 * 60 * 1000
+  return new Date(utcMs).toISOString()
+}
+
 // ============================================
 // Goals (目標)
 // ============================================
@@ -256,9 +266,8 @@ export let tasks: Task[] = [
 export let timeBlocks: TimeBlock[] = [
   {
     id: 'tb1',
-    date: today,
-    startTime: '09:00',
-    endTime: '11:00',
+    startDatetime: toUtcIso(today, '09:00'),
+    endDatetime: toUtcIso(today, '11:00'),
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
     milestoneId: 'ms-ica',
@@ -270,9 +279,8 @@ export let timeBlocks: TimeBlock[] = [
   },
   {
     id: 'tb2',
-    date: today,
-    startTime: '11:30',
-    endTime: '14:30',
+    startDatetime: toUtcIso(today, '11:30'),
+    endDatetime: toUtcIso(today, '14:30'),
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
     milestoneId: 'ms-kensan',
@@ -284,9 +292,8 @@ export let timeBlocks: TimeBlock[] = [
   },
   {
     id: 'tb3',
-    date: today,
-    startTime: '15:00',
-    endTime: '16:00',
+    startDatetime: toUtcIso(today, '15:00'),
+    endDatetime: toUtcIso(today, '16:00'),
     taskId: 't6',
     taskName: 'ブログ記事執筆',
     milestoneId: 'ms-blog',
@@ -299,9 +306,8 @@ export let timeBlocks: TimeBlock[] = [
   // Tomorrow
   {
     id: 'tb-tm1',
-    date: tomorrow,
-    startTime: '09:00',
-    endTime: '11:00',
+    startDatetime: toUtcIso(tomorrow, '09:00'),
+    endDatetime: toUtcIso(tomorrow, '11:00'),
     taskId: 't1-2',
     taskName: 'ICA試験勉強 - Security',
     milestoneId: 'ms-ica',
@@ -320,9 +326,8 @@ export let timeEntries: TimeEntry[] = [
   // Yesterday
   {
     id: 'te1',
-    date: yesterday,
-    startTime: '09:00',
-    endTime: '11:00',
+    startDatetime: toUtcIso(yesterday, '09:00'),
+    endDatetime: toUtcIso(yesterday, '11:00'),
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
     milestoneId: 'ms-ica',
@@ -334,9 +339,8 @@ export let timeEntries: TimeEntry[] = [
   },
   {
     id: 'te2',
-    date: yesterday,
-    startTime: '11:30',
-    endTime: '14:30',
+    startDatetime: toUtcIso(yesterday, '11:30'),
+    endDatetime: toUtcIso(yesterday, '14:30'),
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
     milestoneId: 'ms-kensan',
@@ -348,9 +352,8 @@ export let timeEntries: TimeEntry[] = [
   },
   {
     id: 'te3',
-    date: yesterday,
-    startTime: '15:00',
-    endTime: '16:00',
+    startDatetime: toUtcIso(yesterday, '15:00'),
+    endDatetime: toUtcIso(yesterday, '16:00'),
     taskId: 't6',
     taskName: 'ブログ記事執筆',
     milestoneId: 'ms-blog',
@@ -362,27 +365,24 @@ export let timeEntries: TimeEntry[] = [
   },
   {
     id: 'te4',
-    date: yesterday,
-    startTime: '16:30',
-    endTime: '17:00',
+    startDatetime: toUtcIso(yesterday, '16:30'),
+    endDatetime: toUtcIso(yesterday, '17:00'),
     taskId: 'r1',
     taskName: '技術ニュースチェック',
     tagIds: ['tag-input'],
   },
   {
     id: 'te5',
-    date: yesterday,
-    startTime: '17:30',
-    endTime: '18:30',
+    startDatetime: toUtcIso(yesterday, '17:30'),
+    endDatetime: toUtcIso(yesterday, '18:30'),
     taskName: '予定外MTG',
     description: '緊急の技術相談',
   },
   // Today
   {
     id: 'te-today-1',
-    date: today,
-    startTime: '09:00',
-    endTime: '11:00',
+    startDatetime: toUtcIso(today, '09:00'),
+    endDatetime: toUtcIso(today, '11:00'),
     taskId: 't1-1',
     taskName: 'ICA試験勉強 - Traffic Management',
     milestoneId: 'ms-ica',
@@ -394,9 +394,8 @@ export let timeEntries: TimeEntry[] = [
   },
   {
     id: 'te-today-2',
-    date: today,
-    startTime: '11:30',
-    endTime: '14:30',
+    startDatetime: toUtcIso(today, '11:30'),
+    endDatetime: toUtcIso(today, '14:30'),
     taskId: 't4-2',
     taskName: 'Kensan開発 - コンポーネント実装',
     milestoneId: 'ms-kensan',
@@ -576,6 +575,16 @@ export let aiReviewReports: AIReviewReport[] = [
     id: 'ai1',
     weekStart: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
     weekEnd: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
+    taskEvaluations: [
+      { taskName: 'ICA模擬試験', status: 'good', comment: '計画通り3回完了。正答率78%→85%に改善。' },
+      { taskName: 'Ciliumハンズオン', status: 'partial', comment: 'Lab 3まで完了。Lab 4-5は未着手。' },
+    ],
+    timeEvaluations: [
+      { goalName: 'Golden Kubestronaut', goalColor: '#0EA5E9', actualMinutes: 1080, targetMinutes: 1200, comment: '月〜水に集中できた。' },
+      { goalName: 'OSS活動', goalColor: '#10B981', actualMinutes: 300, targetMinutes: 300, comment: '目標通り。PR 2件マージ。' },
+    ],
+    learningSummary:
+      '今週はKubernetesのネットワーキング層を中心に学習。CiliumのeBPFベースのデータプレーンの仕組みと、従来のiptablesベースとの違いを理解した。ICA試験ではTraffic Management問題の正答率が特に改善。',
     summary:
       '今週は合計32時間の学習を達成しました。Golden Kubestronaut目標に対して、ICA試験勉強に重点的に取り組み、Traffic Managementの理解が深まりました。',
     goodPoints: [
@@ -628,14 +637,79 @@ export const weeklySummary: WeeklySummary = {
 // ============================================
 // Daily study hours (チャート用)
 // ============================================
+const dayNames = ['日', '月', '火', '水', '木', '金', '土']
+const getDayName = (d: Date) => dayNames[d.getDay()]
+
 export const dailyStudyHours = [
-  { date: format(subDays(new Date(), 6), 'M/d'), hours: 4, day: '月' },
-  { date: format(subDays(new Date(), 5), 'M/d'), hours: 5, day: '火' },
-  { date: format(subDays(new Date(), 4), 'M/d'), hours: 6, day: '水' },
-  { date: format(subDays(new Date(), 3), 'M/d'), hours: 5, day: '木' },
-  { date: format(subDays(new Date(), 2), 'M/d'), hours: 7, day: '金' },
-  { date: format(subDays(new Date(), 1), 'M/d'), hours: 3, day: '土' },
-  { date: format(new Date(), 'M/d'), hours: 2, day: '日' },
+  {
+    date: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
+    hours: 4,
+    day: getDayName(subDays(new Date(), 6)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 150 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 60 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 30 },
+    ],
+  },
+  {
+    date: format(subDays(new Date(), 5), 'yyyy-MM-dd'),
+    hours: 5,
+    day: getDayName(subDays(new Date(), 5)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 180 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 90 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 30 },
+    ],
+  },
+  {
+    date: format(subDays(new Date(), 4), 'yyyy-MM-dd'),
+    hours: 6,
+    day: getDayName(subDays(new Date(), 4)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 180 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 120 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 60 },
+    ],
+  },
+  {
+    date: format(subDays(new Date(), 3), 'yyyy-MM-dd'),
+    hours: 5,
+    day: getDayName(subDays(new Date(), 3)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 120 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 120 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 60 },
+    ],
+  },
+  {
+    date: format(subDays(new Date(), 2), 'yyyy-MM-dd'),
+    hours: 7,
+    day: getDayName(subDays(new Date(), 2)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 240 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 120 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 60 },
+    ],
+  },
+  {
+    date: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
+    hours: 3,
+    day: getDayName(subDays(new Date(), 1)),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 120 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 30 },
+      { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: 30 },
+    ],
+  },
+  {
+    date: format(new Date(), 'yyyy-MM-dd'),
+    hours: 2,
+    day: getDayName(new Date()),
+    byGoal: [
+      { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: 60 },
+      { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: 60 },
+    ],
+  },
 ]
 
 // ============================================

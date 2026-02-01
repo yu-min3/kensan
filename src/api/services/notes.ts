@@ -1,8 +1,8 @@
-// Notes API Service (unified diary, learning, memo)
+// Notes API Service (unified diary, learning, general, book_review, etc.)
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService, buildQueryParams } from '../createApiService'
-import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem } from '@/types'
+import type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem, NoteTypeConfig } from '@/types'
 
 // ============================================
 // API Response Types
@@ -315,11 +315,11 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
     if (filters?.q) params.q = filters.q
 
     const query = buildQueryParams(params)
-    const response = await httpClient.get<NoteListItemResponse[]>(
+    const response = await httpClient.get<NoteListItemResponse[] | null>(
       API_CONFIG.baseUrls.note,
       `/notes${query}`
     )
-    return response.map(transformNoteListItem)
+    return (response ?? []).map(transformNoteListItem)
   },
 
   /**
@@ -339,11 +339,11 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
     if (limit) params.limit = String(limit)
 
     const queryStr = buildQueryParams(params)
-    const response = await httpClient.get<NoteSearchResultResponse[]>(
+    const response = await httpClient.get<NoteSearchResultResponse[] | null>(
       API_CONFIG.baseUrls.note,
       `/notes/search${queryStr}`
     )
-    return response.map(transformSearchResult)
+    return (response ?? []).map(transformSearchResult)
   },
 
   /**
@@ -356,38 +356,6 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
       { archived }
     )
     return transformNote(response)
-  },
-
-  // ============================================
-  // Convenience methods for specific note types
-  // ============================================
-
-  /**
-   * List diary notes
-   */
-  async listDiaries(filters?: Omit<NoteFilter, 'types'>): Promise<NoteListItem[]> {
-    return this.listItems({ ...filters, types: ['diary'] })
-  },
-
-  /**
-   * List learning notes
-   */
-  async listLearnings(filters?: Omit<NoteFilter, 'types'>): Promise<NoteListItem[]> {
-    return this.listItems({ ...filters, types: ['learning'] })
-  },
-
-  /**
-   * Create a diary entry
-   */
-  async createDiary(input: Omit<CreateNoteInput, 'type'> & { date: string }): Promise<Note> {
-    return baseNotesApi.create({ ...input, type: 'diary' })
-  },
-
-  /**
-   * Create a learning record
-   */
-  async createLearning(input: Omit<CreateNoteInput, 'type'>): Promise<Note> {
-    return baseNotesApi.create({ ...input, type: 'learning' })
   },
 
   // ============================================
@@ -538,6 +506,68 @@ export const notesApi = extendApiService(baseNotesApi, () => ({
 }))
 
 // ============================================
+// Note Types API (data-driven note type configuration)
+// ============================================
+interface NoteTypeConfigResponse {
+  id: string
+  slug: string
+  displayName: string
+  displayNameEn?: string
+  description?: string
+  icon: string
+  color: string
+  constraints: {
+    dateRequired: boolean
+    titleRequired: boolean
+    contentRequired: boolean
+    dailyUnique: boolean
+  }
+  metadataSchema: Array<{
+    key: string
+    label: string
+    labelEn?: string
+    type: string
+    required: boolean
+    constraints?: Record<string, unknown>
+  }>
+  sortOrder: number
+  isSystem: boolean
+  isActive: boolean
+}
+
+const transformNoteTypeConfig = (t: NoteTypeConfigResponse): NoteTypeConfig => ({
+  id: t.id,
+  slug: t.slug,
+  displayName: t.displayName,
+  displayNameEn: t.displayNameEn,
+  description: t.description,
+  icon: t.icon,
+  color: t.color,
+  constraints: t.constraints,
+  metadataSchema: t.metadataSchema.map((f) => ({
+    key: f.key,
+    label: f.label,
+    labelEn: f.labelEn,
+    type: f.type as NoteTypeConfig['metadataSchema'][number]['type'],
+    required: f.required,
+    constraints: f.constraints,
+  })),
+  sortOrder: t.sortOrder,
+  isSystem: t.isSystem,
+  isActive: t.isActive,
+})
+
+export const noteTypesApi = {
+  async list(): Promise<NoteTypeConfig[]> {
+    const response = await httpClient.get<NoteTypeConfigResponse[]>(
+      API_CONFIG.baseUrls.note,
+      '/note-types'
+    )
+    return response.map(transformNoteTypeConfig)
+  },
+}
+
+// ============================================
 // Note Tags API (note-type tags)
 // ============================================
 import type { Tag, TagType } from '@/types'
@@ -592,4 +622,4 @@ export const noteTagsApi = {
 // ============================================
 // Export types for external use
 // ============================================
-export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem }
+export type { Note, NoteListItem, NoteSearchResult, NoteType, NoteFormat, NoteContent, ContentType, StorageProvider, NoteMetadataItem, NoteTypeConfig }

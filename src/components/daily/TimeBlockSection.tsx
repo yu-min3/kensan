@@ -10,6 +10,7 @@ import { TimeBlockDialog } from '@/components/common/TimeBlockDialog'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useTaskStore } from '@/stores/useTaskStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
+import { getLocalDate, getLocalTime } from '@/lib/timezone'
 import { useTimerStore } from '@/stores/useTimerStore'
 import { useTimeBlockDialog } from '@/hooks/useTimeBlockDialog'
 import { formatDateIso, formatDateShortJa } from '@/lib/dateFormat'
@@ -180,9 +181,11 @@ export function TimeBlockSection({
     }
   }
 
+  const tz = timezone || 'Asia/Tokyo'
+
   // Filter data for selected date
-  const filteredBlocks = timeBlocks.filter((b) => b.date === selectedDateIso)
-  const filteredEntries = timeEntries.filter((e) => e.date === selectedDateIso)
+  const filteredBlocks = timeBlocks.filter((b) => getLocalDate(b.startDatetime, tz) === selectedDateIso)
+  const filteredEntries = timeEntries.filter((e) => getLocalDate(e.startDatetime, tz) === selectedDateIso)
 
   // 実績ダイアログを開く（新規）
   const openNewEntryDialog = () => {
@@ -211,9 +214,9 @@ export function TimeBlockSection({
       isOpen: true,
       editingEntryId: entry.id,
       taskName: entry.taskName,
-      date: entry.date,
-      startTime: entry.startTime.slice(0, 5),
-      endTime: entry.endTime.slice(0, 5),
+      date: getLocalDate(entry.startDatetime, tz),
+      startTime: getLocalTime(entry.startDatetime, tz),
+      endTime: getLocalTime(entry.endDatetime, tz),
       taskId: entry.taskId,
       milestoneId: entry.milestoneId,
       description: entry.description || '',
@@ -234,9 +237,6 @@ export function TimeBlockSection({
     try {
       const data = {
         taskName: entryDialog.taskName,
-        date: entryDialog.date,
-        startTime: entryDialog.startTime,
-        endTime: entryDialog.endTime,
         taskId: entryDialog.taskId,
         milestoneId: entryDialog.milestoneId,
         milestoneName: entrySelectedMilestone?.name,
@@ -247,9 +247,9 @@ export function TimeBlockSection({
       }
 
       if (entryDialog.editingEntryId) {
-        await updateTimeEntry(entryDialog.editingEntryId, data)
+        await updateTimeEntry(entryDialog.editingEntryId, entryDialog.date, entryDialog.startTime, entryDialog.endTime, data)
       } else {
-        await addTimeEntry(data)
+        await addTimeEntry(entryDialog.date, entryDialog.startTime, entryDialog.endTime, data)
       }
 
       closeEntryDialog()
@@ -389,7 +389,7 @@ export function TimeBlockSection({
               onBlockClick={handleBlockClick}
               onBlockDelete={timeBlockDialog.deleteBlock}
               onBlockResize={(blockId, startTime, endTime) => {
-                updateTimeBlock(blockId, { startTime, endTime })
+                updateTimeBlock(blockId, selectedDateIso, startTime, endTime)
               }}
               onBlockStartTimer={handleBlockStartTimer}
               onEntryClick={openEditEntryDialog}

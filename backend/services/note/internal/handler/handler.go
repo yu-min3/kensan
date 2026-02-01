@@ -26,6 +26,7 @@ func NewHandler(svc service.FullService) *Handler {
 // RegisterRoutes registers the note routes.
 // Authentication middleware is expected to be applied by the caller.
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/note-types", h.ListNoteTypes)
 	r.Get("/notes", h.List)
 	r.Post("/notes", h.Create)
 	r.Get("/notes/search", h.Search)
@@ -62,9 +63,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if typesParam := r.URL.Query().Get("types"); typesParam != "" {
 		types := strings.Split(typesParam, ",")
 		for _, t := range types {
-			noteType := note.NoteType(strings.TrimSpace(t))
-			if noteType.IsValid() {
-				filter.Types = append(filter.Types, noteType)
+			trimmed := strings.TrimSpace(t)
+			if trimmed != "" {
+				filter.Types = append(filter.Types, note.NoteType(trimmed))
 			}
 		}
 	}
@@ -251,9 +252,9 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	if typesParam := r.URL.Query().Get("types"); typesParam != "" {
 		types := strings.Split(typesParam, ",")
 		for _, t := range types {
-			noteType := note.NoteType(strings.TrimSpace(t))
-			if noteType.IsValid() {
-				filter.Types = append(filter.Types, noteType)
+			trimmed := strings.TrimSpace(t)
+			if trimmed != "" {
+				filter.Types = append(filter.Types, note.NoteType(trimmed))
 			}
 		}
 	}
@@ -291,7 +292,9 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, service.ErrTypeRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "type", Message: "Type is required"}})
 	case errors.Is(err, service.ErrInvalidType):
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "type", Message: "Type must be diary, learning, or memo"}})
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "type", Message: "Invalid note type"}})
+	case errors.Is(err, service.ErrMetadataValidation):
+		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "metadata", Message: err.Error()}})
 	case errors.Is(err, service.ErrTitleRequired):
 		middleware.ValidationError(w, r, []middleware.ErrorDetail{{Field: "title", Message: "Title is required for diary and learning notes"}})
 	case errors.Is(err, service.ErrContentRequired):
@@ -316,6 +319,18 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Unhandled error in note-service")
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred")
 	}
+}
+
+// ListNoteTypes handles listing available note types
+// GET /note-types
+func (h *Handler) ListNoteTypes(w http.ResponseWriter, r *http.Request) {
+	types, err := h.service.GetNoteTypes(r.Context())
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	middleware.JSON(w, r, http.StatusOK, types)
 }
 
 // ========== NoteContent Handlers ==========

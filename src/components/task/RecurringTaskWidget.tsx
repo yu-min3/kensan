@@ -110,7 +110,7 @@ export function RecurringTaskWidget({ goals, milestones, tasks, className }: Rec
       // TimeEntryでtaskIdが一致するものをカウント（今週分）
       const actualThisWeek = timeEntries.filter(entry => {
         if (entry.taskId !== task.id) return false
-        const entryDate = new Date(entry.date)
+        const entryDate = new Date(entry.startDatetime)
         return entryDate >= weekRange.start && entryDate <= weekRange.end
       }).length
 

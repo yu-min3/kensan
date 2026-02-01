@@ -41,9 +41,8 @@ erDiagram
     time_blocks {
         uuid id PK
         uuid user_id FK
-        date date
-        time start_time
-        time end_time
+        timestamptz start_datetime
+        timestamptz end_datetime
         uuid task_id FK
         string task_name
         uuid milestone_id
@@ -61,9 +60,8 @@ erDiagram
     time_entries {
         uuid id PK
         uuid user_id FK
-        date date
-        time start_time
-        time end_time
+        timestamptz start_datetime
+        timestamptz end_datetime
         uuid task_id FK
         string task_name
         uuid milestone_id
@@ -103,9 +101,8 @@ erDiagram
 type TimeBlock struct {
     ID            string    `json:"id"`
     UserID        string    `json:"userId"`
-    Date          string    `json:"date"`      // YYYY-MM-DD
-    StartTime     string    `json:"startTime"` // HH:mm
-    EndTime       string    `json:"endTime"`   // HH:mm
+    StartDatetime time.Time `json:"startDatetime"` // UTC
+    EndDatetime   time.Time `json:"endDatetime"`   // UTC
     TaskID        *string   `json:"taskId,omitempty"`
     TaskName      string    `json:"taskName"`
     MilestoneID   *string   `json:"milestoneId,omitempty"`
@@ -127,9 +124,8 @@ type TimeBlock struct {
 type TimeEntry struct {
     ID            string    `json:"id"`
     UserID        string    `json:"userId"`
-    Date          string    `json:"date"`      // YYYY-MM-DD
-    StartTime     string    `json:"startTime"` // HH:mm
-    EndTime       string    `json:"endTime"`   // HH:mm
+    StartDatetime time.Time `json:"startDatetime"` // UTC
+    EndDatetime   time.Time `json:"endDatetime"`   // UTC
     TaskID        *string   `json:"taskId,omitempty"`
     TaskName      string    `json:"taskName"`
     MilestoneID   *string   `json:"milestoneId,omitempty"`
@@ -183,23 +179,16 @@ type RunningTimer struct {
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
-| date | string | 日付指定（YYYY-MM-DD） |
-| start_date | string | 範囲開始（YYYY-MM-DD） |
-| end_date | string | 範囲終了（YYYY-MM-DD） |
-| start_timestamp | string | UTC範囲開始（ISO8601） |
-| end_timestamp | string | UTC範囲終了（ISO8601） |
-| timezone | string | レスポンス変換用TZ |
+| start_datetime | string | UTC範囲開始（ISO8601） |
+| end_datetime | string | UTC範囲終了（ISO8601） |
 | goal_id | string | Goal IDでフィルタ |
 | milestone_id | string | Milestone IDでフィルタ |
-
-**タイムスタンプフィルタ優先**: `start_timestamp`/`end_timestamp`が指定されると`date`/`start_date`/`end_date`より優先
 
 **POST /timeblocks リクエスト:**
 ```json
 {
-  "date": "2026-01-23",
-  "startTime": "09:00",
-  "endTime": "11:00",
+  "startDatetime": "2026-01-23T00:00:00Z",
+  "endDatetime": "2026-01-23T02:00:00Z",
   "taskId": "uuid",
   "taskName": "Kubernetes学習",
   "milestoneId": "uuid",
@@ -241,14 +230,13 @@ type RunningTimer struct {
 | PUT | /time-entries/{entryId} | 更新 |
 | DELETE | /time-entries/{entryId} | 削除 |
 
-クエリパラメータはTimeBlockと同様。
+クエリパラメータはTimeBlockと同様（`start_datetime`/`end_datetime`で範囲指定）。
 
 **POST /time-entries リクエスト:**
 ```json
 {
-  "date": "2026-01-23",
-  "startTime": "09:15",
-  "endTime": "10:45",
+  "startDatetime": "2026-01-23T00:15:00Z",
+  "endDatetime": "2026-01-23T01:45:00Z",
   "taskId": "uuid",
   "taskName": "Kubernetes学習",
   "goalId": "uuid",
@@ -307,9 +295,8 @@ type RunningTimer struct {
   "data": {
     "timeEntry": {
       "id": "uuid",
-      "date": "2026-01-23",
-      "startTime": "09:00",
-      "endTime": "10:30",
+      "startDatetime": "2026-01-23T00:00:00Z",
+      "endDatetime": "2026-01-23T01:30:00Z",
       "taskName": "Kubernetes学習"
     },
     "duration": 5400
@@ -323,7 +310,8 @@ type RunningTimer struct {
 
 ### タイムゾーン変換
 
-フロントエンドはローカル日付をUTCタイムスタンプ範囲に変換してクエリ:
+DBは `TIMESTAMPTZ`（UTC）で保存。APIはUTC ISO 8601文字列をそのまま返す。
+タイムゾーン変換はフロントエンド側で実施。
 
 ```
 ローカル日付: 2026-01-23 (Asia/Tokyo)
@@ -337,15 +325,14 @@ sequenceDiagram
     participant Service
     participant Repository
 
-    Frontend->>Handler: GET /timeblocks?start_timestamp=2026-01-22T15:00:00Z&end_timestamp=2026-01-23T15:00:00Z&timezone=Asia/Tokyo
-    Handler->>Service: ListTimeBlocks(filter, timezone)
+    Frontend->>Handler: GET /timeblocks?start_datetime=2026-01-22T15:00:00Z&end_datetime=2026-01-23T15:00:00Z
+    Handler->>Service: ListTimeBlocks(filter)
     Service->>Repository: List(userID, filter)
-    Note over Repository: UTC範囲でクエリ
-    Repository-->>Service: []TimeBlock
-    Service->>Service: ConvertToTimezone(blocks, "Asia/Tokyo")
-    Note over Service: date/startTime/endTimeをローカルに変換
-    Service-->>Handler: []TimeBlock (ローカル時刻)
-    Handler-->>Frontend: 200 OK
+    Note over Repository: WHERE start_datetime >= $1 AND start_datetime < $2
+    Repository-->>Service: []TimeBlock (UTC)
+    Service-->>Handler: []TimeBlock (UTC)
+    Handler-->>Frontend: 200 OK (UTC ISO 8601)
+    Note over Frontend: getLocalTime()でローカル表示に変換
 ```
 
 ### タイマーフロー
@@ -388,17 +375,16 @@ sequenceDiagram
 
 ### 日跨ぎ処理
 
-タイマー停止時に日付を跨いでいた場合:
-- 開始日と終了日が異なる場合、終了日の`date`を使用
-- `startTime`は開始時刻、`endTime`は停止時刻
+`TIMESTAMPTZ`方式では日跨ぎは自然に処理される:
+- `start_datetime` と `end_datetime` が異なる日付でも問題なし
+- タイマー停止時は `started_at` と `now()` をそのまま使用
 
 ### 入力バリデーション
 
 | フィールド | ルール |
 |----------|--------|
-| date | YYYY-MM-DD形式 |
-| startTime | HH:mm形式 |
-| endTime | HH:mm形式、startTime以降 |
+| startDatetime | ISO 8601 (RFC3339) 形式 |
+| endDatetime | ISO 8601 (RFC3339) 形式、startDatetime より後 |
 | taskName | 必須 |
 
 ---
@@ -445,16 +431,16 @@ type Repository interface {
 
 ### 主要クエリ
 
-**ListTimeBlocks (タイムスタンプフィルタ):**
+**ListTimeBlocks (datetime範囲フィルタ):**
 ```sql
-SELECT id, user_id, date, start_time, end_time, task_id, task_name,
+SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
        milestone_id, milestone_name, goal_id, goal_name, goal_color,
        tag_ids, is_routine, routine_task_id, created_at, updated_at
 FROM time_blocks
 WHERE user_id = $1
-  AND (date + start_time) >= $2::timestamp  -- start_timestamp
-  AND (date + start_time) < $3::timestamp   -- end_timestamp
-ORDER BY date, start_time
+  AND start_datetime >= $2  -- start_datetime
+  AND start_datetime < $3   -- end_datetime
+ORDER BY start_datetime ASC
 ```
 
 **GetRunningTimer:**
@@ -468,11 +454,11 @@ WHERE user_id = $1
 **CreateTimeEntry (タイマー停止時):**
 ```sql
 INSERT INTO time_entries (
-    id, user_id, date, start_time, end_time, task_id, task_name,
+    id, user_id, start_datetime, end_datetime, task_id, task_name,
     milestone_id, milestone_name, goal_id, goal_name, goal_color,
     tag_ids, description, created_at, updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()
 )
 ```
 
@@ -486,8 +472,7 @@ var (
     ErrTimeEntryNotFound    = errors.New("time entry not found")
     ErrRunningTimerNotFound = errors.New("no running timer")
     ErrTimerAlreadyRunning  = errors.New("timer already running")
-    ErrInvalidDate          = errors.New("invalid date format")
-    ErrInvalidTime          = errors.New("invalid time format")
+    ErrInvalidDatetime      = errors.New("invalid datetime format")
     ErrInvalidInput         = errors.New("invalid input")
 )
 ```

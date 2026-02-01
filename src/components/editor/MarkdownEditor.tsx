@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import { Markdown } from 'tiptap-markdown'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface MarkdownEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  onImageUpload?: (file: File) => Promise<string>
 }
 
 function ToolbarButton({
@@ -59,7 +61,16 @@ function ToolbarButton({
   )
 }
 
-export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+export function MarkdownEditor({ value, onChange, placeholder, onImageUpload }: MarkdownEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -73,6 +84,10 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
       Link.configure({
         openOnClick: false,
       }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+      }),
       Markdown,
     ],
     content: value,
@@ -83,6 +98,58 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
       onChange(markdown)
     },
   })
+
+  // handlePaste needs editor reference, so define after useEditor
+  const handlePaste = useCallback(
+    async (event: ClipboardEvent) => {
+      if (!onImageUpload || !editor) return false
+
+      const items = event.clipboardData?.items
+      if (!items) return false
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (!file) continue
+
+          event.preventDefault()
+
+          // Show image immediately using data URL
+          const dataUrl = await readFileAsDataURL(file)
+          editor.chain().focus().setImage({ src: dataUrl, alt: 'Uploading...' }).run()
+
+          // Upload in background, then replace data URL with real URL
+          try {
+            const url = await onImageUpload(file)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const storage = editor.storage as any
+            const currentMarkdown = storage.markdown.getMarkdown() as string
+            const updatedMarkdown = currentMarkdown.replace(dataUrl, url)
+            editor.commands.setContent(updatedMarkdown)
+            onChange(updatedMarkdown)
+          } catch (error) {
+            console.error('Image upload failed:', error)
+            // Keep the data URL preview so user doesn't lose the image
+          }
+
+          return true
+        }
+      }
+      return false
+    },
+    [onImageUpload, onChange, editor]
+  )
+
+  // Register paste handler via DOM event since editorProps can't be updated after init
+  useEffect(() => {
+    if (!editor) return
+    const element = editor.view.dom
+    const handler = (event: Event) => {
+      handlePaste(event as ClipboardEvent)
+    }
+    element.addEventListener('paste', handler)
+    return () => element.removeEventListener('paste', handler)
+  }, [editor, handlePaste])
 
   // 外部からvalueが変更された場合に同期
   useEffect(() => {

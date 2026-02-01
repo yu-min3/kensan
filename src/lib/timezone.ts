@@ -1,8 +1,9 @@
 /**
- * Timezone utilities for converting local dates to UTC ranges
+ * Timezone utilities for converting between local dates/times and UTC ISO datetimes
  *
- * The database stores all timestamps in UTC. When querying for a specific
- * local date, we need to convert it to the corresponding UTC range.
+ * The database stores all timestamps as TIMESTAMPTZ (effectively UTC).
+ * The API returns UTC ISO 8601 strings (e.g., "2026-01-20T15:00:00Z").
+ * Frontend is responsible for all timezone conversion.
  *
  * Example: JST 2026-01-21 (Asia/Tokyo, UTC+9)
  *   - Start: 2026-01-21 00:00:00 JST = 2026-01-20 15:00:00 UTC
@@ -103,58 +104,49 @@ export function getTodayInTimezone(timezone: string): string {
 }
 
 /**
- * Convert UTC date and time to local date and time
+ * Get the local date (YYYY-MM-DD) from an ISO 8601 UTC datetime string
  *
- * @param utcDate - Date string in YYYY-MM-DD format (UTC)
- * @param utcTime - Time string in HH:mm or HH:mm:ss format (UTC)
- * @param timezone - Target timezone (e.g., 'Asia/Tokyo')
- * @returns Object with local date (YYYY-MM-DD) and time (HH:mm)
+ * @param isoDatetime - ISO 8601 UTC string (e.g., "2026-01-20T15:00:00Z")
+ * @param timezone - User's timezone (e.g., 'Asia/Tokyo')
+ * @returns Local date string in YYYY-MM-DD format
  */
-export function utcToLocalDateTime(
-  utcDate: string,
-  utcTime: string,
-  timezone: string
-): { date: string; time: string } {
-  const offset = getTimezoneOffset(timezone)
-
-  // Parse UTC date and time
-  const [year, month, day] = utcDate.split('-').map(Number)
-  const timeParts = utcTime.split(':').map(Number)
-  const hours = timeParts[0]
-  const minutes = timeParts[1]
-
-  // Create UTC timestamp
-  const utcMs = Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
-
-  // Add timezone offset to get local time
-  const localMs = utcMs + offset * 60 * 60 * 1000
-  const localDate = new Date(localMs)
-
-  const localYear = localDate.getUTCFullYear()
-  const localMonth = String(localDate.getUTCMonth() + 1).padStart(2, '0')
-  const localDay = String(localDate.getUTCDate()).padStart(2, '0')
-  const localHours = String(localDate.getUTCHours()).padStart(2, '0')
-  const localMinutes = String(localDate.getUTCMinutes()).padStart(2, '0')
-
-  return {
-    date: `${localYear}-${localMonth}-${localDay}`,
-    time: `${localHours}:${localMinutes}`,
-  }
+export function getLocalDate(isoDatetime: string, timezone: string): string {
+  const date = new Date(isoDatetime)
+  return formatDateInTimezone(date, timezone)
 }
 
 /**
- * Convert local date and time to UTC date and time
+ * Get the local time (HH:mm) from an ISO 8601 UTC datetime string
+ *
+ * @param isoDatetime - ISO 8601 UTC string (e.g., "2026-01-20T15:00:00Z")
+ * @param timezone - User's timezone (e.g., 'Asia/Tokyo')
+ * @returns Local time string in HH:mm format
+ */
+export function getLocalTime(isoDatetime: string, timezone: string): string {
+  const offset = getTimezoneOffset(timezone)
+  const date = new Date(isoDatetime)
+  const localMs = date.getTime() + (offset * 60 * 60 * 1000)
+  const localDate = new Date(localMs)
+
+  const hours = String(localDate.getUTCHours()).padStart(2, '0')
+  const minutes = String(localDate.getUTCMinutes()).padStart(2, '0')
+
+  return `${hours}:${minutes}`
+}
+
+/**
+ * Convert a local date and time to a UTC ISO 8601 datetime string
  *
  * @param localDate - Date string in YYYY-MM-DD format (user's local timezone)
  * @param localTime - Time string in HH:mm format (user's local timezone)
  * @param timezone - User's timezone (e.g., 'Asia/Tokyo')
- * @returns Object with UTC date (YYYY-MM-DD) and time (HH:mm)
+ * @returns ISO 8601 UTC datetime string (e.g., "2026-01-20T15:00:00.000Z")
  */
-export function localToUtcDateTime(
+export function localToUtcDatetime(
   localDate: string,
   localTime: string,
   timezone: string
-): { date: string; time: string } {
+): string {
   const offset = getTimezoneOffset(timezone)
 
   // Parse local date and time
@@ -166,16 +158,6 @@ export function localToUtcDateTime(
   // Create timestamp at local time, then subtract offset to get UTC
   const localMs = Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
   const utcMs = localMs - offset * 60 * 60 * 1000
-  const utcDate = new Date(utcMs)
 
-  const utcYear = utcDate.getUTCFullYear()
-  const utcMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
-  const utcDay = String(utcDate.getUTCDate()).padStart(2, '0')
-  const utcHours = String(utcDate.getUTCHours()).padStart(2, '0')
-  const utcMinutes = String(utcDate.getUTCMinutes()).padStart(2, '0')
-
-  return {
-    date: `${utcYear}-${utcMonth}-${utcDay}`,
-    time: `${utcHours}:${utcMinutes}`,
-  }
+  return new Date(utcMs).toISOString()
 }

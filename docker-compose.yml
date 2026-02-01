@@ -1,5 +1,84 @@
 services:
   # =============================================================================
+  # Observability
+  # =============================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: kensan-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # gRPC
+      - "4318:4318"   # HTTP
+      - "13133:13133" # Health check
+    depends_on:
+      - tempo
+      - loki
+    networks:
+      - kensan-network
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: kensan-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - kensan-network
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: kensan-loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./observability/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - kensan-network
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: kensan-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-remote-write-receiver"
+      - "--storage.tsdb.retention.time=48h"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - kensan-network
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: kensan-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    networks:
+      - kensan-network
+
+  # =============================================================================
   # Infrastructure
   # =============================================================================
   postgres:
@@ -19,6 +98,41 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - kensan-network
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: kensan-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: kensan
+      MINIO_ROOT_PASSWORD: kensan-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - kensan-network
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: kensan-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 kensan kensan-minio &&
+      mc mb --ignore-existing local/kensan-notes &&
+      echo '{\"CORSRules\":[{\"AllowedOrigins\":[\"http://localhost:5173\"],\"AllowedMethods\":[\"GET\",\"PUT\"],\"AllowedHeaders\":[\"*\"],\"MaxAgeSeconds\":3600}]}' | mc cors set local/kensan-notes /dev/stdin
+      "
     networks:
       - kensan-network
 
@@ -60,6 +174,8 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8081:8081"
     depends_on:
@@ -82,6 +198,8 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8082:8082"
     depends_on:
@@ -104,6 +222,8 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8084:8084"
     depends_on:
@@ -126,6 +246,8 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8088:8088"
     depends_on:
@@ -156,6 +278,9 @@ services:
       R2_ACCESS_KEY: ${R2_ACCESS_KEY:-}
       R2_SECRET_KEY: ${R2_SECRET_KEY:-}
       R2_BUCKET: ${R2_BUCKET:-kensan-files}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
+      OTEL_SEMCONV_STABILITY_OPT_IN: "http"
     ports:
       - "8089:8089"
     depends_on:
@@ -184,6 +309,8 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8090:8090"
     depends_on:
@@ -206,10 +333,20 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      STORAGE_ENDPOINT: minio:9000
+      STORAGE_ACCESS_KEY: kensan
+      STORAGE_SECRET_KEY: kensan-minio
+      STORAGE_BUCKET: kensan-notes
+      STORAGE_USE_SSL: "false"
+      STORAGE_PUBLIC_URL: http://localhost:9000/kensan-notes
+      OTEL_ENABLED: "true"
+      OTEL_COLLECTOR_URL: "otel-collector:4318"
     ports:
       - "8091:8091"
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - kensan-network
@@ -220,3 +357,8 @@ networks:
 
 volumes:
   postgres_data:
+  minio_data:
+  tempo_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:

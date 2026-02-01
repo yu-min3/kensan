@@ -55,6 +55,8 @@ export interface TimeBlockItemProps {
   isDragging: boolean
   showComparison: boolean
   isTimerRunning: boolean
+  overlapColumn?: number
+  overlapTotalColumns?: number
   onBlockClick?: (block: TimeBlock) => void
   onBlockDelete?: (blockId: string) => void
   onBlockResize?: (blockId: string, startTime: string, endTime: string) => void

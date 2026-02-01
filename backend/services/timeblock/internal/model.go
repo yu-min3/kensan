@@ -8,9 +8,8 @@ import (
 type TimeBlock struct {
 	ID            string    `json:"id"`
 	UserID        string    `json:"userId"`
-	Date          string    `json:"date"`      // YYYY-MM-DD
-	StartTime     string    `json:"startTime"` // HH:mm
-	EndTime       string    `json:"endTime"`   // HH:mm
+	StartDatetime time.Time `json:"startDatetime"` // UTC ISO 8601
+	EndDatetime   time.Time `json:"endDatetime"`   // UTC ISO 8601
 	TaskID        *string   `json:"taskId,omitempty"`
 	TaskName      string    `json:"taskName"`
 	MilestoneID   *string   `json:"milestoneId,omitempty"`
@@ -29,9 +28,8 @@ type TimeBlock struct {
 type TimeEntry struct {
 	ID            string    `json:"id"`
 	UserID        string    `json:"userId"`
-	Date          string    `json:"date"`      // YYYY-MM-DD
-	StartTime     string    `json:"startTime"` // HH:mm
-	EndTime       string    `json:"endTime"`   // HH:mm
+	StartDatetime time.Time `json:"startDatetime"` // UTC ISO 8601
+	EndDatetime   time.Time `json:"endDatetime"`   // UTC ISO 8601
 	TaskID        *string   `json:"taskId,omitempty"`
 	TaskName      string    `json:"taskName"`
 	MilestoneID   *string   `json:"milestoneId,omitempty"`
@@ -47,9 +45,8 @@ type TimeEntry struct {
 
 // CreateTimeBlockInput represents the input for creating a time block
 type CreateTimeBlockInput struct {
-	Date          string   `json:"date"`
-	StartTime     string   `json:"startTime"`
-	EndTime       string   `json:"endTime"`
+	StartDatetime string   `json:"startDatetime"` // ISO 8601 UTC string
+	EndDatetime   string   `json:"endDatetime"`   // ISO 8601 UTC string
 	TaskID        *string  `json:"taskId,omitempty"`
 	TaskName      string   `json:"taskName"`
 	MilestoneID   *string  `json:"milestoneId,omitempty"`
@@ -64,9 +61,8 @@ type CreateTimeBlockInput struct {
 
 // UpdateTimeBlockInput represents the input for updating a time block
 type UpdateTimeBlockInput struct {
-	Date          *string  `json:"date,omitempty"`
-	StartTime     *string  `json:"startTime,omitempty"`
-	EndTime       *string  `json:"endTime,omitempty"`
+	StartDatetime *string  `json:"startDatetime,omitempty"` // ISO 8601 UTC string
+	EndDatetime   *string  `json:"endDatetime,omitempty"`   // ISO 8601 UTC string
 	TaskID        *string  `json:"taskId,omitempty"`
 	TaskName      *string  `json:"taskName,omitempty"`
 	MilestoneID   *string  `json:"milestoneId,omitempty"`
@@ -81,9 +77,8 @@ type UpdateTimeBlockInput struct {
 
 // CreateTimeEntryInput represents the input for creating a time entry
 type CreateTimeEntryInput struct {
-	Date          string   `json:"date"`
-	StartTime     string   `json:"startTime"`
-	EndTime       string   `json:"endTime"`
+	StartDatetime string   `json:"startDatetime"` // ISO 8601 UTC string
+	EndDatetime   string   `json:"endDatetime"`   // ISO 8601 UTC string
 	TaskID        *string  `json:"taskId,omitempty"`
 	TaskName      string   `json:"taskName"`
 	MilestoneID   *string  `json:"milestoneId,omitempty"`
@@ -97,9 +92,8 @@ type CreateTimeEntryInput struct {
 
 // UpdateTimeEntryInput represents the input for updating a time entry
 type UpdateTimeEntryInput struct {
-	Date          *string  `json:"date,omitempty"`
-	StartTime     *string  `json:"startTime,omitempty"`
-	EndTime       *string  `json:"endTime,omitempty"`
+	StartDatetime *string  `json:"startDatetime,omitempty"` // ISO 8601 UTC string
+	EndDatetime   *string  `json:"endDatetime,omitempty"`   // ISO 8601 UTC string
 	TaskID        *string  `json:"taskId,omitempty"`
 	TaskName      *string  `json:"taskName,omitempty"`
 	MilestoneID   *string  `json:"milestoneId,omitempty"`
@@ -113,28 +107,18 @@ type UpdateTimeEntryInput struct {
 
 // TimeBlockFilter represents filters for listing time blocks
 type TimeBlockFilter struct {
-	Date      *string // Exact date match (YYYY-MM-DD)
-	StartDate *string // Range start (inclusive)
-	EndDate   *string // Range end (inclusive)
-	// UTC timestamp range filters (ISO8601 format)
-	// These take precedence over Date/StartDate/EndDate when provided
-	StartTimestamp *string // UTC timestamp range start (inclusive)
-	EndTimestamp   *string // UTC timestamp range end (exclusive)
-	GoalID         *string // Filter by goal
-	MilestoneID    *string // Filter by milestone
+	StartDatetime *string // UTC timestamp range start (inclusive), ISO 8601
+	EndDatetime   *string // UTC timestamp range end (exclusive), ISO 8601
+	GoalID        *string // Filter by goal
+	MilestoneID   *string // Filter by milestone
 }
 
 // TimeEntryFilter represents filters for listing time entries
 type TimeEntryFilter struct {
-	Date        *string // Exact date match (YYYY-MM-DD)
-	StartDate   *string // Range start (inclusive)
-	EndDate     *string // Range end (inclusive)
-	GoalID      *string // Filter by goal
-	MilestoneID *string // Filter by milestone
-	// UTC timestamp range filters (ISO8601 format)
-	// These take precedence over Date/StartDate/EndDate when provided
-	StartTimestamp *string // UTC timestamp range start (inclusive)
-	EndTimestamp   *string // UTC timestamp range end (exclusive)
+	StartDatetime *string // UTC timestamp range start (inclusive), ISO 8601
+	EndDatetime   *string // UTC timestamp range end (exclusive), ISO 8601
+	GoalID        *string // Filter by goal
+	MilestoneID   *string // Filter by milestone
 }
 
 // GenerateFromRoutinesInput represents input for generating time blocks from routines

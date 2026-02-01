@@ -19,8 +19,8 @@ type MockRepository struct {
 // Compile-time check that MockRepository implements repository.Repository
 var _ repository.Repository = (*MockRepository)(nil)
 
-func (m *MockRepository) GetTotalMinutesByDateRange(ctx context.Context, userID, startDate, endDate string) (int, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetTotalMinutesByDateRange(ctx context.Context, userID, startDatetime, endDatetime string) (int, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime)
 	return args.Int(0), args.Error(1)
 }
 
@@ -29,45 +29,45 @@ func (m *MockRepository) GetCompletedTasksCount(ctx context.Context, userID, sta
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockRepository) GetTimeBlocksAggregated(ctx context.Context, userID, startDate, endDate string) (int, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetTimeBlocksAggregated(ctx context.Context, userID, startDatetime, endDatetime string) (int, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime)
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockRepository) GetDailyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetDailyBreakdown(ctx context.Context, userID, startDatetime, endDatetime, timezone string) ([]analytics.DailyBreakdown, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]analytics.DailyBreakdown), args.Error(1)
 }
 
-func (m *MockRepository) GetWeeklyBreakdown(ctx context.Context, userID, startDate, endDate string) ([]analytics.DailyBreakdown, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetWeeklyBreakdown(ctx context.Context, userID, startDatetime, endDatetime, timezone string) ([]analytics.DailyBreakdown, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]analytics.DailyBreakdown), args.Error(1)
 }
 
-func (m *MockRepository) GetMinutesByGoal(ctx context.Context, userID, startDate, endDate string) ([]repository.GoalWithMinutes, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetMinutesByGoal(ctx context.Context, userID, startDatetime, endDatetime string) ([]repository.GoalWithMinutes, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]repository.GoalWithMinutes), args.Error(1)
 }
 
-func (m *MockRepository) GetMinutesByMilestone(ctx context.Context, userID, startDate, endDate string) ([]repository.MilestoneWithMinutes, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetMinutesByMilestone(ctx context.Context, userID, startDatetime, endDatetime string) ([]repository.MilestoneWithMinutes, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]repository.MilestoneWithMinutes), args.Error(1)
 }
 
-func (m *MockRepository) GetMinutesByTag(ctx context.Context, userID, startDate, endDate string) ([]repository.TagWithMinutes, error) {
-	args := m.Called(ctx, userID, startDate, endDate)
+func (m *MockRepository) GetMinutesByTag(ctx context.Context, userID, startDatetime, endDatetime string) ([]repository.TagWithMinutes, error) {
+	args := m.Called(ctx, userID, startDatetime, endDatetime)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -113,18 +113,24 @@ func TestService_GetWeeklySummary_Success(t *testing.T) {
 
 	filter := analytics.WeeklySummaryFilter{
 		WeekStart: "2024-01-15",
+		// No timezone = defaults to UTC
 	}
 
-	// Setup mock expectations
-	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, "2024-01-15", "2024-01-21").Return(1500, nil)
-	mockRepo.On("GetMinutesByGoal", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.GoalWithMinutes{
+	// With UTC timezone, dateToUtcRange("2024-01-15", "2024-01-21", "UTC") gives:
+	// start: "2024-01-15T00:00:00Z", end: "2024-01-22T00:00:00Z" (exclusive)
+	startDt := "2024-01-15T00:00:00Z"
+	endDt := "2024-01-22T00:00:00Z"
+
+	// Setup mock expectations with UTC datetime strings
+	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, startDt, endDt).Return(1500, nil)
+	mockRepo.On("GetMinutesByGoal", ctx, userID, startDt, endDt).Return([]repository.GoalWithMinutes{
 		{ID: "goal-1", Name: "GK", Color: "#0EA5E9", Minutes: 900},
 		{ID: "goal-2", Name: "OSS", Color: "#10B981", Minutes: 600},
 	}, nil)
-	mockRepo.On("GetMinutesByTag", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.TagWithMinutes{}, nil)
-	mockRepo.On("GetMinutesByMilestone", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.MilestoneWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByTag", ctx, userID, startDt, endDt).Return([]repository.TagWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByMilestone", ctx, userID, startDt, endDt).Return([]repository.MilestoneWithMinutes{}, nil)
 	mockRepo.On("GetCompletedTasksCount", ctx, userID, "2024-01-15", "2024-01-21").Return(15, nil)
-	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, "2024-01-15", "2024-01-21").Return(1800, nil)
+	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, startDt, endDt).Return(1800, nil)
 
 	result, err := svc.GetWeeklySummary(ctx, userID, filter)
 
@@ -168,8 +174,11 @@ func TestService_GetWeeklySummary_RepositoryError(t *testing.T) {
 		WeekStart: "2024-01-15",
 	}
 
+	startDt := "2024-01-15T00:00:00Z"
+	endDt := "2024-01-22T00:00:00Z"
+
 	repoErr := errors.New("database connection failed")
-	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, "2024-01-15", "2024-01-21").Return(0, repoErr)
+	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, startDt, endDt).Return(0, repoErr)
 
 	result, err := svc.GetWeeklySummary(ctx, userID, filter)
 
@@ -188,13 +197,16 @@ func TestService_GetWeeklySummary_EmptyData(t *testing.T) {
 		WeekStart: "2024-01-15",
 	}
 
+	startDt := "2024-01-15T00:00:00Z"
+	endDt := "2024-01-22T00:00:00Z"
+
 	// Return empty data
-	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, "2024-01-15", "2024-01-21").Return(0, nil)
-	mockRepo.On("GetMinutesByGoal", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.GoalWithMinutes{}, nil)
-	mockRepo.On("GetMinutesByTag", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.TagWithMinutes{}, nil)
-	mockRepo.On("GetMinutesByMilestone", ctx, userID, "2024-01-15", "2024-01-21").Return([]repository.MilestoneWithMinutes{}, nil)
+	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, startDt, endDt).Return(0, nil)
+	mockRepo.On("GetMinutesByGoal", ctx, userID, startDt, endDt).Return([]repository.GoalWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByTag", ctx, userID, startDt, endDt).Return([]repository.TagWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByMilestone", ctx, userID, startDt, endDt).Return([]repository.MilestoneWithMinutes{}, nil)
 	mockRepo.On("GetCompletedTasksCount", ctx, userID, "2024-01-15", "2024-01-21").Return(0, nil)
-	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, "2024-01-15", "2024-01-21").Return(0, nil)
+	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, startDt, endDt).Return(0, nil)
 
 	result, err := svc.GetWeeklySummary(ctx, userID, filter)
 
@@ -217,19 +229,25 @@ func TestService_GetMonthlySummary_Success(t *testing.T) {
 	filter := analytics.MonthlySummaryFilter{
 		Year:  2024,
 		Month: 1,
+		// No timezone = defaults to UTC
 	}
 
+	// With UTC timezone, dateToUtcRange("2024-01-01", "2024-01-31", "UTC") gives:
+	// start: "2024-01-01T00:00:00Z", end: "2024-02-01T00:00:00Z" (exclusive)
+	startDt := "2024-01-01T00:00:00Z"
+	endDt := "2024-02-01T00:00:00Z"
+
 	// Setup mock expectations for January 2024
-	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, "2024-01-01", "2024-01-31").Return(6000, nil)
-	mockRepo.On("GetMinutesByGoal", ctx, userID, "2024-01-01", "2024-01-31").Return([]repository.GoalWithMinutes{
+	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, startDt, endDt).Return(6000, nil)
+	mockRepo.On("GetMinutesByGoal", ctx, userID, startDt, endDt).Return([]repository.GoalWithMinutes{
 		{ID: "goal-1", Name: "GK", Color: "#0EA5E9", Minutes: 3000},
 		{ID: "goal-2", Name: "OSS", Color: "#10B981", Minutes: 2000},
 	}, nil)
-	mockRepo.On("GetMinutesByTag", ctx, userID, "2024-01-01", "2024-01-31").Return([]repository.TagWithMinutes{}, nil)
-	mockRepo.On("GetMinutesByMilestone", ctx, userID, "2024-01-01", "2024-01-31").Return([]repository.MilestoneWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByTag", ctx, userID, startDt, endDt).Return([]repository.TagWithMinutes{}, nil)
+	mockRepo.On("GetMinutesByMilestone", ctx, userID, startDt, endDt).Return([]repository.MilestoneWithMinutes{}, nil)
 	mockRepo.On("GetCompletedTasksCount", ctx, userID, "2024-01-01", "2024-01-31").Return(50, nil)
-	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, "2024-01-01", "2024-01-31").Return(7000, nil)
-	mockRepo.On("GetWeeklyBreakdown", ctx, userID, "2024-01-01", "2024-01-31").Return([]analytics.DailyBreakdown{
+	mockRepo.On("GetTimeBlocksAggregated", ctx, userID, startDt, endDt).Return(7000, nil)
+	mockRepo.On("GetWeeklyBreakdown", ctx, userID, startDt, endDt, "UTC").Return([]analytics.DailyBreakdown{
 		{Date: "Week 1", Minutes: 1500},
 		{Date: "Week 2", Minutes: 1500},
 	}, nil)
@@ -320,7 +338,7 @@ func TestService_GetTrends_Success(t *testing.T) {
 		Count:  2,
 	}
 
-	// Mock will be called for each period
+	// Mock will be called for each period with UTC datetime strings
 	mockRepo.On("GetTotalMinutesByDateRange", ctx, userID, mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(1500, nil)
 
 	result, err := svc.GetTrends(ctx, userID, filter)

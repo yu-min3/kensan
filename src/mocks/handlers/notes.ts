@@ -56,7 +56,79 @@ const toSearchResultResponse = (n: Note, score: number) => ({
   score,
 })
 
+// Mock note type configurations
+const mockNoteTypes = [
+  {
+    id: 'nt-1',
+    slug: 'diary',
+    displayName: '日記',
+    displayNameEn: 'Diary',
+    description: '日々の振り返りや気づきを記録します',
+    icon: 'calendar-days',
+    color: '#3B82F6',
+    constraints: { dateRequired: true, titleRequired: true, contentRequired: true, dailyUnique: true },
+    metadataSchema: [],
+    sortOrder: 0,
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: 'nt-2',
+    slug: 'learning',
+    displayName: '学習記録',
+    displayNameEn: 'Learning Record',
+    description: '技術的な学びやナレッジを記録します',
+    icon: 'book-open',
+    color: '#10B981',
+    constraints: { dateRequired: true, titleRequired: true, contentRequired: true, dailyUnique: true },
+    metadataSchema: [],
+    sortOrder: 1,
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: 'nt-3',
+    slug: 'general',
+    displayName: '一般ノート',
+    displayNameEn: 'General Note',
+    description: '自由形式のノートです',
+    icon: 'file-text',
+    color: '#6B7280',
+    constraints: { dateRequired: false, titleRequired: true, contentRequired: true, dailyUnique: false },
+    metadataSchema: [],
+    sortOrder: 2,
+    isSystem: false,
+    isActive: true,
+  },
+  {
+    id: 'nt-4',
+    slug: 'book_review',
+    displayName: '読書レビュー',
+    displayNameEn: 'Book Review',
+    description: '読んだ本のレビューや感想を記録します',
+    icon: 'book-open-check',
+    color: '#8B5CF6',
+    constraints: { dateRequired: false, titleRequired: true, contentRequired: true, dailyUnique: false },
+    metadataSchema: [
+      { key: 'author', label: '著者', labelEn: 'Author', type: 'string', required: true, constraints: {} },
+      { key: 'rating', label: '評価', labelEn: 'Rating', type: 'integer', required: false, constraints: { min: 1, max: 5 } },
+      { key: 'isbn', label: 'ISBN', labelEn: 'ISBN', type: 'string', required: false, constraints: {} },
+      { key: 'publisher', label: '出版社', labelEn: 'Publisher', type: 'string', required: false, constraints: {} },
+      { key: 'finished_date', label: '読了日', labelEn: 'Finished Date', type: 'date', required: false, constraints: {} },
+      { key: 'category', label: 'カテゴリ', labelEn: 'Category', type: 'enum', required: false, constraints: { values: ['技術書', 'ビジネス', '自己啓発', '小説', 'その他'] } },
+    ],
+    sortOrder: 3,
+    isSystem: false,
+    isActive: true,
+  },
+]
+
 export const noteHandlers = [
+  // GET /note-types - List note type configurations
+  http.get(`${BASE_URL}/note-types`, () => {
+    return HttpResponse.json(mockNoteTypes)
+  }),
+
   // GET /notes - List notes (returns items without content)
   http.get(`${BASE_URL}/notes`, ({ request }) => {
     const url = new URL(request.url)
@@ -261,6 +333,72 @@ export const noteHandlers = [
 
     notes.splice(index, 1)
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  // POST /notes/:id/contents/upload-url - Get presigned upload URL
+  http.post(`${BASE_URL}/notes/:id/contents/upload-url`, async ({ params, request }) => {
+    const note = notes.find((n) => n.id === params.id)
+    if (!note) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Note not found' },
+        { status: 404 }
+      )
+    }
+
+    const body = (await request.json()) as { fileName: string; mimeType: string; fileSize: number }
+    const contentId = generateId('content')
+    const storageKey = `notes/${params.id}/${contentId}/${body.fileName}`
+
+    return HttpResponse.json({
+      uploadUrl: `http://localhost:9000/kensan-notes/${storageKey}`,
+      contentId,
+      storageKey,
+    })
+  }),
+
+  // POST /notes/:id/contents - Create note content
+  http.post(`${BASE_URL}/notes/:id/contents`, async ({ params, request }) => {
+    const note = notes.find((n) => n.id === params.id)
+    if (!note) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Note not found' },
+        { status: 404 }
+      )
+    }
+
+    const body = (await request.json()) as Record<string, unknown>
+    const now = new Date().toISOString()
+    const contentId = (body.contentId as string) || generateId('content')
+
+    return HttpResponse.json({
+      id: contentId,
+      noteId: params.id,
+      contentType: body.contentType || 'image',
+      storageProvider: body.storageProvider || 'minio',
+      storageKey: body.storageKey,
+      fileName: body.fileName,
+      mimeType: body.mimeType,
+      fileSizeBytes: body.fileSizeBytes,
+      sortOrder: body.sortOrder || 0,
+      metadata: body.metadata || {},
+      createdAt: now,
+      updatedAt: now,
+    }, { status: 201 })
+  }),
+
+  // GET /notes/:id/contents/:contentId/download-url - Get download URL
+  http.get(`${BASE_URL}/notes/:id/contents/:contentId/download-url`, ({ params }) => {
+    const note = notes.find((n) => n.id === params.id)
+    if (!note) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Note not found' },
+        { status: 404 }
+      )
+    }
+
+    return HttpResponse.json({
+      downloadUrl: `http://localhost:9000/kensan-notes/notes/${params.id}/${params.contentId}/image.png`,
+    })
   }),
 
   // POST /notes/:id/archive - Archive/unarchive note

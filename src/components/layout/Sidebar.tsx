@@ -4,7 +4,7 @@ import {
   StickyNote,
   FolderKanban,
   BarChart3,
-  Bot,
+  Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -20,7 +20,7 @@ const navItems: NavItem[] = [
   { to: '/notes', icon: StickyNote, label: 'ノート' },
   { to: '/tasks', icon: FolderKanban, label: 'タスク管理' },
   { to: '/analytics', icon: BarChart3, label: '分析・レポート' },
-  { to: '/ai-review', icon: Bot, label: 'AI振り返り', badge: 'Phase 2' },
+  { to: '/interactions', icon: Activity, label: 'AI Explorer' },
 ]
 
 export function Sidebar() {

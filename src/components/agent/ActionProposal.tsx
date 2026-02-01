@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ActionItem } from '@/stores/useChatStore'
+import { formatActionDescription } from '@/lib/actionFormatter'
 
 interface ActionProposalProps {
   actions: ActionItem[]
@@ -38,7 +39,7 @@ export function ActionProposal({ actions, onApprove, onReject, disabled }: Actio
               disabled={disabled}
               className="rounded border-input"
             />
-            <span>{action.description}</span>
+            <span>{formatActionDescription(action.type, action.input)}</span>
           </label>
         ))}
       </div>

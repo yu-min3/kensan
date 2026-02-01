@@ -91,7 +91,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // ListTimeBlocks returns all time blocks for a user with optional filters
 func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error) {
 	query := `
-		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		       tag_ids, is_routine, routine_task_id, created_at, updated_at
 		FROM time_blocks
@@ -100,34 +100,16 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 	args := []interface{}{userID}
 	argCount := 1
 
-	// UTC timestamp range filters take precedence over date filters
-	if filter.StartTimestamp != nil && filter.EndTimestamp != nil {
-		// Query using combined date + start_time as timestamp
+	if filter.StartDatetime != nil {
 		argCount++
-		query += fmt.Sprintf(" AND (date + start_time) >= $%d::timestamp", argCount)
-		args = append(args, *filter.StartTimestamp)
+		query += fmt.Sprintf(" AND start_datetime >= $%d::timestamptz", argCount)
+		args = append(args, *filter.StartDatetime)
+	}
+
+	if filter.EndDatetime != nil {
 		argCount++
-		query += fmt.Sprintf(" AND (date + start_time) < $%d::timestamp", argCount)
-		args = append(args, *filter.EndTimestamp)
-	} else {
-		// Fall back to date-based filters
-		if filter.Date != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date = $%d", argCount)
-			args = append(args, *filter.Date)
-		}
-
-		if filter.StartDate != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date >= $%d", argCount)
-			args = append(args, *filter.StartDate)
-		}
-
-		if filter.EndDate != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date <= $%d", argCount)
-			args = append(args, *filter.EndDate)
-		}
+		query += fmt.Sprintf(" AND start_datetime < $%d::timestamptz", argCount)
+		args = append(args, *filter.EndDatetime)
 	}
 
 	if filter.GoalID != nil {
@@ -142,7 +124,7 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 		args = append(args, *filter.MilestoneID)
 	}
 
-	query += " ORDER BY date ASC, start_time ASC"
+	query += " ORDER BY start_datetime ASC"
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -157,9 +139,8 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 		err := rows.Scan(
 			&tb.ID,
 			&tb.UserID,
-			&tb.Date,
-			&tb.StartTime,
-			&tb.EndTime,
+			&tb.StartDatetime,
+			&tb.EndDatetime,
 			&tb.TaskID,
 			&tb.TaskName,
 			&tb.MilestoneID,
@@ -190,7 +171,7 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 // GetTimeBlockByID returns a time block by ID for a specific user
 func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeBlockID string) (*timeblock.TimeBlock, error) {
 	query := `
-		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		       tag_ids, is_routine, routine_task_id, created_at, updated_at
 		FROM time_blocks
@@ -202,9 +183,8 @@ func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeB
 	err := r.pool.QueryRow(ctx, query, timeBlockID, userID).Scan(
 		&tb.ID,
 		&tb.UserID,
-		&tb.Date,
-		&tb.StartTime,
-		&tb.EndTime,
+		&tb.StartDatetime,
+		&tb.EndDatetime,
 		&tb.TaskID,
 		&tb.TaskName,
 		&tb.MilestoneID,
@@ -240,25 +220,34 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		tagIDs = []string{}
 	}
 
+	// Parse datetime strings
+	startDt, err := time.Parse(time.RFC3339, input.StartDatetime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start_datetime: %w", err)
+	}
+	endDt, err := time.Parse(time.RFC3339, input.EndDatetime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end_datetime: %w", err)
+	}
+
 	query := `
-		INSERT INTO time_blocks (id, user_id, date, start_time, end_time, task_id, task_name,
+		INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime, task_id, task_name,
 		                         milestone_id, milestone_name,
 		                         goal_id, goal_name, goal_color, tag_ids,
 		                         is_routine, routine_task_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		          tag_ids, is_routine, routine_task_id, created_at, updated_at
 	`
 
 	var tb timeblock.TimeBlock
 	var returnedTagIDs []string
-	err := r.pool.QueryRow(ctx, query,
+	err = r.pool.QueryRow(ctx, query,
 		id,
 		userID,
-		input.Date,
-		input.StartTime,
-		input.EndTime,
+		startDt,
+		endDt,
 		input.TaskID,
 		input.TaskName,
 		input.MilestoneID,
@@ -274,9 +263,8 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 	).Scan(
 		&tb.ID,
 		&tb.UserID,
-		&tb.Date,
-		&tb.StartTime,
-		&tb.EndTime,
+		&tb.StartDatetime,
+		&tb.EndDatetime,
 		&tb.TaskID,
 		&tb.TaskName,
 		&tb.MilestoneID,
@@ -303,9 +291,21 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBlockID string, input timeblock.UpdateTimeBlockInput) (*timeblock.TimeBlock, error) {
 	b := NewUpdateBuilder()
 
-	AddField(b, "date", input.Date)
-	AddField(b, "start_time", input.StartTime)
-	AddField(b, "end_time", input.EndTime)
+	// For datetime fields, parse string to time.Time before adding
+	if input.StartDatetime != nil {
+		startDt, err := time.Parse(time.RFC3339, *input.StartDatetime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start_datetime: %w", err)
+		}
+		b.AddFieldValue("start_datetime", startDt)
+	}
+	if input.EndDatetime != nil {
+		endDt, err := time.Parse(time.RFC3339, *input.EndDatetime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_datetime: %w", err)
+		}
+		b.AddFieldValue("end_datetime", endDt)
+	}
 	AddField(b, "task_id", input.TaskID)
 	AddField(b, "task_name", input.TaskName)
 	AddField(b, "milestone_id", input.MilestoneID)
@@ -331,7 +331,7 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		UPDATE time_blocks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		          tag_ids, is_routine, routine_task_id, created_at, updated_at
 	`, b.SetClause(), idArg, userArg)
@@ -341,9 +341,8 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&tb.ID,
 		&tb.UserID,
-		&tb.Date,
-		&tb.StartTime,
-		&tb.EndTime,
+		&tb.StartDatetime,
+		&tb.EndDatetime,
 		&tb.TaskID,
 		&tb.TaskName,
 		&tb.MilestoneID,
@@ -407,7 +406,7 @@ func (r *PostgresRepository) CreateTimeBlockBatch(ctx context.Context, userID st
 // ListTimeEntries returns all time entries for a user with optional filters
 func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error) {
 	query := `
-		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		       tag_ids, description, created_at, updated_at
 		FROM time_entries
@@ -416,34 +415,16 @@ func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string,
 	args := []interface{}{userID}
 	argCount := 1
 
-	// UTC timestamp range filters take precedence over date filters
-	if filter.StartTimestamp != nil && filter.EndTimestamp != nil {
-		// Query using combined date + start_time as timestamp
+	if filter.StartDatetime != nil {
 		argCount++
-		query += fmt.Sprintf(" AND (date + start_time) >= $%d::timestamp", argCount)
-		args = append(args, *filter.StartTimestamp)
+		query += fmt.Sprintf(" AND start_datetime >= $%d::timestamptz", argCount)
+		args = append(args, *filter.StartDatetime)
+	}
+
+	if filter.EndDatetime != nil {
 		argCount++
-		query += fmt.Sprintf(" AND (date + start_time) < $%d::timestamp", argCount)
-		args = append(args, *filter.EndTimestamp)
-	} else {
-		// Fall back to date-based filters
-		if filter.Date != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date = $%d", argCount)
-			args = append(args, *filter.Date)
-		}
-
-		if filter.StartDate != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date >= $%d", argCount)
-			args = append(args, *filter.StartDate)
-		}
-
-		if filter.EndDate != nil {
-			argCount++
-			query += fmt.Sprintf(" AND date <= $%d", argCount)
-			args = append(args, *filter.EndDate)
-		}
+		query += fmt.Sprintf(" AND start_datetime < $%d::timestamptz", argCount)
+		args = append(args, *filter.EndDatetime)
 	}
 
 	if filter.GoalID != nil {
@@ -458,7 +439,7 @@ func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string,
 		args = append(args, *filter.MilestoneID)
 	}
 
-	query += " ORDER BY date ASC, start_time ASC"
+	query += " ORDER BY start_datetime ASC"
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -473,9 +454,8 @@ func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string,
 		err := rows.Scan(
 			&te.ID,
 			&te.UserID,
-			&te.Date,
-			&te.StartTime,
-			&te.EndTime,
+			&te.StartDatetime,
+			&te.EndDatetime,
 			&te.TaskID,
 			&te.TaskName,
 			&te.MilestoneID,
@@ -505,7 +485,7 @@ func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string,
 // GetTimeEntryByID returns a time entry by ID for a specific user
 func (r *PostgresRepository) GetTimeEntryByID(ctx context.Context, userID, timeEntryID string) (*timeblock.TimeEntry, error) {
 	query := `
-		SELECT id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		       tag_ids, description, created_at, updated_at
 		FROM time_entries
@@ -517,9 +497,8 @@ func (r *PostgresRepository) GetTimeEntryByID(ctx context.Context, userID, timeE
 	err := r.pool.QueryRow(ctx, query, timeEntryID, userID).Scan(
 		&te.ID,
 		&te.UserID,
-		&te.Date,
-		&te.StartTime,
-		&te.EndTime,
+		&te.StartDatetime,
+		&te.EndDatetime,
 		&te.TaskID,
 		&te.TaskName,
 		&te.MilestoneID,
@@ -554,24 +533,33 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 		tagIDs = []string{}
 	}
 
+	// Parse datetime strings
+	startDt, err := time.Parse(time.RFC3339, input.StartDatetime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start_datetime: %w", err)
+	}
+	endDt, err := time.Parse(time.RFC3339, input.EndDatetime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end_datetime: %w", err)
+	}
+
 	query := `
-		INSERT INTO time_entries (id, user_id, date, start_time, end_time, task_id, task_name,
+		INSERT INTO time_entries (id, user_id, start_datetime, end_datetime, task_id, task_name,
 		                          milestone_id, milestone_name,
 		                          goal_id, goal_name, goal_color, tag_ids, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		          tag_ids, description, created_at, updated_at
 	`
 
 	var te timeblock.TimeEntry
 	var returnedTagIDs []string
-	err := r.pool.QueryRow(ctx, query,
+	err = r.pool.QueryRow(ctx, query,
 		id,
 		userID,
-		input.Date,
-		input.StartTime,
-		input.EndTime,
+		startDt,
+		endDt,
 		input.TaskID,
 		input.TaskName,
 		input.MilestoneID,
@@ -586,9 +574,8 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 	).Scan(
 		&te.ID,
 		&te.UserID,
-		&te.Date,
-		&te.StartTime,
-		&te.EndTime,
+		&te.StartDatetime,
+		&te.EndDatetime,
 		&te.TaskID,
 		&te.TaskName,
 		&te.MilestoneID,
@@ -614,9 +601,21 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEntryID string, input timeblock.UpdateTimeEntryInput) (*timeblock.TimeEntry, error) {
 	b := NewUpdateBuilder()
 
-	AddField(b, "date", input.Date)
-	AddField(b, "start_time", input.StartTime)
-	AddField(b, "end_time", input.EndTime)
+	// For datetime fields, parse string to time.Time before adding
+	if input.StartDatetime != nil {
+		startDt, err := time.Parse(time.RFC3339, *input.StartDatetime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start_datetime: %w", err)
+		}
+		b.AddFieldValue("start_datetime", startDt)
+	}
+	if input.EndDatetime != nil {
+		endDt, err := time.Parse(time.RFC3339, *input.EndDatetime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_datetime: %w", err)
+		}
+		b.AddFieldValue("end_datetime", endDt)
+	}
 	AddField(b, "task_id", input.TaskID)
 	AddField(b, "task_name", input.TaskName)
 	AddField(b, "milestone_id", input.MilestoneID)
@@ -641,7 +640,7 @@ func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEn
 		UPDATE time_entries
 		SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		          tag_ids, description, created_at, updated_at
 	`, b.SetClause(), idArg, userArg)
@@ -651,9 +650,8 @@ func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEn
 	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&te.ID,
 		&te.UserID,
-		&te.Date,
-		&te.StartTime,
-		&te.EndTime,
+		&te.StartDatetime,
+		&te.EndDatetime,
 		&te.TaskID,
 		&te.TaskName,
 		&te.MilestoneID,
@@ -807,25 +805,21 @@ func (r *PostgresRepository) StopTimer(ctx context.Context, userID string) (*tim
 
 	now := time.Now()
 
-	// Create time entry from the running timer
+	// Create time entry from the running timer using start_datetime/end_datetime directly
 	entryID := uuid.New().String()
-	startDate := timer.StartedAt.Format("2006-01-02")
-	startTime := timer.StartedAt.Format("15:04")
-	endDate := now.Format("2006-01-02")
-	endTime := now.Format("15:04")
 
 	tagIDs := timer.TagIDs
 	if tagIDs == nil {
 		tagIDs = []string{}
 	}
 
-	// Insert time entry
+	// Insert time entry with timestamps directly
 	insertQuery := `
-		INSERT INTO time_entries (id, user_id, date, start_time, end_time, task_id, task_name,
+		INSERT INTO time_entries (id, user_id, start_datetime, end_datetime, task_id, task_name,
 		                          milestone_id, milestone_name,
 		                          goal_id, goal_name, goal_color, tag_ids, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-		RETURNING id, user_id, date::text, start_time::text, end_time::text, task_id, task_name,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		          tag_ids, description, created_at, updated_at
 	`
@@ -835,9 +829,8 @@ func (r *PostgresRepository) StopTimer(ctx context.Context, userID string) (*tim
 	err = r.pool.QueryRow(ctx, insertQuery,
 		entryID,
 		userID,
-		startDate,
-		startTime,
-		endTime,
+		timer.StartedAt,
+		now,
 		timer.TaskID,
 		timer.TaskName,
 		timer.MilestoneID,
@@ -851,9 +844,8 @@ func (r *PostgresRepository) StopTimer(ctx context.Context, userID string) (*tim
 	).Scan(
 		&te.ID,
 		&te.UserID,
-		&te.Date,
-		&te.StartTime,
-		&te.EndTime,
+		&te.StartDatetime,
+		&te.EndDatetime,
 		&te.TaskID,
 		&te.TaskName,
 		&te.MilestoneID,
@@ -878,9 +870,6 @@ func (r *PostgresRepository) StopTimer(ctx context.Context, userID string) (*tim
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete running timer: %w", err)
 	}
-
-	// Handle cross-midnight timers - use the end date if different from start date
-	_ = endDate // The timer might span multiple days, but we store start date
 
 	return &te, nil
 }

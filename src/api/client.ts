@@ -22,6 +22,16 @@ class HttpClient {
   private authToken: string | null = null
   private onUnauthorizedCallback: (() => void) | null = null
 
+  /**
+   * Generate a W3C Trace Context traceparent header value.
+   * Format: 00-{traceId(32hex)}-{parentId(16hex)}-{flags(2hex)}
+   */
+  private generateTraceparent(): string {
+    const traceId = crypto.randomUUID().replace(/-/g, '')
+    const parentId = crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+    return `00-${traceId}-${parentId}-01`
+  }
+
   setAuthToken(token: string | null) {
     this.authToken = token
   }
@@ -41,6 +51,7 @@ class HttpClient {
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
+      'traceparent': this.generateTraceparent(),
       ...headers,
     }
 

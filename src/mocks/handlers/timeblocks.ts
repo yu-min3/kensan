@@ -9,9 +9,8 @@ const BASE_URL = 'http://localhost:8084/api/v1'
 // Transform to API response format
 const toTimeBlockResponse = (tb: TimeBlock) => ({
   id: tb.id,
-  date: tb.date,
-  startTime: tb.startTime,
-  endTime: tb.endTime,
+  startDatetime: tb.startDatetime,
+  endDatetime: tb.endDatetime,
   taskId: tb.taskId,
   taskName: tb.taskName,
   milestoneId: tb.milestoneId,
@@ -24,9 +23,8 @@ const toTimeBlockResponse = (tb: TimeBlock) => ({
 
 const toTimeEntryResponse = (te: TimeEntry) => ({
   id: te.id,
-  date: te.date,
-  startTime: te.startTime,
-  endTime: te.endTime,
+  startDatetime: te.startDatetime,
+  endDatetime: te.endDatetime,
   taskId: te.taskId,
   taskName: te.taskName,
   milestoneId: te.milestoneId,
@@ -50,9 +48,7 @@ const timeBlockCrudHandlers = createMockCrudHandlers(
     resourceName: 'TimeBlock',
   },
   {
-    filters: [
-      { paramName: 'date', fieldName: 'date', type: 'equals' },
-    ],
+    filters: [],
   }
 )
 
@@ -68,37 +64,25 @@ const timeEntryCrudHandlers = createMockCrudHandlers(
     resourceName: 'TimeEntry',
   },
   {
-    filters: [
-      { paramName: 'date', fieldName: 'date', type: 'equals' },
-    ],
+    filters: [],
   }
 )
 
-// Custom handlers for timestamp/date range filtering
+// Custom handlers for datetime range filtering
 const customTimeBlockHandlers = [
-  // GET /timeblocks - Override to handle timestamp and date range filters
+  // GET /timeblocks - Handle start_datetime/end_datetime range filters
   http.get(`${BASE_URL}/timeblocks`, ({ request }) => {
     const url = new URL(request.url)
-    const date = url.searchParams.get('date')
-    const startDate = url.searchParams.get('start_date')
-    const endDate = url.searchParams.get('end_date')
-    const startTimestamp = url.searchParams.get('start_timestamp')
-    const endTimestamp = url.searchParams.get('end_timestamp')
+    const startDatetime = url.searchParams.get('start_datetime')
+    const endDatetime = url.searchParams.get('end_datetime')
 
     let result = [...timeBlocks]
 
-    if (date) {
-      // Simple date filter
-      result = result.filter(tb => tb.date === date)
-    } else if (startTimestamp && endTimestamp) {
-      // UTC timestamp range filter - extract date portion for mock comparison
-      // In real backend, this would do proper timestamp comparison
-      const startDateFromTimestamp = startTimestamp.substring(0, 10)
-      const endDateFromTimestamp = endTimestamp.substring(0, 10)
-      result = result.filter(tb => tb.date >= startDateFromTimestamp && tb.date <= endDateFromTimestamp)
-    } else if (startDate && endDate) {
-      // Date range filter
-      result = result.filter(tb => tb.date >= startDate && tb.date <= endDate)
+    if (startDatetime && endDatetime) {
+      // UTC datetime range filter
+      result = result.filter(tb =>
+        tb.startDatetime >= startDatetime && tb.startDatetime < endDatetime
+      )
     }
 
     return HttpResponse.json(result.map(toTimeBlockResponse))
@@ -106,28 +90,19 @@ const customTimeBlockHandlers = [
 ]
 
 const customTimeEntryHandlers = [
-  // GET /time-entries - Override to handle timestamp and date range filters
+  // GET /time-entries - Handle start_datetime/end_datetime range filters
   http.get(`${BASE_URL}/time-entries`, ({ request }) => {
     const url = new URL(request.url)
-    const date = url.searchParams.get('date')
-    const startDate = url.searchParams.get('start_date')
-    const endDate = url.searchParams.get('end_date')
-    const startTimestamp = url.searchParams.get('start_timestamp')
-    const endTimestamp = url.searchParams.get('end_timestamp')
+    const startDatetime = url.searchParams.get('start_datetime')
+    const endDatetime = url.searchParams.get('end_datetime')
 
     let result = [...timeEntries]
 
-    if (date) {
-      // Simple date filter
-      result = result.filter(te => te.date === date)
-    } else if (startTimestamp && endTimestamp) {
-      // UTC timestamp range filter - extract date portion for mock comparison
-      const startDateFromTimestamp = startTimestamp.substring(0, 10)
-      const endDateFromTimestamp = endTimestamp.substring(0, 10)
-      result = result.filter(te => te.date >= startDateFromTimestamp && te.date <= endDateFromTimestamp)
-    } else if (startDate && endDate) {
-      // Date range filter
-      result = result.filter(te => te.date >= startDate && te.date <= endDate)
+    if (startDatetime && endDatetime) {
+      // UTC datetime range filter
+      result = result.filter(te =>
+        te.startDatetime >= startDatetime && te.startDatetime < endDatetime
+      )
     }
 
     return HttpResponse.json(result.map(toTimeEntryResponse))

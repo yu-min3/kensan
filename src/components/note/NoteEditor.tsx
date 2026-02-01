@@ -12,6 +12,9 @@ import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
 import { DrawioEditor } from '@/components/editor/DrawioEditor'
 import { Badge } from '@/components/ui/badge'
 import { TagInput } from '@/components/common/TagInput'
+import { MetadataForm } from '@/components/note/MetadataForm'
+import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
+import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { FileText, Shapes, Calendar, Target, Milestone, ListTodo } from 'lucide-react'
 import type { NoteType, NoteFormat, Goal, Milestone as MilestoneType, Task, Tag as TagType } from '@/types'
 import { format } from 'date-fns'
@@ -26,6 +29,7 @@ export interface NoteEditorValue {
   milestoneId?: string
   goalId?: string
   tagIds?: string[]
+  typeMetadata?: Record<string, string>
 }
 
 interface NoteEditorProps {
@@ -42,6 +46,8 @@ interface NoteEditorProps {
   showTypeSelector?: boolean
   showMetadata?: boolean
   placeholder?: string
+  // Image upload
+  onImageUpload?: (file: File) => Promise<string>
 }
 
 export function NoteEditor({
@@ -55,7 +61,12 @@ export function NoteEditor({
   showTypeSelector = false,
   showMetadata = true,
   placeholder,
+  onImageUpload,
 }: NoteEditorProps) {
+  const { types, getConstraints, getMetadataSchema } = useNoteTypeStore()
+  const typeConstraints = getConstraints(value.type)
+  const metadataSchema = getMetadataSchema(value.type)
+
   // Filter milestones by selected goal
   const filteredMilestones = value.goalId
     ? milestones.filter((m) => m.goalId === value.goalId)
@@ -94,11 +105,14 @@ export function NoteEditor({
     handleChange({ tagIds })
   }
 
+  const handleTypeMetadataChange = (typeMetadata: Record<string, string>) => {
+    handleChange({ typeMetadata })
+  }
+
   // Helper functions to get display names for select values
   const getGoalDisplayName = (goalId: string | undefined): string | undefined => {
     if (!goalId || goalId === '_none') return undefined
     const goal = goals.find((g) => g.id === goalId)
-    // Return goal name if found, otherwise return undefined (not the ID)
     return goal?.name
   }
 
@@ -114,9 +128,9 @@ export function NoteEditor({
     return task?.name
   }
 
-  const handleFormatChange = (format: NoteFormat) => {
+  const handleFormatChange = (fmt: NoteFormat) => {
     // If switching formats, show confirmation if content exists
-    if (value.content && value.format !== format) {
+    if (value.content && value.format !== fmt) {
       if (
         !window.confirm(
           'フォーマットを切り替えると現在の内容が失われる可能性があります。続けますか？'
@@ -125,11 +139,11 @@ export function NoteEditor({
         return
       }
     }
-    handleChange({ format, content: '' })
+    handleChange({ format: fmt, content: '' })
   }
 
-  // Title is always required for notes
-  const isTitleRequired = true
+  const isTitleRequired = typeConstraints?.titleRequired ?? true
+  const isDateRequired = typeConstraints?.dateRequired ?? false
 
   return (
     <div className="space-y-4">
@@ -139,21 +153,30 @@ export function NoteEditor({
           <Label>ノートタイプ</Label>
           <Select
             value={value.type}
-            onValueChange={(t) => handleChange({ type: t as NoteType })}
+            onValueChange={(t) => handleChange({ type: t as NoteType, typeMetadata: {} })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="diary">日記</SelectItem>
-              <SelectItem value="learning">学習記録</SelectItem>
+              {types.map((noteType) => {
+                const Icon = getNoteTypeIcon(noteType.icon)
+                return (
+                  <SelectItem key={noteType.slug} value={noteType.slug}>
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      {noteType.displayName}
+                    </div>
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
         </div>
       )}
 
-      {/* Date (required for diary and learning types) */}
-      {(value.type === 'diary' || value.type === 'learning') && (
+      {/* Date (shown when type requires it) */}
+      {isDateRequired && (
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
@@ -173,11 +196,7 @@ export function NoteEditor({
         <Input
           value={value.title || ''}
           onChange={(e) => handleChange({ title: e.target.value })}
-          placeholder={
-            value.type === 'diary'
-              ? '今日の振り返り'
-              : '学習内容のタイトル'
-          }
+          placeholder="タイトルを入力"
         />
       </div>
 
@@ -216,6 +235,7 @@ export function NoteEditor({
             value={value.content}
             onChange={(content) => handleChange({ content })}
             placeholder={placeholder}
+            onImageUpload={onImageUpload}
           />
         ) : (
           <DrawioEditor
@@ -224,6 +244,15 @@ export function NoteEditor({
           />
         )}
       </div>
+
+      {/* Type-specific metadata form */}
+      {metadataSchema.length > 0 && (
+        <MetadataForm
+          schema={metadataSchema}
+          values={value.typeMetadata ?? {}}
+          onChange={handleTypeMetadataChange}
+        />
+      )}
 
       {/* Metadata section */}
       {showMetadata && (

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -626,6 +627,96 @@ func convertMetadataToValue(items []*note.NoteMetadataItem) []note.NoteMetadataI
 		result[i] = *item
 	}
 	return result
+}
+
+// ========== NoteType Operations ==========
+
+// ListNoteTypes retrieves note type configurations
+func (r *PostgresRepository) ListNoteTypes(ctx context.Context, activeOnly bool) ([]*note.NoteTypeConfig, error) {
+	query := `
+		SELECT id, slug, display_name, display_name_en, description, icon, color,
+		       constraints, metadata_schema, sort_order, is_system, is_active
+		FROM note_types
+	`
+	if activeOnly {
+		query += ` WHERE is_active = TRUE`
+	}
+	query += ` ORDER BY sort_order, slug`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list note types: %w", err)
+	}
+	defer rows.Close()
+
+	var types []*note.NoteTypeConfig
+	for rows.Next() {
+		t, err := r.scanNoteType(rows)
+		if err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating note types: %w", err)
+	}
+
+	return types, nil
+}
+
+// GetNoteTypeBySlug retrieves a note type configuration by slug
+func (r *PostgresRepository) GetNoteTypeBySlug(ctx context.Context, slug string) (*note.NoteTypeConfig, error) {
+	query := `
+		SELECT id, slug, display_name, display_name_en, description, icon, color,
+		       constraints, metadata_schema, sort_order, is_system, is_active
+		FROM note_types
+		WHERE slug = $1
+	`
+
+	t, err := r.scanNoteType(r.pool.QueryRow(ctx, query, slug))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get note type: %w", err)
+	}
+
+	return t, nil
+}
+
+// scanNoteType scans a row into a NoteTypeConfig struct
+func (r *PostgresRepository) scanNoteType(row pgx.Row) (*note.NoteTypeConfig, error) {
+	var t note.NoteTypeConfig
+	var constraintsJSON, metadataSchemaJSON []byte
+
+	err := row.Scan(
+		&t.ID,
+		&t.Slug,
+		&t.DisplayName,
+		&t.DisplayNameEn,
+		&t.Description,
+		&t.Icon,
+		&t.Color,
+		&constraintsJSON,
+		&metadataSchemaJSON,
+		&t.SortOrder,
+		&t.IsSystem,
+		&t.IsActive,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan note type: %w", err)
+	}
+
+	if err := json.Unmarshal(constraintsJSON, &t.Constraints); err != nil {
+		return nil, fmt.Errorf("failed to parse constraints JSON: %w", err)
+	}
+
+	if err := json.Unmarshal(metadataSchemaJSON, &t.MetadataSchema); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata_schema JSON: %w", err)
+	}
+
+	return &t, nil
 }
 
 // ========== NoteContent Operations ==========

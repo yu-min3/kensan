@@ -1,9 +1,8 @@
-import { Edit, Trash2, Play } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { GoalBadge } from '@/components/common/GoalBadge'
-import { ConfirmPopover } from '@/components/common/ConfirmPopover'
+import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { formatTime } from './utils'
+import { TimelineItemContent } from './TimelineItemContent'
+import type { ActionButton } from './TimelineItemContent'
 import type { TimeBlockItemProps, ResizeEdge } from './types'
 
 /**
@@ -16,6 +15,8 @@ export function TimeBlockItem({
   isDragging,
   showComparison,
   isTimerRunning,
+  overlapColumn = 0,
+  overlapTotalColumns = 1,
   onBlockClick,
   onBlockDelete,
   onBlockResize,
@@ -39,12 +40,45 @@ export function TimeBlockItem({
     onResizeStart(e, block, edge)
   }
 
+  // Calculate horizontal position for overlapping blocks
+  const rightBound = showComparison ? 52 : 0 // percentage from right
+  const leftPadding = 4 // px
+  const rightPadding = showComparison ? 0 : 4 // px
+  const hasOverlap = overlapTotalColumns > 1
+
+  const overlapStyle: React.CSSProperties = hasOverlap
+    ? {
+        left: `calc(${leftPadding}px + ${(overlapColumn / overlapTotalColumns) * 100}% * ${(100 - rightBound) / 100})`,
+        width: `calc(${(1 / overlapTotalColumns) * 100}% * ${(100 - rightBound) / 100} - ${leftPadding + rightPadding}px)`,
+        right: 'auto',
+      }
+    : {}
+
+  const actions = useMemo(() => {
+    if (isActive) return undefined
+    const result: ActionButton[] = []
+    if (onBlockStartTimer && !isTimerRunning) {
+      result.push({ type: 'timer', onClick: () => onBlockStartTimer(block) })
+    }
+    if (onBlockClick) {
+      result.push({ type: 'edit', onClick: () => onBlockClick(block) })
+    }
+    if (onBlockDelete) {
+      result.push({
+        type: 'delete',
+        onClick: () => onBlockDelete(block.id),
+        confirmMessage: 'このタイムブロックを削除しますか？',
+      })
+    }
+    return result.length > 0 ? result : undefined
+  }, [block, isActive, isTimerRunning, onBlockClick, onBlockDelete, onBlockStartTimer])
+
   return (
     <div
       data-block
       className={cn(
-        'absolute left-1 right-1 rounded-md px-2 py-1 text-xs group overflow-hidden',
-        showComparison ? 'left-1 right-[52%]' : 'right-1',
+        'absolute rounded-md px-2 py-1 text-xs group overflow-hidden',
+        !hasOverlap && (showComparison ? 'left-1 right-[52%]' : 'left-1 right-1'),
         onBlockResize && !isActive && 'cursor-grab',
         isActive && 'ring-2 ring-primary z-10',
         isDragging && 'cursor-grabbing',
@@ -58,6 +92,7 @@ export function TimeBlockItem({
         top: `${getTopPosition(displayTimes.startTime)}%`,
         height: `${getHeight(displayTimes.startTime, displayTimes.endTime)}%`,
         minHeight: '24px',
+        ...overlapStyle,
       }}
       onMouseDown={(e) => {
         if (onBlockResize && e.target === e.currentTarget) {
@@ -92,79 +127,16 @@ export function TimeBlockItem({
         )}
         onMouseDown={handleDragMouseDown}
       >
-        <div className="flex items-center gap-1">
-          {hasGoal ? (
-            <GoalBadge name={block.goalName!} color={block.goalColor!} size="sm" />
-          ) : (
-            <span className="text-muted-foreground text-[10px] px-1 py-0.5 rounded bg-muted-foreground/10">
-              目標なし
-            </span>
-          )}
-          {block.milestoneName && (
-            <span
-              className="text-[10px] text-muted-foreground truncate max-w-[80px]"
-              title={block.milestoneName}
-            >
-              {block.milestoneName}
-            </span>
-          )}
-          <span className="truncate font-medium flex-1">{block.taskName}</span>
-          {(onBlockClick || onBlockDelete || onBlockStartTimer) && !isActive && (
-            <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-              {onBlockStartTimer && !isTimerRunning && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 p-0 text-primary hover:text-primary"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onBlockStartTimer(block)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="タイマー開始"
-                >
-                  <Play className="h-3 w-3" />
-                </Button>
-              )}
-              {onBlockClick && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onBlockClick(block)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="編集"
-                >
-                  <Edit className="h-3 w-3" />
-                </Button>
-              )}
-              {onBlockDelete && (
-                <ConfirmPopover
-                  message="このタイムブロックを削除しますか？"
-                  confirmLabel="削除"
-                  onConfirm={() => onBlockDelete(block.id)}
-                  variant="destructive"
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    title="削除"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </ConfirmPopover>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="text-muted-foreground">
-          {formatTime(displayTimes.startTime)} - {formatTime(displayTimes.endTime)}
-        </div>
+        <TimelineItemContent
+          taskName={block.taskName}
+          goalId={block.goalId}
+          goalName={block.goalName}
+          goalColor={block.goalColor}
+          milestoneName={block.milestoneName}
+          startTimeLabel={formatTime(displayTimes.startTime)}
+          endTimeLabel={formatTime(displayTimes.endTime)}
+          actions={actions}
+        />
       </div>
 
       {/* Bottom resize handle */}

@@ -322,6 +322,11 @@ format_tool_result(result: Any) -> str
 | `get_time_blocks` | 予定取得 | No |
 | `create_time_block` | 予定作成 | Yes |
 | `get_time_entries` | 作業実績取得 | No |
+| `get_notes` | ノート取得 (タイプフィルタ可) | No |
+| `create_note` | ノート作成 (データ駆動タイプ) | Yes |
+
+**ノートツールのタイプ指定:**
+`get_notes`と`create_note`の`type`パラメータはデータ駆動。ハードコードのenum制約はなく、`note_types`テーブルに登録された任意のslugを受け付ける（例: `diary`, `learning`, `general`, `book_review`）。
 
 **例 - create_time_block:**
 ```python
@@ -331,9 +336,9 @@ format_tool_result(result: Any) -> str
     input_schema={
         "properties": {
             "user_id": {"type": "string"},
-            "date": {"type": "string", "description": "YYYY-MM-DD"},
-            "start_time": {"type": "string", "description": "HH:MM"},
-            "end_time": {"type": "string", "description": "HH:MM"},
+            "date": {"type": "string", "description": "YYYY-MM-DD（ローカル日付）"},
+            "start_time": {"type": "string", "description": "HH:MM（ローカル時刻）"},
+            "end_time": {"type": "string", "description": "HH:MM（ローカル時刻）"},
             "task_name": {"type": "string"},
             "goal_id": {"type": "string"},
             "goal_name": {"type": "string"},
@@ -344,8 +349,13 @@ format_tool_result(result: Any) -> str
     },
 )
 async def create_time_block(args: dict) -> dict:
-    # バリデーションしてタイムブロックを作成
-    block = await db_create_time_block(...)
+    # ツール入力はローカル日時（LLMの使いやすさ優先）
+    # 内部でAsia/Tokyo → UTCに変換してDB保存
+    block = await db_create_time_block(
+        start_datetime=_combine_to_utc(date, start_time),
+        end_datetime=_combine_to_utc(date, end_time),
+        ...
+    )
     return {"timeBlock": block}
 ```
 
@@ -759,16 +769,19 @@ async def update_task(task_id, user_id, name?, completed?, due_date?)
 **time_blocks.py / time_entries.py:**
 ```python
 async def get_time_blocks(
+    pool,
     user_id: UUID,
-    target_date: date | None = None,
-    start_date: date | None = None,
-    end_date: date | None = None
+    start_datetime: datetime | None = None,  # UTC
+    end_datetime: datetime | None = None      # UTC
 ) -> list[dict]
+# 返却: {"id", "startDatetime" (ISO), "endDatetime" (ISO), "taskName", ...}
 
 async def create_time_block(
-    user_id, target_date, start_time, end_time, task_name,
+    pool,
+    user_id, start_datetime, end_datetime, task_name,
     task_id?, milestone_id?, goal_id?, goal_color?, is_routine?
 )
+# start_datetime/end_datetime は datetime オブジェクト（UTC）
 ```
 
 ---
@@ -1149,6 +1162,10 @@ class Settings(BaseSettings):
     # セキュリティ
     JWT_SECRET: str = "dev-secret-key"
 
+    # OpenTelemetry
+    OTEL_ENABLED: bool = False
+    OTEL_COLLECTOR_URL: str = "localhost:4318"
+
     @model_validator(mode='after')
     def validate_production(self) -> 'Settings':
         """本番環境で必須設定をバリデート"""
@@ -1190,6 +1207,18 @@ OPENAI_API_KEY=sk-...          # 埋め込み用
 R2_ENDPOINT=https://...        # ファイルストレージ用
 JWT_SECRET=your-secret-key
 ```
+
+### Telemetry (`telemetry.py`)
+
+OpenTelemetry計装（`OTEL_ENABLED=true`で有効化）:
+
+- `initialize_telemetry(config)` - TracerProvider + MeterProvider初期化
+- `instrument_fastapi(app)` - FastAPI自動計装（/health除外）
+- `instrument_asyncpg()` - asyncpg DB自動計装
+- `instrument_httpx()` - httpxクライアント自動計装
+- `shutdown_telemetry()` - グレースフルシャットダウン
+
+パッケージ未インストール時はImportErrorをキャッチし、警告ログで続行。
 
 ---
 

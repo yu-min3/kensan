@@ -8,7 +8,7 @@ import (
 
 // TimeBlockService defines the interface for time block operations
 type TimeBlockService interface {
-	ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter, timezone string) ([]timeblock.TimeBlock, error)
+	ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error)
 	GetTimeBlock(ctx context.Context, userID, timeBlockID string) (*timeblock.TimeBlock, error)
 	CreateTimeBlock(ctx context.Context, userID string, input timeblock.CreateTimeBlockInput) (*timeblock.TimeBlock, error)
 	UpdateTimeBlock(ctx context.Context, userID, timeBlockID string, input timeblock.UpdateTimeBlockInput) (*timeblock.TimeBlock, error)
@@ -18,7 +18,7 @@ type TimeBlockService interface {
 
 // TimeEntryService defines the interface for time entry operations
 type TimeEntryService interface {
-	ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter, timezone string) ([]timeblock.TimeEntry, error)
+	ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error)
 	GetTimeEntry(ctx context.Context, userID, timeEntryID string) (*timeblock.TimeEntry, error)
 	CreateTimeEntry(ctx context.Context, userID string, input timeblock.CreateTimeEntryInput) (*timeblock.TimeEntry, error)
 	UpdateTimeEntry(ctx context.Context, userID, timeEntryID string, input timeblock.UpdateTimeEntryInput) (*timeblock.TimeEntry, error)

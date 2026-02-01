@@ -1,4 +1,4 @@
-import { Settings, Bell, Sun, Moon, LogOut, Bot } from 'lucide-react'
+import { Settings, Sun, Moon, LogOut, Sparkles } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,19 +50,18 @@ export function Header() {
           )}
         </Button>
 
-        <Button variant="ghost" size="icon">
-          <Bell className="h-5 w-5" />
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={() => useChatStore.getState().toggle()} title="AI Assistant">
-          <Bot className="h-5 w-5" />
-        </Button>
-
-        <Link to="/settings">
-          <Button variant="ghost" size="icon">
-            <Settings className="h-5 w-5" />
-          </Button>
-        </Link>
+        <button
+          className="inline-flex items-center gap-1.5 px-3 h-8 text-sm font-medium rounded-md transition-opacity hover:opacity-90 cursor-pointer"
+          style={{
+            backgroundColor: 'hsl(var(--brand))',
+            color: 'hsl(var(--brand-foreground))',
+          }}
+          onClick={() => useChatStore.getState().toggle()}
+          title="AI Assistant"
+        >
+          <Sparkles className="h-4 w-4" />
+          AI
+        </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

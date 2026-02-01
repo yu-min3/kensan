@@ -1,9 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TimeBlock, TimeEntry } from '@/types'
-import { GoalBadge } from './GoalBadge'
-import { ConfirmPopover } from './ConfirmPopover'
 import { cn } from '@/lib/utils'
-import { Edit, Trash2, Plus, Minus } from 'lucide-react'
+import { Plus, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDroppable } from '@dnd-kit/core'
 import {
@@ -15,8 +13,13 @@ import {
   snapToInterval,
   formatTime,
   calculateTimeFromY,
+  calculateOverlapLayout,
 } from './timeline'
+import { TimelineItemContent } from './timeline/TimelineItemContent'
+import type { ActionButton } from './timeline/TimelineItemContent'
 import type { RunningTimerData } from './timeline'
+import { getLocalTime } from '@/lib/timezone'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 
 interface TimeBlockTimelineProps {
   timeBlocks?: TimeBlock[]
@@ -43,7 +46,7 @@ interface TimeBlockTimelineProps {
 const BASE_HOUR_HEIGHT = 48
 const MIN_SCALE = 0.5
 const MAX_SCALE = 2.0
-const SCALE_STEP = 0.1
+const SCALE_STEP = 0.25
 
 export function TimeBlockTimeline({
   timeBlocks = [],
@@ -68,6 +71,10 @@ export function TimeBlockTimeline({
   const [currentTime, setCurrentTime] = useState<Date>(new Date())
   const [internalScale, setInternalScale] = useState(1.0)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
+
+  // Helper to extract local time from an ISO datetime
+  const toLocalTime = useCallback((isoDatetime: string) => getLocalTime(isoDatetime, timezone), [timezone])
 
   // Scale management
   const scale = propScale ?? internalScale
@@ -114,8 +121,8 @@ export function TimeBlockTimeline({
 
   // Calculate actual time range from data
   const allTimes = [
-    ...timeBlocks.flatMap((b) => [b.startTime, b.endTime]),
-    ...timeEntries.flatMap((e) => [e.startTime, e.endTime]),
+    ...timeBlocks.flatMap((b) => [toLocalTime(b.startDatetime), toLocalTime(b.endDatetime)]),
+    ...timeEntries.flatMap((e) => [toLocalTime(e.startDatetime), toLocalTime(e.endDatetime)]),
     ...(runningEntryTimes ? [runningEntryTimes.startTime, runningEntryTimes.endTime] : []),
   ]
 
@@ -147,9 +154,9 @@ export function TimeBlockTimeline({
     return (duration / totalMinutes) * 100
   }
 
-  // Scroll area height
+  // Scroll area height (fixed size regardless of zoom)
   const visibleHours = 12
-  const maxHeight = `${visibleHours * hourHeight}px`
+  const maxHeight = `${visibleHours * BASE_HOUR_HEIGHT}px`
 
   // Use drag/resize hook
   const {
@@ -291,32 +298,44 @@ export function TimeBlockTimeline({
           })()}
 
           {/* Time blocks (plans) */}
-          {timeBlocks.map((block) => {
-            const displayTimes = getDisplayTimes(block)
-            const isResizing = resizeState?.blockId === block.id
-            const isDragging = dragState?.blockId === block.id
-            const isActive = isResizing || isDragging
-
-            return (
-              <TimeBlockItem
-                key={block.id}
-                block={block}
-                displayTimes={displayTimes}
-                isActive={isActive}
-                isDragging={isDragging}
-                showComparison={showComparison}
-                isTimerRunning={isTimerRunning}
-                onBlockClick={onBlockClick}
-                onBlockDelete={onBlockDelete}
-                onBlockResize={onBlockResize}
-                onBlockStartTimer={onBlockStartTimer}
-                onDragStart={handleDragStart}
-                onResizeStart={handleResizeStart}
-                getTopPosition={getTopPosition}
-                getHeight={getHeight}
-              />
+          {(() => {
+            const overlapLayout = calculateOverlapLayout(
+              timeBlocks.map((b) => {
+                const dt = getDisplayTimes(b)
+                return { id: b.id, startTime: dt.startTime, endTime: dt.endTime }
+              })
             )
-          })}
+
+            return timeBlocks.map((block) => {
+              const displayTimes = getDisplayTimes(block)
+              const isResizing = resizeState?.blockId === block.id
+              const isDragging = dragState?.blockId === block.id
+              const isActive = isResizing || isDragging
+              const layout = overlapLayout.get(block.id)
+
+              return (
+                <TimeBlockItem
+                  key={block.id}
+                  block={block}
+                  displayTimes={displayTimes}
+                  isActive={isActive}
+                  isDragging={isDragging}
+                  showComparison={showComparison}
+                  isTimerRunning={isTimerRunning}
+                  overlapColumn={layout?.column}
+                  overlapTotalColumns={layout?.totalColumns}
+                  onBlockClick={onBlockClick}
+                  onBlockDelete={onBlockDelete}
+                  onBlockResize={onBlockResize}
+                  onBlockStartTimer={onBlockStartTimer}
+                  onDragStart={handleDragStart}
+                  onResizeStart={handleResizeStart}
+                  getTopPosition={getTopPosition}
+                  getHeight={getHeight}
+                />
+              )
+            })
+          })()}
 
           {/* Time entries (actuals) */}
           {showComparison &&
@@ -335,8 +354,8 @@ export function TimeBlockTimeline({
                     backgroundColor: hasGoal
                       ? `color-mix(in srgb, ${entry.goalColor} 12%, transparent)`
                       : 'hsl(var(--muted))',
-                    top: `${getTopPosition(entry.startTime)}%`,
-                    height: `${getHeight(entry.startTime, entry.endTime)}%`,
+                    top: `${getTopPosition(toLocalTime(entry.startDatetime))}%`,
+                    height: `${getHeight(toLocalTime(entry.startDatetime), toLocalTime(entry.endDatetime))}%`,
                     minHeight: '24px',
                   }}
                 >
@@ -348,61 +367,21 @@ export function TimeBlockTimeline({
                   )}
 
                   <div className={cn('relative', hasGoal && 'pl-1')}>
-                    <div className="flex items-center gap-1">
-                      {hasGoal ? (
-                        <GoalBadge name={entry.goalName!} color={entry.goalColor!} size="sm" />
-                      ) : (
-                        <span className="text-muted-foreground text-[10px] px-1 py-0.5 rounded bg-muted-foreground/10">
-                          目標なし
-                        </span>
-                      )}
-                      {entry.milestoneName && (
-                        <span
-                          className="text-[10px] text-muted-foreground truncate max-w-[80px]"
-                          title={entry.milestoneName}
-                        >
-                          {entry.milestoneName}
-                        </span>
-                      )}
-                      <span className="truncate font-medium flex-1">{entry.taskName}</span>
-                      {(onEntryClick || onEntryDelete) && (
-                        <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-1">
-                          {onEntryClick && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onEntryClick(entry)
-                              }}
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {onEntryDelete && (
-                            <ConfirmPopover
-                              message="この実績を削除しますか？"
-                              confirmLabel="削除"
-                              onConfirm={() => onEntryDelete(entry.id)}
-                              variant="destructive"
-                            >
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </ConfirmPopover>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-muted-foreground">
-                      {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-                    </div>
+                    <TimelineItemContent
+                      taskName={entry.taskName}
+                      goalId={entry.goalId}
+                      goalName={entry.goalName}
+                      goalColor={entry.goalColor}
+                      milestoneName={entry.milestoneName}
+                      startTimeLabel={formatTime(toLocalTime(entry.startDatetime))}
+                      endTimeLabel={formatTime(toLocalTime(entry.endDatetime))}
+                      actions={(() => {
+                        const a: ActionButton[] = []
+                        if (onEntryClick) a.push({ type: 'edit', onClick: () => onEntryClick(entry) })
+                        if (onEntryDelete) a.push({ type: 'delete', onClick: () => onEntryDelete(entry.id), confirmMessage: 'この実績を削除しますか？' })
+                        return a.length > 0 ? a : undefined
+                      })()}
+                    />
                   </div>
                 </div>
               )
@@ -443,32 +422,19 @@ export function TimeBlockTimeline({
                   )}
 
                   <div className={cn('relative', hasGoal && 'pl-1')}>
-                    <div className="flex items-center gap-1">
-                      {hasGoal ? (
-                        <GoalBadge
-                          name={runningTimer.goalName!}
-                          color={runningTimer.goalColor!}
-                          size="sm"
-                        />
-                      ) : (
-                        <span className="text-primary text-[10px] px-1 py-0.5 rounded bg-primary/10 font-medium">
-                          作業中
-                        </span>
-                      )}
-                      {runningTimer.milestoneName && (
-                        <span
-                          className="text-[10px] text-muted-foreground truncate max-w-[80px]"
-                          title={runningTimer.milestoneName}
-                        >
-                          {runningTimer.milestoneName}
-                        </span>
-                      )}
-                      <span className="truncate font-medium flex-1">{runningTimer.taskName}</span>
-                      <span className="text-primary text-[10px] font-medium flex-shrink-0">REC</span>
-                    </div>
-                    <div className="text-muted-foreground">
-                      {formatTime(runningEntryTimes.startTime)} - 作業中
-                    </div>
+                    <TimelineItemContent
+                      taskName={runningTimer.taskName}
+                      goalId={runningTimer.goalId}
+                      goalName={runningTimer.goalName}
+                      goalColor={runningTimer.goalColor}
+                      milestoneName={runningTimer.milestoneName}
+                      startTimeLabel={formatTime(runningEntryTimes.startTime)}
+                      endTimeLabel="作業中"
+                      noGoalLabel="作業中"
+                      trailingBadge={
+                        <span className="text-primary text-[10px] font-medium flex-shrink-0">REC</span>
+                      }
+                    />
                   </div>
                 </div>
               )

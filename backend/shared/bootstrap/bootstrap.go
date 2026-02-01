@@ -18,6 +18,7 @@ import (
 	"github.com/kensan/backend/shared/database"
 	"github.com/kensan/backend/shared/logging"
 	"github.com/kensan/backend/shared/middleware"
+	"github.com/kensan/backend/shared/telemetry"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,6 +31,7 @@ type Service struct {
 	Router       chi.Router
 	apiRouter    chi.Router // sub-router for /api/v1 routes
 	writeTimeout time.Duration
+	otelProvider *telemetry.Provider
 }
 
 // RouteRegistrar is a function that registers routes on a chi.Router.
@@ -57,8 +59,22 @@ func New(name string, opts ...Option) (*Service, error) {
 	// Load configuration
 	cfg := config.Load()
 
-	// Setup database connection
+	// Setup OpenTelemetry
 	ctx := context.Background()
+	otelProvider, err := telemetry.Initialize(ctx, telemetry.Config{
+		ServiceName:  name,
+		CollectorURL: cfg.Telemetry.CollectorURL,
+		Enabled:      cfg.Telemetry.Enabled,
+	})
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to initialize OpenTelemetry, continuing without it")
+		otelProvider = &telemetry.Provider{}
+	}
+	if cfg.Telemetry.Enabled {
+		logger.Info().Str("collector", cfg.Telemetry.CollectorURL).Msg("OpenTelemetry initialized")
+	}
+
+	// Setup database connection
 	pool, err := database.NewPostgresPool(ctx, cfg.Database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
@@ -72,6 +88,7 @@ func New(name string, opts ...Option) (*Service, error) {
 	// Setup router with common middleware
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(middleware.OTelTrace(name))
 	r.Use(middleware.Logger)
 	r.Use(corsMiddleware())
 
@@ -90,6 +107,7 @@ func New(name string, opts ...Option) (*Service, error) {
 		Router:       r,
 		apiRouter:    apiRouter,
 		writeTimeout: 15 * time.Second, // default
+		otelProvider: otelProvider,
 	}
 
 	// Apply options
@@ -162,6 +180,11 @@ func (s *Service) Run() error {
 
 // Close releases all resources held by the service.
 func (s *Service) Close() {
+	if s.otelProvider != nil {
+		if err := s.otelProvider.Shutdown(context.Background()); err != nil {
+			log.Warn().Err(err).Msg("Failed to shutdown OpenTelemetry")
+		}
+	}
 	if s.Pool != nil {
 		s.Pool.Close()
 	}
@@ -172,8 +195,8 @@ func corsMiddleware() func(http.Handler) http.Handler {
 	return cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:*", "https://*.kensan.dev"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
-		ExposedHeaders:   []string{"X-Request-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "traceparent", "tracestate"},
+		ExposedHeaders:   []string{"X-Request-ID", "traceparent", "tracestate"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	})

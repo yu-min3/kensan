@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { TimeBlock, TimeEntry } from '@/types'
 import { timeblocksApi, timeentriesApi } from '@/api/services/timeblocks'
 import { useSettingsStore } from './useSettingsStore'
+import { getLocalDate } from '@/lib/timezone'
 
 interface TimeBlockState {
   timeBlocks: TimeBlock[]
@@ -15,19 +16,56 @@ interface TimeBlockState {
   fetchTimeBlocksRange: (startDate: string, endDate: string) => Promise<void>
   fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
 
-  // タイムブロック操作 (timezone-aware: converts local time to UTC before sending)
-  addTimeBlock: (block: Omit<TimeBlock, 'id'>) => Promise<void>
-  updateTimeBlock: (id: string, updates: Partial<TimeBlock>) => Promise<void>
+  // タイムブロック操作 (local date/time → UTC conversion)
+  addTimeBlock: (localDate: string, localStartTime: string, localEndTime: string, data: {
+    taskId?: string
+    taskName: string
+    milestoneId?: string
+    milestoneName?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+    tagIds?: string[]
+    isRoutine?: boolean
+  }) => Promise<void>
+  updateTimeBlock: (id: string, localDate: string, localStartTime?: string, localEndTime?: string, data?: {
+    taskId?: string
+    taskName?: string
+    milestoneId?: string
+    milestoneName?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+  }) => Promise<void>
   deleteTimeBlock: (id: string) => Promise<void>
 
-  // 時間記録操作（API連携, timezone-aware）
-  addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => Promise<void>
-  updateTimeEntry: (id: string, updates: Partial<TimeEntry>) => Promise<void>
+  // 時間記録操作（local date/time → UTC conversion）
+  addTimeEntry: (localDate: string, localStartTime: string, localEndTime: string, data: {
+    taskId?: string
+    taskName: string
+    milestoneId?: string
+    milestoneName?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+    tagIds?: string[]
+    description?: string
+  }) => Promise<void>
+  updateTimeEntry: (id: string, localDate: string, localStartTime?: string, localEndTime?: string, data?: {
+    taskId?: string
+    taskName?: string
+    milestoneId?: string
+    milestoneName?: string
+    goalId?: string
+    goalName?: string
+    goalColor?: string
+    description?: string
+  }) => Promise<void>
   deleteTimeEntry: (id: string) => Promise<void>
 
-  // 取得
-  getTimeBlocksByDate: (date: string) => TimeBlock[]
-  getTimeEntriesByDate: (date: string) => TimeEntry[]
+  // 取得 (filter by local date using timezone conversion)
+  getTimeBlocksByDate: (localDate: string) => TimeBlock[]
+  getTimeEntriesByDate: (localDate: string) => TimeEntry[]
   getTodayTimeBlocks: () => TimeBlock[]
   getTodayTimeEntries: () => TimeEntry[]
 
@@ -70,17 +108,20 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
   fetchTimeBlocksRange: async (startDate, endDate) => {
     set({ isLoading: true, error: null })
     try {
-      const timeBlocks = await timeblocksApi.listByDateRange(startDate, endDate)
+      const timezone = getTimezone()
+      const timeBlocks = await timeblocksApi.listByDateRange(startDate, endDate, timezone)
       set({ timeBlocks, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
     }
   },
 
-  addTimeBlock: async (block) => {
+  addTimeBlock: async (localDate, localStartTime, localEndTime, data) => {
     try {
       const timezone = getTimezone()
-      const newBlock = await timeblocksApi.createWithTimezone(block, timezone)
+      const newBlock = await timeblocksApi.createFromLocal(
+        localDate, localStartTime, localEndTime, data, timezone
+      )
       set((state) => ({
         timeBlocks: [...state.timeBlocks, newBlock],
       }))
@@ -89,13 +130,12 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  updateTimeBlock: async (id, updates) => {
+  updateTimeBlock: async (id, localDate, localStartTime, localEndTime, data) => {
     try {
       const timezone = getTimezone()
-      // Find current block to get its date for time-only updates
-      const currentBlock = get().timeBlocks.find((b) => b.id === id)
-      const currentDate = currentBlock?.date || updates.date || ''
-      const updatedBlock = await timeblocksApi.updateWithTimezone(id, updates, timezone, currentDate)
+      const updatedBlock = await timeblocksApi.updateFromLocal(
+        id, localDate, localStartTime, localEndTime, data || {}, timezone
+      )
       set((state) => ({
         timeBlocks: state.timeBlocks.map((b) =>
           b.id === id ? updatedBlock : b
@@ -120,7 +160,8 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
   fetchTimeEntriesRange: async (startDate, endDate) => {
     set({ isLoading: true, error: null })
     try {
-      const timeEntries = await timeentriesApi.listByDateRange(startDate, endDate)
+      const timezone = getTimezone()
+      const timeEntries = await timeentriesApi.listByDateRange(startDate, endDate, timezone)
       set({ timeEntries, isLoading: false })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
@@ -128,10 +169,12 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
   },
 
   // TimeEntry CRUD operations (timezone-aware)
-  addTimeEntry: async (entry) => {
+  addTimeEntry: async (localDate, localStartTime, localEndTime, data) => {
     try {
       const timezone = getTimezone()
-      const newEntry = await timeentriesApi.createWithTimezone(entry, timezone)
+      const newEntry = await timeentriesApi.createFromLocal(
+        localDate, localStartTime, localEndTime, data, timezone
+      )
       set((state) => ({
         timeEntries: [...state.timeEntries, newEntry],
       }))
@@ -140,13 +183,12 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  updateTimeEntry: async (id, updates) => {
+  updateTimeEntry: async (id, localDate, localStartTime, localEndTime, data) => {
     try {
       const timezone = getTimezone()
-      // Find current entry to get its date for time-only updates
-      const currentEntry = get().timeEntries.find((e) => e.id === id)
-      const currentDate = currentEntry?.date || updates.date || ''
-      const updatedEntry = await timeentriesApi.updateWithTimezone(id, updates, timezone, currentDate)
+      const updatedEntry = await timeentriesApi.updateFromLocal(
+        id, localDate, localStartTime, localEndTime, data || {}, timezone
+      )
       set((state) => ({
         timeEntries: state.timeEntries.map((e) =>
           e.id === id ? updatedEntry : e
@@ -168,11 +210,15 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  getTimeBlocksByDate: (date) =>
-    get().timeBlocks.filter((b) => b.date === date),
+  getTimeBlocksByDate: (localDate) => {
+    const timezone = getTimezone()
+    return get().timeBlocks.filter((b) => getLocalDate(b.startDatetime, timezone) === localDate)
+  },
 
-  getTimeEntriesByDate: (date) =>
-    get().timeEntries.filter((e) => e.date === date),
+  getTimeEntriesByDate: (localDate) => {
+    const timezone = getTimezone()
+    return get().timeEntries.filter((e) => getLocalDate(e.startDatetime, timezone) === localDate)
+  },
 
   getTodayTimeBlocks: () => {
     // When using timezone-aware fetch (fetchTimeBlocksForLocalDate), the store

@@ -15,6 +15,8 @@ type NoteService interface {
 	Delete(ctx context.Context, userID, noteID string) error
 	Archive(ctx context.Context, userID, noteID string, archived bool) (*note.Note, error)
 	Search(ctx context.Context, userID string, query string, filter *note.NoteFilter, limit int) ([]*note.SearchResult, error)
+	GetNoteTypes(ctx context.Context) ([]*note.NoteTypeConfig, error)
+	LoadNoteTypes(ctx context.Context) error
 }
 
 // NoteContentService defines the interface for note content operations

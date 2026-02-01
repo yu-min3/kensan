@@ -89,12 +89,14 @@ func (p TrendPeriod) IsValid() bool {
 // WeeklySummaryFilter represents filters for getting weekly summary
 type WeeklySummaryFilter struct {
 	WeekStart string // YYYY-MM-DD format, should be a Monday
+	Timezone  string // IANA timezone (e.g., "Asia/Tokyo") for daily/weekly grouping
 }
 
 // MonthlySummaryFilter represents filters for getting monthly summary
 type MonthlySummaryFilter struct {
-	Year  int
-	Month int
+	Year     int
+	Month    int
+	Timezone string // IANA timezone (e.g., "Asia/Tokyo") for weekly grouping
 }
 
 // TrendFilter represents filters for trend analysis
@@ -115,10 +117,12 @@ type DailyStudyHoursFilter struct {
 	Days      int
 	StartDate string // YYYY-MM-DD format (optional, takes precedence over Days)
 	EndDate   string // YYYY-MM-DD format (optional, takes precedence over Days)
+	Timezone  string // IANA timezone (e.g., "Asia/Tokyo") for daily grouping
 }
 
 // SummaryFilter represents filters for getting summary by date range
 type SummaryFilter struct {
 	StartDate string // YYYY-MM-DD format (required)
 	EndDate   string // YYYY-MM-DD format (required)
+	Timezone  string // IANA timezone (e.g., "Asia/Tokyo") for grouping
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/kensan/backend/services/note/internal/handler"
@@ -47,6 +48,13 @@ func main() {
 	// Setup repository, service, and handler
 	noteRepo := repository.NewPostgresRepository(svc.Pool)
 	noteService := service.NewService(noteRepo, storageClient)
+
+	// Load note type configurations from database
+	if err := noteService.LoadNoteTypes(context.Background()); err != nil {
+		log.Fatal().Err(err).Msg("Failed to load note types")
+	}
+	log.Info().Msg("Note types loaded successfully")
+
 	noteHandler := handler.NewHandler(noteService)
 
 	// Register routes

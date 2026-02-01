@@ -16,6 +16,7 @@ class ToolDefinition:
     description: str
     input_schema: dict[str, Any]
     handler: Callable[[dict[str, Any]], Awaitable[Any]]
+    readonly: bool = True
 
     def to_api_schema(self) -> dict[str, Any]:
         """Convert to Anthropic API tool schema format."""
@@ -38,6 +39,7 @@ def tool(
     name: str,
     description: str,
     input_schema: dict[str, Any] | None = None,
+    readonly: bool = True,
 ) -> Callable:
     """Decorator to register a function as a tool.
 
@@ -45,6 +47,7 @@ def tool(
         name: The tool name (used in API calls)
         description: Human-readable description of what the tool does
         input_schema: JSON Schema for the tool's input parameters
+        readonly: Whether this tool only reads data (True) or modifies data (False)
 
     Returns:
         Decorated function that's also registered as a tool
@@ -60,6 +63,7 @@ def tool(
             description=description,
             input_schema=input_schema or {"properties": {}, "required": []},
             handler=wrapper,
+            readonly=readonly,
         )
         _tool_registry[name] = tool_def
 
@@ -97,6 +101,21 @@ def get_tools_api_schema(tool_names: list[str] | None = None) -> list[dict[str, 
         tools = [t for t in get_all_tools() if t.name in tool_names]
 
     return [t.to_api_schema() for t in tools]
+
+
+def is_readonly_tool(name: str) -> bool:
+    """Check if a tool is readonly (safe to execute without approval).
+
+    Args:
+        name: The tool name
+
+    Returns:
+        True if readonly, False if write tool. Defaults to True for unknown tools.
+    """
+    tool_def = get_tool(name)
+    if tool_def is None:
+        return True
+    return tool_def.readonly
 
 
 async def execute_tool(name: str, args: dict[str, Any]) -> Any:

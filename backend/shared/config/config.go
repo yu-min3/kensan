@@ -7,9 +7,10 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	Telemetry TelemetryConfig
 }
 
 type ServerConfig struct {
@@ -33,6 +34,11 @@ type JWTConfig struct {
 	ExpireHour int
 }
 
+type TelemetryConfig struct {
+	Enabled      bool   // OTEL_ENABLED (default: false)
+	CollectorURL string // OTEL_COLLECTOR_URL (default: localhost:4318)
+}
+
 // Load loads configuration from environment variables
 func Load() *Config {
 	return &Config{
@@ -54,6 +60,10 @@ func Load() *Config {
 			Issuer:     getEnv("JWT_ISSUER", "kensan"),
 			ExpireHour: getEnvAsInt("JWT_EXPIRE_HOUR", 24),
 		},
+		Telemetry: TelemetryConfig{
+			Enabled:      getEnvAsBool("OTEL_ENABLED", false),
+			CollectorURL: getEnv("OTEL_COLLECTOR_URL", "localhost:4318"),
+		},
 	}
 }
 
@@ -68,6 +78,15 @@ func getEnvAsInt(key string, defaultValue int) int {
 	if value, exists := os.LookupEnv(key); exists {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(key); exists {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue

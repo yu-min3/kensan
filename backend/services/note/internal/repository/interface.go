@@ -38,6 +38,14 @@ type Repository interface {
 	// GetTagIDs retrieves the tag IDs for a note
 	GetTagIDs(ctx context.Context, noteID string) ([]string, error)
 
+	// ========== NoteType Operations ==========
+
+	// ListNoteTypes retrieves note type configurations
+	ListNoteTypes(ctx context.Context, activeOnly bool) ([]*note.NoteTypeConfig, error)
+
+	// GetNoteTypeBySlug retrieves a note type configuration by slug
+	GetNoteTypeBySlug(ctx context.Context, slug string) (*note.NoteTypeConfig, error)
+
 	// ========== NoteContent Operations ==========
 
 	// ListContents retrieves all contents for a note

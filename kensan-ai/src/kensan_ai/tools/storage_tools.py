@@ -185,10 +185,6 @@ def get_r2_client() -> R2Client:
     description="ファイルをR2ストレージにアップロードします。画像やドキュメントの保存に使用します。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "filename": {
                 "type": "string",
                 "description": "ファイル名",
@@ -206,7 +202,7 @@ def get_r2_client() -> R2Client:
                 "description": "documentsテーブルにも保存するか (デフォルト: true)",
             },
         },
-        "required": ["user_id", "filename", "content_base64"],
+        "required": ["filename", "content_base64"],
     },
 )
 async def upload_file(args: dict[str, Any]) -> dict[str, Any]:
@@ -275,16 +271,12 @@ async def upload_file(args: dict[str, Any]) -> dict[str, Any]:
     description="R2ストレージからファイルのメタデータとURLを取得します。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "file_id": {
                 "type": "string",
                 "description": "ファイルID (documentsテーブルのID)",
             },
         },
-        "required": ["user_id", "file_id"],
+        "required": ["file_id"],
     },
 )
 async def get_file(args: dict[str, Any]) -> dict[str, Any]:
@@ -332,16 +324,12 @@ async def get_file(args: dict[str, Any]) -> dict[str, Any]:
     description="R2ストレージからファイルを削除します。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "file_id": {
                 "type": "string",
                 "description": "ファイルID (documentsテーブルのID)",
             },
         },
-        "required": ["user_id", "file_id"],
+        "required": ["file_id"],
     },
 )
 async def delete_file(args: dict[str, Any]) -> dict[str, Any]:
@@ -405,10 +393,6 @@ async def delete_file(args: dict[str, Any]) -> dict[str, Any]:
     description="R2への直接アップロード用の署名付きURLを生成します。大きなファイルのアップロードに使用します。",
     input_schema={
         "properties": {
-            "user_id": {
-                "type": "string",
-                "description": "ユーザーID (UUID形式)",
-            },
             "filename": {
                 "type": "string",
                 "description": "ファイル名",
@@ -422,7 +406,7 @@ async def delete_file(args: dict[str, Any]) -> dict[str, Any]:
                 "description": "URLの有効期限（秒、デフォルト: 3600）",
             },
         },
-        "required": ["user_id", "filename"],
+        "required": ["filename"],
     },
 )
 async def get_upload_url(args: dict[str, Any]) -> dict[str, Any]:

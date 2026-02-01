@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { NoteEditor, NoteEditorValue } from '@/components/note/NoteEditor'
 import { useNoteStore } from '@/stores/useNoteStore'
+import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useTaskStore } from '@/stores/useTaskStore'
+import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
+import { notesApi } from '@/api/services/notes'
 import type { NoteType, Note } from '@/types'
 import { format } from 'date-fns'
 import {
@@ -15,19 +18,7 @@ import {
   Archive,
   ArchiveRestore,
   Clock,
-  CalendarDays,
-  BookOpen,
 } from 'lucide-react'
-
-const NOTE_TYPE_LABELS: Record<NoteType, string> = {
-  diary: '日記',
-  learning: '学習記録',
-}
-
-const NOTE_TYPE_ICONS: Record<NoteType, React.ComponentType<{ className?: string }>> = {
-  diary: CalendarDays,
-  learning: BookOpen,
-}
 
 export function N02NoteEdit() {
   const { id } = useParams()
@@ -41,10 +32,14 @@ export function N02NoteEdit() {
     deleteNote,
     archiveNote,
   } = useNoteStore()
+  const { types, getBySlug, getConstraints } = useNoteTypeStore()
   const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskStore()
 
   const isNew = !id
-  const initialType = (searchParams.get('type') as NoteType) || 'diary'
+  const initialType = (searchParams.get('type') as NoteType) || (types[0]?.slug ?? 'diary')
+
+  const typeConstraints = getConstraints(initialType)
+  const isDateRequired = typeConstraints?.dateRequired ?? false
 
   // Local state for the editor
   const [editorValue, setEditorValue] = useState<NoteEditorValue>({
@@ -52,16 +47,18 @@ export function N02NoteEdit() {
     title: '',
     content: '',
     format: 'markdown',
-    date: (initialType === 'diary' || initialType === 'learning') ? format(new Date(), 'yyyy-MM-dd') : undefined,
+    date: isDateRequired ? format(new Date(), 'yyyy-MM-dd') : undefined,
     taskId: undefined,
     milestoneId: undefined,
     goalId: undefined,
     tagIds: [],
+    typeMetadata: {},
   })
 
   const [isLoading, setIsLoading] = useState(!isNew)
   const [isSaving, setIsSaving] = useState(false)
   const [existingNote, setExistingNote] = useState<Note | null>(null)
+  const currentNoteIdRef = useRef<string | undefined>(id)
 
   // Fetch existing note
   useEffect(() => {
@@ -70,6 +67,15 @@ export function N02NoteEdit() {
       fetchNote(id)
         .then((note) => {
           setExistingNote(note)
+          // Convert note metadata to typeMetadata record
+          const typeMetadata: Record<string, string> = {}
+          if (note.metadata) {
+            for (const m of note.metadata) {
+              if (m.value) {
+                typeMetadata[m.key] = m.value
+              }
+            }
+          }
           setEditorValue({
             type: note.type,
             title: note.title,
@@ -80,6 +86,7 @@ export function N02NoteEdit() {
             milestoneId: note.milestoneId,
             goalId: note.goalId,
             tagIds: note.tagIds || [],
+            typeMetadata,
           })
           setIsLoading(false)
         })
@@ -109,6 +116,44 @@ export function N02NoteEdit() {
     }
   }
 
+  // Convert typeMetadata to API metadata format
+  const buildMetadata = () => {
+    if (!editorValue.typeMetadata) return undefined
+    const entries = Object.entries(editorValue.typeMetadata).filter(([, v]) => v !== '')
+    if (entries.length === 0) return undefined
+    return entries.map(([key, value]) => ({ key, value }))
+  }
+
+  // Store editorValue in a ref so ensureNoteId always reads the latest
+  const editorValueRef = useRef(editorValue)
+  editorValueRef.current = editorValue
+
+  const ensureNoteId = useCallback(async (): Promise<string> => {
+    if (currentNoteIdRef.current) return currentNoteIdRef.current
+
+    // Create a draft note to get an ID for file uploads.
+    // Backend allows empty content/date on creation (draft workflow).
+    const ev = editorValueRef.current
+    const note = await createNote({
+      type: ev.type,
+      title: ev.title?.trim() || '(下書き)',
+      content: ev.content,
+      format: ev.format,
+      date: ev.date,
+    })
+    currentNoteIdRef.current = note.id
+    setExistingNote(note)
+    navigate(`/notes/${note.id}`, { replace: true })
+    return note.id
+  }, [createNote, navigate])
+
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    const noteId = await ensureNoteId()
+    const content = await notesApi.createContentWithFile(noteId, file, 'image')
+    const downloadUrl = await notesApi.getDownloadURL(noteId, content.id)
+    return downloadUrl
+  }, [ensureNoteId])
+
   const handleSave = async () => {
     setIsSaving(true)
     try {
@@ -126,9 +171,13 @@ export function N02NoteEdit() {
         goalName: denormalized.goalName,
         goalColor: denormalized.goalColor,
         tagIds: editorValue.tagIds,
+        metadata: buildMetadata(),
       }
 
-      if (isNew) {
+      if (currentNoteIdRef.current && isNew) {
+        // Draft was created for image upload, update it
+        await updateNote(currentNoteIdRef.current, noteData)
+      } else if (isNew) {
         await createNote(noteData)
       } else if (id) {
         await updateNote(id, noteData)
@@ -166,21 +215,21 @@ export function N02NoteEdit() {
     }
   }
 
-  // Validation
+  // Validation using dynamic constraints
   const isValid = () => {
-    // Content is required
-    if (!editorValue.content.trim()) return false
+    const constraints = getConstraints(editorValue.type)
 
-    // Title is always required
-    if (!editorValue.title?.trim()) return false
-
-    // Date is required for diary and learning
-    if ((editorValue.type === 'diary' || editorValue.type === 'learning') && !editorValue.date) return false
+    if (constraints?.contentRequired && !editorValue.content.trim()) return false
+    if (constraints?.titleRequired && !editorValue.title?.trim()) return false
+    if (constraints?.dateRequired && !editorValue.date) return false
 
     return true
   }
 
-  const TypeIcon = NOTE_TYPE_ICONS[editorValue.type]
+  // Get type display info
+  const typeConfig = getBySlug(editorValue.type)
+  const TypeIcon = getNoteTypeIcon(typeConfig?.icon ?? 'file-text')
+  const typeDisplayName = typeConfig?.displayName ?? editorValue.type
 
   if (isLoading) {
     return (
@@ -198,8 +247,8 @@ export function N02NoteEdit() {
           <TypeIcon className="h-8 w-8 text-slate-500" />
           <h1 className="text-2xl font-bold">
             {isNew
-              ? `${NOTE_TYPE_LABELS[editorValue.type]}を作成`
-              : `${NOTE_TYPE_LABELS[editorValue.type]}を編集`}
+              ? `${typeDisplayName}を作成`
+              : `${typeDisplayName}を編集`}
           </h1>
         </div>
         <div className="flex gap-2">
@@ -274,6 +323,7 @@ export function N02NoteEdit() {
             onCreateTag={(name, color) => addTag({ name, color })}
             showTypeSelector={isNew}
             showMetadata={true}
+            onImageUpload={handleImageUpload}
           />
         </div>
 
@@ -337,14 +387,8 @@ export function N02NoteEdit() {
               <CardTitle className="text-base">ヒント</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              {editorValue.type === 'diary' && (
-                <p>日記は日付ごとに振り返りを記録できます。目標やタグを付けて分類しましょう。</p>
-              )}
-              {editorValue.type === 'learning' && (
-                <p>
-                  学習記録は技術メモやナレッジベースとして活用できます。
-                  マイルストーンやタスクと紐付けて進捗を管理しましょう。
-                </p>
+              {typeConfig?.description && (
+                <p>{typeConfig.description}</p>
               )}
               <p className="pt-2">
                 Markdownまたはdraw.io形式で記述できます。

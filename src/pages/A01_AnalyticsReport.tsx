@@ -32,11 +32,22 @@ import {
   Pie,
   Cell,
   CartesianGrid,
+  Legend,
 } from 'recharts'
+import type { ContentType } from 'recharts/types/component/Tooltip'
+import { AIReviewSection } from '@/components/analytics/AIReviewSection'
 import { cn } from '@/lib/utils'
 import type { DateRange } from 'react-day-picker'
 
 type PeriodType = 'today' | 'week' | 'month' | 'custom'
+
+// Format Date as yyyy-MM-dd in local timezone (avoids UTC shift from toISOString)
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 // Helper to get date range for each period
 function getDateRangeForPeriod(period: PeriodType, customRange?: DateRange): { start: Date; end: Date } {
@@ -76,6 +87,45 @@ function formatDateRange(start: Date, end: Date): string {
   return `${startStr} - ${endStr}`
 }
 
+// Custom tooltip for stacked bar chart
+function createStackedBarTooltip(
+  goalList: { id: string; name: string; color: string }[]
+): ContentType<number, string> {
+  return ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null
+
+    const nonZeroItems = payload.filter((p) => p.value && (p.value as number) > 0)
+    if (nonZeroItems.length === 0) return null
+
+    const total = nonZeroItems.reduce((sum, p) => sum + ((p.value as number) ?? 0), 0)
+
+    return (
+      <div className="rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md">
+        <p className="font-medium mb-1">{label}</p>
+        {nonZeroItems.map((item) => {
+          const goal = goalList.find((g) => g.id === item.dataKey)
+          return (
+            <div key={item.dataKey} className="flex items-center gap-2 py-0.5">
+              <div
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ backgroundColor: item.color as string }}
+              />
+              <span className="text-muted-foreground">{goal?.name ?? item.dataKey}</span>
+              <span className="ml-auto font-medium">{item.value}h</span>
+            </div>
+          )
+        })}
+        {nonZeroItems.length > 1 && (
+          <div className="border-t mt-1 pt-1 flex justify-between text-muted-foreground">
+            <span>合計</span>
+            <span className="font-medium text-foreground">{Math.round(total * 10) / 10}h</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+}
+
 export function A01AnalyticsReport() {
   const [period, setPeriod] = useState<PeriodType>('week')
   const [customRange, setCustomRange] = useState<DateRange | undefined>()
@@ -83,29 +133,72 @@ export function A01AnalyticsReport() {
 
   const { weeklySummary, dailyStudyHours, isLoading, error, fetchDashboardData } = useAnalyticsStore()
   const { getByType } = useNoteStore()
-  const learningRecords = getByType('learning')
+  const allLearningRecords = getByType('learning')
 
   const dateRange = useMemo(() => {
     return getDateRangeForPeriod(period, customRange)
   }, [period, customRange])
 
+  // Filter learning records by selected date range
+  const learningRecords = useMemo(() => {
+    const { start, end } = dateRange
+    const startStr = formatLocalDate(start)
+    const endStr = formatLocalDate(end)
+    return allLearningRecords.filter((record) => {
+      const recordDate = formatLocalDate(new Date(record.createdAt))
+      return recordDate >= startStr && recordDate <= endStr
+    })
+  }, [allLearningRecords, dateRange])
+
   useEffect(() => {
     const { start, end } = dateRange
-    const startStr = start.toISOString().split('T')[0]
-    const endStr = end.toISOString().split('T')[0]
+    const startStr = formatLocalDate(start)
+    const endStr = formatLocalDate(end)
     fetchDashboardData(startStr, endStr)
   }, [fetchDashboardData, dateRange])
 
-  // Filter daily study hours based on selected period
-  const filteredDailyHours = useMemo(() => {
-    if (!dailyStudyHours.length) return []
+  // Build goal list and stacked chart data from daily study hours
+  // Note: dailyStudyHours is already range-filtered by the API, no client-side filter needed
+  const { goalList, stackedChartData } = useMemo(() => {
+    const goals = new Map<string, { id: string; name: string; color: string }>()
+    const hasByGoal = dailyStudyHours.some((d) => d.byGoal && d.byGoal.length > 0)
 
-    const { start, end } = dateRange
-    return dailyStudyHours.filter((d) => {
-      const date = new Date(d.date)
-      return date >= start && date <= end
+    // Compute goal ratios from summary for proportional fallback
+    const summaryGoalRatios: { id: string; name: string; color: string; ratio: number }[] = []
+    if (!hasByGoal && weeklySummary) {
+      const totalSummaryMinutes = weeklySummary.byGoal.reduce((sum, g) => sum + g.minutes, 0)
+      for (const g of weeklySummary.byGoal) {
+        summaryGoalRatios.push({
+          id: g.id,
+          name: g.name,
+          color: g.color,
+          ratio: totalSummaryMinutes > 0 ? g.minutes / totalSummaryMinutes : 0,
+        })
+      }
+    }
+
+    const data = dailyStudyHours.map((d) => {
+      const entry: Record<string, string | number> = { date: d.date, day: d.day }
+      if (hasByGoal && d.byGoal) {
+        for (const g of d.byGoal) {
+          if (!goals.has(g.id)) {
+            goals.set(g.id, { id: g.id, name: g.name, color: g.color })
+          }
+          entry[g.id] = Math.round((g.minutes / 60) * 10) / 10
+        }
+      } else {
+        // Fallback: distribute total hours proportionally by summary goal ratios
+        for (const g of summaryGoalRatios) {
+          if (!goals.has(g.id)) {
+            goals.set(g.id, { id: g.id, name: g.name, color: g.color })
+          }
+          entry[g.id] = Math.round(d.hours * g.ratio * 10) / 10
+        }
+      }
+      return entry
     })
-  }, [dailyStudyHours, dateRange])
+    return { goalList: Array.from(goals.values()), stackedChartData: data }
+  }, [dailyStudyHours, weeklySummary])
 
   const pieData = useMemo(() => {
     if (!weeklySummary) return []
@@ -118,16 +211,16 @@ export function A01AnalyticsReport() {
       .filter((d) => d.value > 0)
   }, [weeklySummary])
 
-  const milestoneData = useMemo(() => {
-    if (!weeklySummary) return []
-    return weeklySummary.byMilestone.map((milestone) => ({
-      name: milestone.name,
-      hours: Math.round((milestone.minutes / 60) * 10) / 10,
-    }))
-  }, [weeklySummary])
-
   const totalHours = weeklySummary ? Math.floor(weeklySummary.totalMinutes / 60) : 0
   const totalMinutes = weeklySummary ? weeklySummary.totalMinutes % 60 : 0
+
+  // Daily average from API-returned data (already range-filtered)
+  const dailyAverage = useMemo(() => {
+    if (!dailyStudyHours.length) return '0h'
+    const total = dailyStudyHours.reduce((sum, d) => sum + d.hours, 0)
+    const avg = Math.round((total / dailyStudyHours.length) * 10) / 10
+    return `${avg}h`
+  }, [dailyStudyHours])
 
   // Handle period change
   const handlePeriodChange = (value: string) => {
@@ -161,7 +254,7 @@ export function A01AnalyticsReport() {
           message={error || 'データを取得できませんでした'}
           onRetry={() => {
             const { start, end } = dateRange
-            fetchDashboardData(start.toISOString().split('T')[0], end.toISOString().split('T')[0])
+            fetchDashboardData(formatLocalDate(start), formatLocalDate(end))
           }}
         />
       </div>
@@ -271,43 +364,15 @@ export function A01AnalyticsReport() {
               <CalendarIcon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">日平均</p>
-                <p className="text-2xl font-bold">
-                  {filteredDailyHours.length > 0
-                    ? `${Math.round(
-                        filteredDailyHours.reduce((sum, d) => sum + d.hours, 0) /
-                          filteredDailyHours.length
-                      )}h`
-                    : '0h'}
-                </p>
+                <p className="text-2xl font-bold">{dailyAverage}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Goal Distribution + Goal Progress */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Daily Study Hours */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              日別学習時間
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={filteredDailyHours.length > 0 ? filteredDailyHours : dailyStudyHours}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" fontSize={12} />
-                <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} unit="h" />
-                <Tooltip formatter={(value) => [`${value}時間`, '学習時間']} />
-                <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Goal Distribution */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -331,7 +396,26 @@ export function A01AnalyticsReport() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [formatDurationShort(value as number), '']} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const item = payload[0]
+                      return (
+                        <div className="rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2.5 h-2.5 rounded-sm"
+                              style={{ backgroundColor: item.payload?.color }}
+                            />
+                            <span>{item.name}</span>
+                            <span className="ml-2 font-medium">
+                              {formatDurationShort(item.value as number)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-3 flex-1">
@@ -354,45 +438,71 @@ export function A01AnalyticsReport() {
           </CardContent>
         </Card>
 
-        {/* Milestone Hours */}
-        <Card>
-          <CardHeader>
-            <CardTitle>マイルストーン別時間</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={milestoneData} layout="vertical">
-                <XAxis type="number" domain={[0, 'auto']} fontSize={12} unit="h" />
-                <YAxis type="category" dataKey="name" fontSize={12} width={100} />
-                <Tooltip formatter={(value) => [`${value}時間`, '']} />
-                <Bar dataKey="hours" fill="hsl(var(--brand))" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Goal Progress */}
         <Card>
           <CardHeader>
             <CardTitle>目標達成度</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {weeklySummary.byGoal.map((goal) => (
-              <div key={goal.id}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <GoalBadge name={goal.name} color={goal.color} size="sm" />
+            {weeklySummary.byGoal.map((goal) => {
+              const progressPercent = Math.round((goal.minutes / (20 * 60)) * 100)
+              return (
+                <div key={goal.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <GoalBadge name={goal.name} color={goal.color} size="sm" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{progressPercent}%</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({Math.floor(goal.minutes / 60)}h)
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {Math.floor(goal.minutes / 60)}h
-                  </span>
+                  <Progress value={progressPercent} className="h-3" />
                 </div>
-                <Progress value={(goal.minutes / (20 * 60)) * 100} className="h-3" />
-              </div>
-            ))}
+              )
+            })}
           </CardContent>
         </Card>
       </div>
+
+      {/* Daily Study Hours - Stacked Bar Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            日別学習時間（目標別）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={stackedChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="day" fontSize={12} />
+              <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} unit="h" />
+              <Tooltip
+                content={createStackedBarTooltip(goalList)}
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+              />
+              <Legend
+                formatter={(value: string) => {
+                  const goal = goalList.find((g) => g.id === value)
+                  return goal?.name ?? value
+                }}
+              />
+              {goalList.map((goal) => (
+                <Bar
+                  key={goal.id}
+                  dataKey={goal.id}
+                  stackId="goal"
+                  fill={goal.color}
+                  radius={[0, 0, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       {/* Learning Records Section */}
       <Card>
@@ -442,16 +552,22 @@ export function A01AnalyticsReport() {
           {learningRecords.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>学習記録はまだありません</p>
+              <p>この期間の学習記録はありません</p>
               <Link to="/notes/new?type=learning">
                 <Button variant="link" className="mt-2">
-                  最初の記録を作成する
+                  記録を作成する
                 </Button>
               </Link>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* AI Review Section */}
+      <AIReviewSection
+        startDate={formatLocalDate(dateRange.start)}
+        endDate={formatLocalDate(dateRange.end)}
+      />
     </div>
   )
 }

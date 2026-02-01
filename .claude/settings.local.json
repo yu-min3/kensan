@@ -69,7 +69,14 @@
       "Bash(do file=\"/home/yu-min/Repositories/kensan-mockup/backend/services/$service/internal/repository/repository.go\" echo \"=== $service - Error handling ===\" grep -B1 -A1 \"if err != nil\" \"$file\")",
       "Bash(for port in 8081 8082 8084 8088 8090 8091)",
       "Bash(do curl -s http://localhost:$port/health -o /dev/null)",
-      "Bash(npx shadcn@latest add alert-dialog:*)"
+      "Bash(npx shadcn@latest add alert-dialog:*)",
+      "Bash(for f in /home/yu-min/Repositories/kensan-mockup/observability/grafana/dashboards/*.json)",
+      "Bash(do python3 -c \"import json; json.load\\(open\\(''$f''\\)\\)\")",
+      "Bash(git log:*)",
+      "Bash(npx eslint:*)",
+      "Bash(ps:*)",
+      "Bash(uv run python:*)",
+      "Bash(npx vite build:*)"
     ]
   },
   "outputStyle": "default"
