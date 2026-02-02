@@ -19,6 +19,7 @@ export function ChatPanel() {
     conversations,
     isLoadingHistory,
     isViewingHistory,
+    proactiveMode,
     close,
     addMessage,
     appendToLastAssistantMessage,
@@ -402,14 +403,24 @@ export function ChatPanel() {
         <>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto py-2">
-            {messages.length === 0 && (
+            {messages.length === 0 && !proactiveMode && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm px-6 text-center">
                 <p>何かお手伝いしましょうか？</p>
                 <p className="text-xs mt-1">例：「今日の予定立てて」「タスク見せて」</p>
               </div>
             )}
-            {messages.map((msg) =>
-              msg.type === 'action_proposal' && msg.actions ? (
+            {proactiveMode && (
+              <div className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground bg-muted/30 border-b">
+                <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+                {proactiveMode === 'briefing'
+                  ? 'AI が今日のブリーフィングを開始しました'
+                  : 'AI が今日の振り返りを開始しました'}
+              </div>
+            )}
+            {messages.map((msg, index) => {
+              // In proactive mode, hide the initial trigger message from the user
+              if (proactiveMode && index === 0 && msg.role === 'user') return null
+              return msg.type === 'action_proposal' && msg.actions ? (
                 <ActionProposal
                   key={msg.id}
                   actions={msg.actions}
@@ -420,7 +431,7 @@ export function ChatPanel() {
               ) : (
                 <ChatMessage key={msg.id} message={msg} />
               )
-            )}
+            })}
             {isStreaming && !pendingActions && (
               <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />

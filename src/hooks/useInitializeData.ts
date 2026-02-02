@@ -6,6 +6,7 @@ import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimerStore } from '@/stores/useTimerStore'
+import { useChatStore } from '@/stores/useChatStore'
 import { getTodayInTimezone } from '@/lib/timezone'
 
 // App startup data initialization hook
@@ -84,6 +85,38 @@ export function useInitializeData() {
         }
 
         console.log('[Kensan] Data initialization complete')
+
+        // Proactive AI trigger: briefing (morning) or summary (evening), each once per day
+        const todayKey = getTodayInTimezone(currentTimezone)
+        const now = new Date()
+        const localHour = new Date(now.toLocaleString('en-US', { timeZone: currentTimezone })).getHours()
+
+        if (localHour < 17) {
+          // Morning / daytime → briefing
+          const lastBriefing = localStorage.getItem('kensan_briefing_date')
+          if (lastBriefing !== todayKey) {
+            localStorage.setItem('kensan_briefing_date', todayKey)
+            setTimeout(() => {
+              useChatStore.getState().sendPrefilled(
+                '今日のブリーフィングをお願いします',
+                'briefing'
+              )
+            }, 500)
+          }
+        } else {
+          // Evening (17:00+) → summary
+          const lastEvening = localStorage.getItem('kensan_evening_date')
+          if (lastEvening !== todayKey) {
+            localStorage.setItem('kensan_evening_date', todayKey)
+            setTimeout(() => {
+              useChatStore.getState().sendPrefilled(
+                '今日の振り返りをお願いします',
+                'evening'
+              )
+            }, 500)
+          }
+        }
+
         setInitialized(true)
       } catch (err) {
         // This catches errors in fetchSettings (required for initialization)

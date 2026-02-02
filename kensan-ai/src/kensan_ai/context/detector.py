@@ -12,6 +12,7 @@ class Situation(str, Enum):
     MORNING = "morning"
     EVENING = "evening"
     WEEKLY = "weekly"
+    BRIEFING = "briefing"
 
 
 # Time ranges for automatic situation detection (in local time)

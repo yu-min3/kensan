@@ -39,7 +39,7 @@ class AgentStreamRequest(BaseModel):
 
     message: str = Field(..., description="User's message")
     conversation_id: str | None = Field(None, description="Conversation ID for continuity")
-    situation: Literal["auto", "morning", "evening", "weekly", "chat"] = Field(
+    situation: Literal["auto", "morning", "evening", "weekly", "chat", "briefing"] = Field(
         "auto", description="Situation context"
     )
     context: dict[str, str] | None = Field(

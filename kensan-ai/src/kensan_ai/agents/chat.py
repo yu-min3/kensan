@@ -168,6 +168,7 @@ SITUATION_TOOL_GROUPS: dict[str, list[str]] = {
     "weekly": ["core", "review", "notes_read", "goals_read", "search"],
     "morning": ["core", "planning", "task", "goals_read", "goals_write"],
     "evening": ["core", "analytics", "notes_read", "notes_write", "memory"],
+    "briefing": ["core", "planning", "task", "goals_read", "analytics"],
 }
 
 # フロントから渡された context キー → 除外するツール
