@@ -79,7 +79,8 @@
       "Bash(npx vite build:*)",
       "Bash(npx playwright:*)",
       "Bash(uv sync:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(git status:*)"
     ]
   },
   "outputStyle": "default"

@@ -32,9 +32,16 @@ class Settings(BaseSettings):
             return self.database_url
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
+    # AI Provider ("anthropic" or "google")
+    ai_provider: str = "google"
+
     # Anthropic API
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
+
+    # Google GenAI API
+    google_api_key: str = ""
+    google_model: str = "gemini-2.0-flash"
 
     # OpenAI API (for embeddings)
     openai_api_key: str = ""
@@ -89,8 +96,10 @@ class Settings(BaseSettings):
     def validate_production_settings(self) -> "Settings":
         """Validate critical settings in production environment."""
         if self.server_env == "production":
-            if not self.anthropic_api_key:
-                raise ValueError("ANTHROPIC_API_KEY is required in production")
+            if self.ai_provider == "anthropic" and not self.anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY is required in production with ai_provider=anthropic")
+            if self.ai_provider == "google" and not self.google_api_key:
+                raise ValueError("GOOGLE_API_KEY is required in production with ai_provider=google")
             if self.jwt_secret == "dev-secret-key-change-in-production":
                 raise ValueError("JWT_SECRET must be changed in production")
         return self

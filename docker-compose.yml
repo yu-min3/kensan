@@ -303,8 +303,11 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      AI_PROVIDER: ${AI_PROVIDER:-google}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       MINIO_ENDPOINT: minio:9000

@@ -1,0 +1,52 @@
+# Production overlay for GCE deployment
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  frontend:
+    build:
+      args:
+        - VITE_USER_SERVICE_URL=http://${GCE_IP:-localhost}:8081
+        - VITE_TASK_SERVICE_URL=http://${GCE_IP:-localhost}:8082
+        - VITE_TIMEBLOCK_SERVICE_URL=http://${GCE_IP:-localhost}:8084
+        - VITE_ANALYTICS_SERVICE_URL=http://${GCE_IP:-localhost}:8088
+        - VITE_AI_SERVICE_URL=http://${GCE_IP:-localhost}:8089
+        - VITE_MEMO_SERVICE_URL=http://${GCE_IP:-localhost}:8090
+        - VITE_NOTE_SERVICE_URL=http://${GCE_IP:-localhost}:8091
+
+  user-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+
+  task-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+
+  timeblock-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+
+  analytics-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+
+  ai-service:
+    environment:
+      SERVER_ENV: production
+      AI_PROVIDER: google
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
+      JWT_SECRET: ${JWT_SECRET}
+
+  memo-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+
+  note-service:
+    environment:
+      SERVER_ENV: production
+      JWT_SECRET: ${JWT_SECRET}

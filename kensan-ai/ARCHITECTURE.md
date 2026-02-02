@@ -35,7 +35,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 |--------------|------|
 | フレームワーク | FastAPI |
 | ランタイム | Python 3.12+ |
-| AIモデル | Claude (Anthropic API) |
+| AIモデル | Claude (Anthropic API) / Gemini (Google GenAI) — `AI_PROVIDER`設定で切替 |
 | 埋め込み | OpenAI text-embedding-3-small |
 | データベース | PostgreSQL 16 + pgvector |
 | 非同期DB | asyncpg |
@@ -50,7 +50,8 @@ kensan-ai/
 │   ├── config.py                  # 設定 (Pydantic BaseSettings)
 │   ├── errors.py                  # 統一エラースキーマ
 │   ├── agents/                    # エージェント実装
-│   │   ├── base.py               # AgentRunnerコア（プロンプトキャッシング対応）
+│   │   ├── base.py               # AgentRunnerコア（Anthropic、プロンプトキャッシング対応）
+│   │   ├── gemini_runner.py     # GeminiAgentRunner（Google GenAI SDK）
 │   │   ├── message_history.py    # 会話メッセージ管理
 │   │   ├── conversation_store.py # 会話ストア
 │   │   ├── chat.py               # 汎用チャットエージェント（動的ツール選択）
@@ -84,7 +85,7 @@ kensan-ai/
 │   ├── embeddings/                # ベクトル埋め込み
 │   │   └── service.py            # OpenAI埋め込みサービス
 │   ├── extraction/                # ファクト抽出
-│   │   └── fact_extractor.py     # Claudeベース抽出
+│   │   └── fact_extractor.py     # LLMベース抽出（Anthropic/Google切替）
 │   ├── logging/                   # インタラクションログ
 │   │   └── interaction_logger.py
 │   ├── api/                       # HTTP層
@@ -1281,9 +1282,18 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = "kensan"
     DB_NAME: str = "kensan"
 
-    # AI
+    # AI Provider ("anthropic" or "google")
+    AI_PROVIDER: str = "google"
+
+    # Anthropic
     ANTHROPIC_API_KEY: str
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+
+    # Google GenAI
+    GOOGLE_API_KEY: str
+    GOOGLE_MODEL: str = "gemini-2.0-flash"
+
+    # Embeddings (OpenAI)
     OPENAI_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 

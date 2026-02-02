@@ -7,6 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import anthropic
+from google import genai
 
 from kensan_ai.config import get_settings
 from kensan_ai.db.connection import get_connection
@@ -34,13 +35,19 @@ SUMMARIZATION_PROMPT = """以下のユーザーに関する事実情報を基に
 
 
 class ProfileSummarizer:
-    """Summarizes user facts into profile summaries using Claude API."""
+    """Summarizes user facts into profile summaries using LLM API."""
 
     def __init__(self):
-        """Initialize the profile summarizer with Anthropic client."""
+        """Initialize the profile summarizer with the configured AI provider."""
         settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = "claude-sonnet-4-20250514"
+        self.ai_provider = settings.ai_provider
+
+        if self.ai_provider == "google":
+            self.google_client = genai.Client(api_key=settings.google_api_key)
+            self.model = settings.google_model
+        else:
+            self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            self.model = "claude-sonnet-4-20250514"
 
     async def get_users_with_new_facts(
         self,
@@ -149,13 +156,19 @@ class ProfileSummarizer:
             new_facts=facts_text,
         )
 
-        response = await self.client.messages.create(
-            model=self.model,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response.content[0].text.strip() if response.content else ""
+        if self.ai_provider == "google":
+            response = await self.google_client.aio.models.generate_content(
+                model=self.model,
+                contents=prompt,
+            )
+            return (response.text or "").strip()
+        else:
+            response = await self.anthropic_client.messages.create(
+                model=self.model,
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip() if response.content else ""
 
     async def update_user_memory(
         self,

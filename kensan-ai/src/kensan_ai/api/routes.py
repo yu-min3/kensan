@@ -10,7 +10,7 @@ import jwt
 from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import StreamingResponse
 
-from kensan_ai.agents import AgentRunner
+from kensan_ai.agents import create_agent_runner
 from kensan_ai.agents.conversation_store import (
     ConversationStore,
     ConversationState,
@@ -175,8 +175,8 @@ async def agent_stream(
             user_id=user_id,
         )
 
-    # 4. Create agent runner
-    agent = AgentRunner(
+    # 4. Create agent runner (Anthropic or Gemini based on ai_provider setting)
+    agent = create_agent_runner(
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
         max_turns=max_turns,
