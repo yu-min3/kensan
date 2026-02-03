@@ -85,6 +85,18 @@ INSERT INTO note_types (slug, display_name, display_name_en, description, icon, 
     ]',
     3,
     FALSE
+),
+(
+    'memo',
+    'メモ',
+    'Memo',
+    'クイックメモ（migration 010 で memos テーブルから移行されたデータ用）',
+    'sticky-note',
+    '#F59E0B',
+    '{"dateRequired": false, "titleRequired": false, "contentRequired": true, "dailyUnique": false}',
+    '[]',
+    10,
+    TRUE
 );
 
 -- ============================================
