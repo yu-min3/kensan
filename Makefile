@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore
 
 # Default target
 .DEFAULT_GOAL := help
@@ -161,6 +161,33 @@ demo-clean:
 	@echo "Demo data removed."
 
 # =============================================================================
+# Database Backup / Restore
+# =============================================================================
+
+BACKUP_DIR := backups
+BACKUP_FILE := $(BACKUP_DIR)/kensan_$(shell date +%Y%m%d_%H%M%S).sql
+
+## Backup database to backups/ directory
+db-backup:
+	@mkdir -p $(BACKUP_DIR)
+	@echo "Backing up database..."
+	@docker exec kensan-postgres pg_dump -U kensan -d kensan --clean --if-exists > $(BACKUP_FILE)
+	@echo "Saved to $(BACKUP_FILE) ($$(du -h $(BACKUP_FILE) | cut -f1))"
+
+## Restore database from backup (usage: make db-restore FILE=backups/kensan_xxx.sql)
+db-restore:
+ifndef FILE
+	@echo "Usage: make db-restore FILE=backups/kensan_20260203_120000.sql"
+	@echo ""
+	@echo "Available backups:"
+	@ls -1t $(BACKUP_DIR)/*.sql 2>/dev/null || echo "  (none)"
+	@exit 1
+endif
+	@echo "Restoring from $(FILE)..."
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < $(FILE)
+	@echo "Restore complete."
+
+# =============================================================================
 # Help
 # =============================================================================
 
@@ -198,6 +225,10 @@ help:
 	@echo "Demo Data:"
 	@echo "  demo-seed   Apply demo seed data (Tanaka Shota persona)"
 	@echo "  demo-clean  Remove demo seed data only"
+	@echo ""
+	@echo "Database:"
+	@echo "  db-backup              Backup database to backups/"
+	@echo "  db-restore FILE=x.sql  Restore database from backup"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

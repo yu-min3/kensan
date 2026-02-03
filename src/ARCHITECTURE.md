@@ -69,9 +69,17 @@ src/
 │   ├── daily/                    # デイリーページセクション
 │   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm + validateMetadata)
 │   ├── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
+│   ├── briefing/                 # ブリーフィング・振り返りUI
+│   │   ├── BriefingLayout.tsx    # 自動SSE起動 + 全体レイアウト
+│   │   ├── BriefingHeader.tsx    # 挨拶・日付・ステータス
+│   │   ├── BriefingStatusBar.tsx # ステップ進行バー
+│   │   ├── BriefingCardGrid.tsx  # 2列レスポンシブグリッド
+│   │   ├── BriefingCard.tsx      # カードシェル（スケルトン・ステータスアイコン）
+│   │   ├── BriefingFollowUp.tsx  # チャット導線CTA
+│   │   └── cards/                # 個別カードコンポーネント（8種）
 │   └── interactions/             # AI Interaction Explorer (InteractionTable, ConversationFlow)
-├── pages/                        # ページコンポーネント（10ファイル）
-├── stores/                       # Zustandストア（12ストア）
+├── pages/                        # ページコンポーネント（12ファイル）
+├── stores/                       # Zustandストア（13ストア）
 ├── hooks/                        # カスタムReactフック
 ├── lib/                          # ユーティリティ（timezone, dateFormat, noteTypeIcons, actionFormatter, utils）
 ├── mocks/                        # MSWハンドラとモックデータ
@@ -103,6 +111,8 @@ graph TB
 
     subgraph "ページコンポーネント"
         Daily[DailyPage]
+        Briefing[B01_Briefing]
+        Reflection[B02_Reflection]
         Tasks[T01_TaskManagement]
         Notes[N01_NoteList]
         NoteEdit[N02_NoteEdit]
@@ -138,6 +148,8 @@ graph TB
     Layout --> Main
 
     Main --> Daily
+    Main --> Briefing
+    Main --> Reflection
     Main --> Tasks
     Main --> Notes
     Main --> NoteEdit
@@ -528,6 +540,36 @@ stopTimer(): Promise<TimeEntry>
 fetchCurrentTimer(): Promise<void>
 ```
 
+#### useBriefingStore
+```typescript
+// 状態
+mode: BriefingMode              // 'morning' | 'evening'
+phase: BriefingPhase            // 'idle' | 'loading' | 'ready' | 'error'
+conversationId: string | null
+steps: BriefingStep[]           // ツール実行ステップの進行状態
+cards: BriefingCard[]           // カードデータ（type, title, status, data, actions）
+insightText: string             // AIインサイトのストリーミングテキスト
+
+// アクション
+startBriefing(mode): void       // モードに応じた初期カード枠を生成
+reset(): void
+activateStep(toolName): void
+completeStep(toolName): void
+updateCard(type, partial): void
+appendInsightText(text): void
+setPhase(phase): void
+```
+
+**SSEイベント処理フロー:**
+```
+SSE event → briefingEventProcessor.ts → useBriefingStore
+  tool_call   → activateStep(toolName)
+  tool_result → completeStep(toolName) + updateCard(card_type, data)
+  action_proposal → updateCard(card_type, actions)
+  text(card_type=ai_insight) → appendInsightText(content)
+  done → setPhase('ready')
+```
+
 ### 永続化パターン
 
 ```typescript
@@ -684,6 +726,8 @@ export const API_CONFIG = {
 / (認証済み + 設定完了)
 ├── /                      S02_Dashboard
 ├── /daily                 DailyPage
+├── /briefing              B01_Briefing（朝のブリーフィング）
+├── /reflection            B02_Reflection（夜の振り返り）
 ├── /notes                 N01_NoteList
 │   ├── /notes/new        N02_NoteEdit
 │   └── /notes/:id        N02_NoteEdit
@@ -699,6 +743,7 @@ export const API_CONFIG = {
 | プレフィックス | ドメイン | 例 |
 |--------------|---------|-----|
 | S | 設定/システム | S01_Settings, S02_Dashboard |
+| B | ブリーフィング | B01_Briefing, B02_Reflection |
 | D | デイリー | DailyPage |
 | N | ノート | N01_NoteList, N02_NoteEdit |
 | T | タスク | T01_TaskManagement |

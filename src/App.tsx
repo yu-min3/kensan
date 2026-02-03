@@ -9,6 +9,8 @@ import { N02NoteEdit } from '@/pages/N02_NoteEdit'
 import { T01TaskManagement } from '@/pages/T01_TaskManagement'
 import { A01AnalyticsReport } from '@/pages/A01_AnalyticsReport'
 import { O01InteractionExplorer } from '@/pages/O01_InteractionExplorer'
+import { B01Briefing } from '@/pages/B01_Briefing'
+import { B02Reflection } from '@/pages/B02_Reflection'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useInitializeData } from '@/hooks/useInitializeData'
@@ -75,6 +77,8 @@ function App() {
           <Route path="tasks" element={<T01TaskManagement />} />
           <Route path="analytics" element={<A01AnalyticsReport />} />
           <Route path="interactions" element={<O01InteractionExplorer />} />
+          <Route path="briefing" element={<B01Briefing />} />
+          <Route path="reflection" element={<B02Reflection />} />
           <Route path="settings" element={<S01Settings />} />
         </Route>
         </Routes>

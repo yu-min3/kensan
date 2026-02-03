@@ -5,6 +5,8 @@ import {
   FolderKanban,
   BarChart3,
   Activity,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +19,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', icon: CalendarDays, label: 'デイリー' },
+  { to: '/briefing', icon: Sun, label: 'ブリーフィング' },
+  { to: '/reflection', icon: Moon, label: '振り返り' },
   { to: '/notes', icon: StickyNote, label: 'ノート' },
   { to: '/tasks', icon: FolderKanban, label: 'タスク管理' },
   { to: '/analytics', icon: BarChart3, label: '分析・レポート' },

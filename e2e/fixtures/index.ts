@@ -8,6 +8,7 @@ import { AnalyticsPage } from '../pages/analytics.page'
 import { SettingsPage } from '../pages/settings.page'
 import { ChatPanelPage } from '../pages/chat-panel.page'
 import { LayoutPage } from '../pages/layout.page'
+import { BriefingPage } from '../pages/briefing.page'
 
 type Fixtures = {
   loginPage: LoginPage
@@ -19,6 +20,7 @@ type Fixtures = {
   settingsPage: SettingsPage
   chatPanelPage: ChatPanelPage
   layoutPage: LayoutPage
+  briefingPage: BriefingPage
 }
 
 export const test = base.extend<Fixtures>({
@@ -48,6 +50,9 @@ export const test = base.extend<Fixtures>({
   },
   layoutPage: async ({ page }, use) => {
     await use(new LayoutPage(page))
+  },
+  briefingPage: async ({ page }, use) => {
+    await use(new BriefingPage(page))
   },
 })
 

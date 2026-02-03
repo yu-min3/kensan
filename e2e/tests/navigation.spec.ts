@@ -7,6 +7,14 @@ test.describe('ナビゲーション', () => {
     // Daily (already on it)
     await expect(layoutPage.navDaily).toBeVisible()
 
+    // Navigate to Briefing
+    await layoutPage.navigateTo('briefing')
+    await expect(page).toHaveURL('/briefing')
+
+    // Navigate to Reflection
+    await layoutPage.navigateTo('reflection')
+    await expect(page).toHaveURL('/reflection')
+
     // Navigate to Notes
     await layoutPage.navigateTo('notes')
     await expect(page).toHaveURL('/notes')

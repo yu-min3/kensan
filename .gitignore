@@ -53,6 +53,9 @@ backend/*-service
 backend/tmp/
 backend/vendor/
 
+# Database backups
+backups/
+
 # kensan-ai Python
 kensan-ai/.venv/
 kensan-ai/__pycache__/

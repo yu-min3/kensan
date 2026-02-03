@@ -1,6 +1,6 @@
 # Kensan 開発状況
 
-**最終更新: 2026-02-01**
+**最終更新: 2026-02-03**
 
 ---
 
@@ -77,8 +77,8 @@ kensan-mockup/
 │   │   ├── task/                 # タスク管理コンポーネント
 │   │   ├── editor/               # エディタ（Markdown, Drawio）
 │   │   └── note/                 # ノートコンポーネント
-│   ├── pages/                    # 8画面
-│   ├── stores/                   # 15個のZustandストア
+│   ├── pages/                    # 10画面
+│   ├── stores/                   # 16個のZustandストア
 │   ├── hooks/                    # カスタムフック
 │   ├── lib/                      # ユーティリティ（timezone等）
 │   └── types/                    # 型定義
@@ -120,6 +120,8 @@ kensan-mockup/
 | N01 | ノート一覧 | `/notes` | 日記・学習記録の一覧・検索 |
 | N02 | ノート編集 | `/notes/:id` | Markdown/Drawioエディタ |
 | A01 | 分析レポート | `/analytics` | 時間分析・週次/月次サマリー |
+| B01 | ブリーフィング | `/briefing` | 朝のAIブリーフィング（自動データ収集・カード表示） |
+| B02 | 振り返り | `/reflection` | 夜のAI振り返り（実績分析・学習日記・明日の計画） |
 | O01 | インタラクション探索 | `/interactions` | AI対話履歴の探索 |
 
 ---
@@ -179,6 +181,7 @@ kensan-mockup/
 | `useMemoStore` | メモ |
 | `useAnalyticsStore` | 分析データ |
 | `useChatStore` | AIチャット |
+| `useBriefingStore` | ブリーフィング・振り返り |
 | `createCrudStore` | ストアファクトリ |
 
 ### APIサービス（10個）

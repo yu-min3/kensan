@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
-import { tasks } from '../data'
-import { generateId } from '../data'
+import { tasks, timeEntries, timeBlocks } from '../data'
+import { generateId, getToday, getYesterday, getTomorrow } from '../data'
 
 const BASE_URL = 'http://localhost:8089/api/v1'
 
@@ -65,6 +65,270 @@ export const agentHandlers = [
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       async start(controller) {
+        // ==========================================
+        // Briefing mode (morning)
+        // ==========================================
+        if (body.situation === 'briefing') {
+          const today = getToday()
+          const yesterday = getYesterday()
+
+          // Step 1: get_time_entries (yesterday)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_te', name: 'get_time_entries', input: { date: yesterday },
+          })))
+          await delay(400)
+
+          const yesterdayEntries = timeEntries
+            .filter((te) => te.startDatetime.startsWith(yesterday) || te.startDatetime < `${today}T00:00:00`)
+            .map((te) => {
+              const start = new Date(te.startDatetime).getTime()
+              const end = new Date(te.endDatetime).getTime()
+              return {
+                id: te.id,
+                taskName: te.taskName,
+                goalName: te.goalName,
+                goalColor: te.goalColor,
+                minutes: Math.round((end - start) / 60000),
+              }
+            })
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_te', name: 'get_time_entries', result: yesterdayEntries,
+            card_type: 'yesterday_summary',
+          })))
+          await delay(300)
+
+          // Step 2: get_tasks (incomplete, for today focus + carryover)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_tasks', name: 'get_tasks', input: { completed: false },
+          })))
+          await delay(400)
+
+          const incompleteTasks = tasks.filter((t) => !t.completed && !t.parentTaskId).slice(0, 5)
+          const focusTasks = incompleteTasks.slice(0, 3).map((t) => ({
+            id: t.id, name: t.name,
+            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
+            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
+            estimatedMinutes: t.estimatedMinutes,
+          }))
+          const carryoverTasks = incompleteTasks
+            .filter((t) => t.dueDate && t.dueDate < today)
+            .map((t) => ({
+              id: t.id, name: t.name,
+              goalColor: '#94a3b8',
+              dueDate: t.dueDate,
+              daysOverdue: Math.floor((Date.now() - new Date(t.dueDate!).getTime()) / 86400000),
+            }))
+
+          // Send focus tasks
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tasks', name: 'get_tasks', result: focusTasks,
+            card_type: 'today_focus',
+          })))
+          await delay(200)
+
+          // Send carryover tasks (as a separate tool_result for the same tool)
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tasks_co', name: 'get_tasks', result: carryoverTasks.length > 0 ? carryoverTasks : [
+              { id: 't6', name: 'Istio記事執筆', goalColor: '#F59E0B', dueDate: yesterday, daysOverdue: 1 },
+            ],
+            card_type: 'carryover_tasks',
+          })))
+          await delay(300)
+
+          // Step 3: get_time_blocks (today)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_tb', name: 'get_time_blocks', input: { date: today },
+          })))
+          await delay(400)
+
+          const todayBlocks = timeBlocks.filter((tb) =>
+            tb.startDatetime >= `${today}T00:00:00Z` && tb.startDatetime < `${today}T23:59:59Z`
+          )
+
+          // Propose timeblocks
+          const tbActions = incompleteTasks.slice(0, 3).map((t, i) => ({
+            id: `tb_a${i + 1}`,
+            type: 'create_time_block',
+            description: `${9 + i * 2}:00-${10 + i * 2}:00 ${t.name}`,
+            input: {
+              date: today,
+              startTime: `${String(9 + i * 2).padStart(2, '0')}:00`,
+              endTime: `${String(10 + i * 2).padStart(2, '0')}:00`,
+              taskId: t.id,
+              title: t.name,
+            },
+          }))
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tb', name: 'get_time_blocks', result: todayBlocks,
+          })))
+          await delay(200)
+
+          controller.enqueue(encoder.encode(sseEvent('action_proposal', {
+            actions: tbActions,
+            card_type: 'timeblock_proposal',
+          })))
+          await delay(300)
+
+          // Step 4: get_analytics_summary
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_analytics', name: 'get_analytics_summary', input: {},
+          })))
+          await delay(400)
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_analytics', name: 'get_analytics_summary',
+            result: { totalMinutes: 1680, completedTasks: 12, plannedVsActual: { planned: 1800, actual: 1680 } },
+          })))
+          await delay(300)
+
+          // Step 5: AI insight
+          controller.enqueue(encoder.encode(sseEvent('text', {
+            content: '昨日は6時間の稼働で、ICA勉強とKensan開発に集中できました。\n\n良い傾向:\n- 午前中の集中時間を確保できている\n- Golden Kubestronaut関連の学習が順調\n\n注意点:\n- Istio記事が1日超過しています。今日30分でも着手しましょう\n- 週の目標進捗は93%（1680/1800分）で順調です',
+            card_type: 'ai_insight',
+          })))
+          await delay(200)
+
+          controller.enqueue(encoder.encode(sseEvent('done', {
+            conversation_id: conversationId,
+            tokens: { input: 1200, output: 600 },
+          })))
+          controller.close()
+          return
+        }
+
+        // ==========================================
+        // Evening mode (reflection)
+        // ==========================================
+        if (body.situation === 'evening') {
+          const today = getToday()
+          const tomorrow = getTomorrow()
+
+          // Step 1: get_time_blocks (today's plan)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_tb', name: 'get_time_blocks', input: { date: today },
+          })))
+          await delay(400)
+
+          const todayBlocks = timeBlocks.filter((tb) =>
+            tb.startDatetime >= `${today}T00:00:00Z` && tb.startDatetime < `${today}T23:59:59Z`
+          )
+          const plannedMinutes = todayBlocks.reduce((sum, tb) => {
+            return sum + Math.round((new Date(tb.endDatetime).getTime() - new Date(tb.startDatetime).getTime()) / 60000)
+          }, 0)
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tb', name: 'get_time_blocks', result: todayBlocks,
+          })))
+          await delay(300)
+
+          // Step 2: get_time_entries (today's actual)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_te', name: 'get_time_entries', input: { date: today },
+          })))
+          await delay(400)
+
+          const todayEntries = timeEntries
+            .filter((te) => te.startDatetime >= `${today}T00:00:00Z` && te.startDatetime < `${today}T23:59:59Z`)
+            .map((te) => {
+              const start = new Date(te.startDatetime).getTime()
+              const end = new Date(te.endDatetime).getTime()
+              return {
+                id: te.id,
+                taskName: te.taskName,
+                goalName: te.goalName,
+                goalColor: te.goalColor,
+                minutes: Math.round((end - start) / 60000),
+              }
+            })
+          const actualMinutes = todayEntries.reduce((sum, te) => sum + te.minutes, 0)
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_te', name: 'get_time_entries',
+            result: { planned: plannedMinutes, actual: actualMinutes, entries: todayEntries, blocks: todayBlocks },
+            card_type: 'actual_vs_planned',
+          })))
+          await delay(300)
+
+          // Step 3: get_tasks (completed today)
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_tasks', name: 'get_tasks', input: { completed: true },
+          })))
+          await delay(400)
+
+          const completedTasks = tasks.filter((t) => t.completed).map((t) => ({
+            id: t.id, name: t.name,
+            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
+            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
+          }))
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tasks', name: 'get_tasks', result: completedTasks,
+            card_type: 'completed_tasks',
+          })))
+          await delay(300)
+
+          // Step 4: get_analytics_summary
+          controller.enqueue(encoder.encode(sseEvent('tool_call', {
+            id: 'tc_analytics', name: 'get_analytics_summary', input: {},
+          })))
+          await delay(400)
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_analytics', name: 'get_analytics_summary',
+            result: { totalMinutes: 1680, completedTasks: 12 },
+          })))
+          await delay(300)
+
+          // Tomorrow focus tasks
+          const tomorrowTasks = tasks.filter((t) => !t.completed && !t.parentTaskId).slice(0, 4).map((t) => ({
+            id: t.id, name: t.name,
+            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
+            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
+          }))
+
+          controller.enqueue(encoder.encode(sseEvent('tool_result', {
+            id: 'tc_tasks_tm', name: 'get_tasks', result: tomorrowTasks,
+            card_type: 'tomorrow_focus',
+          })))
+          await delay(200)
+
+          // Tomorrow TB proposal
+          const tmActions = tomorrowTasks.slice(0, 3).map((t, i) => ({
+            id: `tm_a${i + 1}`,
+            type: 'create_time_block',
+            description: `${9 + i * 2}:00-${10 + i * 2}:00 ${t.name}`,
+            input: {
+              date: tomorrow,
+              startTime: `${String(9 + i * 2).padStart(2, '0')}:00`,
+              endTime: `${String(10 + i * 2).padStart(2, '0')}:00`,
+              title: t.name,
+            },
+          }))
+
+          controller.enqueue(encoder.encode(sseEvent('action_proposal', {
+            actions: tmActions,
+            card_type: 'timeblock_proposal',
+          })))
+          await delay(300)
+
+          // Step 5: AI insight + learning diary
+          controller.enqueue(encoder.encode(sseEvent('text', {
+            content: '今日は計画の' + Math.round((actualMinutes / Math.max(plannedMinutes, 1)) * 100) + '%を達成しました。\n\n良かった点:\n- ICA Traffic Managementの学習を予定通り完了\n- Kensan開発が3時間進んだ\n\n改善点:\n- ブログ記事に着手できなかった\n---\n## 今日の学習メモ\n\n### Istio Traffic Management\n- VirtualServiceのretry設定を学習\n- DestinationRuleのトラフィック分割を実践\n- Circuit Breakerパターンの設定方法を確認\n\n### Kensan開発\n- BriefingLayout コンポーネントの設計\n- SSEストリーミングの実装パターン',
+            card_type: 'ai_insight',
+          })))
+          await delay(200)
+
+          controller.enqueue(encoder.encode(sseEvent('done', {
+            conversation_id: conversationId,
+            tokens: { input: 1500, output: 800 },
+          })))
+          controller.close()
+          return
+        }
+
+        // ==========================================
+        // Regular chat flows
+        // ==========================================
         if (
           message.includes('タスク') &&
           (message.includes('見せて') || message.includes('確認') || message.includes('一覧'))
