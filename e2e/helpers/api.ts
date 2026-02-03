@@ -64,3 +64,33 @@ export async function deleteNote(id: string) {
     method: 'DELETE',
   })
 }
+
+/** Update a milestone via API */
+export async function updateMilestone(id: string, data: {
+  name?: string
+  description?: string
+  startDate?: string | null
+  targetDate?: string | null
+  status?: string
+}) {
+  const body: Record<string, unknown> = {}
+  if (data.name !== undefined) body.name = data.name
+  if (data.description !== undefined) body.description = data.description
+  if (data.startDate !== undefined) body.start_date = data.startDate
+  if (data.targetDate !== undefined) body.target_date = data.targetDate
+  if (data.status !== undefined) body.status = data.status
+
+  const res = await apiRequest(`http://localhost:8082/api/v1/milestones/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+  const json = await res.json()
+  return json.data
+}
+
+/** List milestones via API */
+export async function listMilestones() {
+  const res = await apiRequest('http://localhost:8082/api/v1/milestones')
+  const json = await res.json()
+  return json.data as Array<{ id: string; name: string; start_date?: string; target_date?: string; status: string }>
+}

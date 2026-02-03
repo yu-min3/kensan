@@ -37,7 +37,19 @@ export class TaskManagementPage {
   }
 
   getGanttChart() {
-    return this.page.locator('.recharts-wrapper').first()
+    return this.page.getByText('ガントチャート').locator('..')
+  }
+
+  getGanttChartCard() {
+    return this.page.locator('[class*="Card"]').filter({ hasText: 'ガントチャート' })
+  }
+
+  getInProgressMilestones() {
+    return this.page.locator('[data-testid="milestone-in-progress"]')
+  }
+
+  getCompletedMilestones() {
+    return this.page.locator('[data-testid="milestone-completed"]')
   }
 
   async search(query: string) {

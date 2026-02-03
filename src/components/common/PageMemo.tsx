@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 interface PageMemoProps {
   /** ページ識別子（localStorageのキーに使用） */
@@ -33,9 +34,10 @@ export function PageMemo({
 }: PageMemoProps) {
   const [content, setContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const userId = useAuthStore((state) => state.user?.id)
 
-  // localStorageキー
-  const storageKey = `${STORAGE_PREFIX}${pageId}`
+  // localStorageキー（ユーザーごとに分離）
+  const storageKey = userId ? `${STORAGE_PREFIX}${userId}-${pageId}` : `${STORAGE_PREFIX}${pageId}`
 
   // 初期読み込み
   useEffect(() => {

@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean
 
 # Default target
 .DEFAULT_GOAL := help
@@ -147,6 +147,20 @@ e2e-headed:
 	npx playwright test --config=e2e/playwright.config.ts --headed
 
 # =============================================================================
+# Demo Data
+# =============================================================================
+
+## Apply demo seed data (Tanaka Shota persona)
+demo-seed:
+	@bash scripts/demo-seed/apply.sh
+
+## Remove demo seed data only
+demo-clean:
+	@echo "Removing demo user data..."
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < scripts/demo-seed/000_cleanup.sql
+	@echo "Demo data removed."
+
+# =============================================================================
 # Help
 # =============================================================================
 
@@ -180,6 +194,10 @@ help:
 	@echo "  e2e          Run E2E tests"
 	@echo "  e2e-ui       Run E2E tests in UI mode"
 	@echo "  e2e-headed   Run E2E tests headed (visible browser)"
+	@echo ""
+	@echo "Demo Data:"
+	@echo "  demo-seed   Apply demo seed data (Tanaka Shota persona)"
+	@echo "  demo-clean  Remove demo seed data only"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

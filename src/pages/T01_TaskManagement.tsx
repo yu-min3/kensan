@@ -827,7 +827,7 @@ export function T01TaskManagement() {
 
       {/* ガントチャート + 定期タスク達成率 + メモ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <GanttChartWidget goals={goals} milestones={milestones} tasks={tasks} className="lg:col-span-2" />
+        <GanttChartWidget goals={goals} milestones={milestones} tasks={tasks} hideCompleted={hideCompleted} className="lg:col-span-2" />
         <div className="space-y-4">
           <RecurringTaskWidget goals={goals} milestones={milestones} tasks={tasks} />
           <PageMemo
