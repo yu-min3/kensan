@@ -1,5 +1,7 @@
 # テストレビューレポート
 
+> **⚠️ 注意**: このレポートは 2026-01-12 時点のスナップショットです。レポート作成後にサービス構成が大幅に変更されています（diary-service, record-service, sync-service は廃止済み、note-service に統合）。該当サービスのセクションは参考情報として残していますが、現在のコードベースには存在しません。
+
 **日付**: 2026-01-12
 **対象**: backend/services/*/internal/service/service_test.go
 

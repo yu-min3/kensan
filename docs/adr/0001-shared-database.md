@@ -8,17 +8,18 @@
 
 ## コンテキスト
 
-Kensanはマイクロサービスアーキテクチャを採用しており、9つの独立したサービスで構成されている。
+Kensanはマイクロサービスアーキテクチャを採用しており、8つの独立したサービスで構成されている。
 
-- user-service
-- task-service
-- sync-service
-- timeblock-service
-- routine-service
-- record-service
-- diary-service
-- analytics-service
-- ai-service
+- user-service (Go, :8081)
+- task-service (Go, :8082)
+- timeblock-service (Go, :8084)
+- routine-service (Go, :8085)
+- analytics-service (Go, :8088)
+- memo-service (Go, :8090)
+- note-service (Go, :8091)
+- kensan-ai (Python, :8089)
+
+> **Note**: 本ADR作成時（2026-01-12）は diary-service, record-service, sync-service, ai-service が存在していたが、その後 note-service に統合（diary/record）、sync-service は廃止（Clockify連携廃止）、ai-service は kensan-ai として Python で再実装された。
 
 マイクロサービスのベストプラクティスでは「Database per Service」パターンが推奨されるが、現段階でこのパターンを採用するかどうかを決定する必要がある。
 

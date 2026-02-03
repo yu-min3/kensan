@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -13,17 +14,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Re-export shared errors for backward compatibility with handlers
+// Service-specific errors
 var (
-	ErrInvalidCredentials = sharedErrors.ErrInvalidCredentials
+	ErrInvalidCredentials = fmt.Errorf("credentials: %w", sharedErrors.ErrUnauthorized)
 	ErrEmailRequired      = sharedErrors.Required("email")
 	ErrPasswordRequired   = sharedErrors.Required("password")
 	ErrNameRequired       = sharedErrors.Required("name")
-	ErrInvalidEmail       = sharedErrors.ErrInvalidEmail
-	ErrPasswordTooShort   = sharedErrors.ErrPasswordTooShort
-	ErrInvalidTheme       = sharedErrors.ErrInvalidTheme
-	ErrUserNotFound       = sharedErrors.ErrUserNotFound
-	ErrUserExists         = sharedErrors.ErrUserExists
+	ErrInvalidEmail       = sharedErrors.InvalidFormat("email", "valid email address")
+	ErrPasswordTooShort   = fmt.Errorf("password: %w (must be at least 8 characters)", sharedErrors.ErrInvalidInput)
+	ErrInvalidTheme       = fmt.Errorf("theme: %w (must be light, dark, or system)", sharedErrors.ErrInvalidInput)
+	ErrUserNotFound       = sharedErrors.NotFound("user")
+	ErrUserExists         = sharedErrors.AlreadyExists("user")
 )
 
 // bcrypt cost for password hashing

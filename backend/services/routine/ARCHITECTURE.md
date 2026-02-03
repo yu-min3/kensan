@@ -328,8 +328,8 @@ DELETE FROM routine_tasks WHERE id = $1 AND user_id = $2
 
 ```go
 var (
-    ErrRoutineNotFound  = errors.ErrRoutineNotFound  // shared/errors から再エクスポート
-    ErrInvalidFrequency = errors.ErrInvalidFrequency // shared/errors から再エクスポート
-    ErrInvalidInput     = errors.ErrInvalidInput     // shared/errors から再エクスポート
+    ErrRoutineNotFound  = errors.NotFound("routine task")       // サービス固有のエラー
+    ErrInvalidFrequency = fmt.Errorf("...: %w", errors.ErrInvalidInput) // サービス固有のエラー
+    ErrInvalidInput     = errors.ErrInvalidInput                // 共通エラーの再エクスポート
 )
 ```

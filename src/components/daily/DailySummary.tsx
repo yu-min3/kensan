@@ -4,6 +4,7 @@ import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { getLocalDate } from '@/lib/timezone'
 import { formatDurationShort, formatDateIso } from '@/lib/dateFormat'
+import { calculateMinutesFromDatetimes, calculateRate } from '@/lib/taskUtils'
 import { TrendingUp } from 'lucide-react'
 import {
   PieChart,
@@ -28,20 +29,11 @@ export function DailySummary({ mode, selectedDate }: DailySummaryProps) {
   const todayBlocks = timeBlocks.filter((b) => getLocalDate(b.startDatetime, timezone) === targetDateIso && b.goalId)
   const todayEntries = timeEntries.filter((e) => getLocalDate(e.startDatetime, timezone) === targetDateIso && e.goalId)
 
-  // Calculate minutes from ISO datetime pairs
-  const calculateMinutes = (items: { startDatetime: string; endDatetime: string }[]) => {
-    return items.reduce((acc, item) => {
-      const startMs = new Date(item.startDatetime).getTime()
-      const endMs = new Date(item.endDatetime).getTime()
-      return acc + (endMs - startMs) / 60000
-    }, 0)
-  }
-
   // 目標ありのみを達成率計算の対象とする
-  const plannedMinutes = calculateMinutes(todayBlocks)
-  const actualMinutes = calculateMinutes(todayEntries)
+  const plannedMinutes = calculateMinutesFromDatetimes(todayBlocks)
+  const actualMinutes = calculateMinutesFromDatetimes(todayEntries)
   const difference = actualMinutes - plannedMinutes
-  const completionRate = plannedMinutes > 0 ? Math.round((actualMinutes / plannedMinutes) * 100) : 0
+  const completionRate = calculateRate(actualMinutes, plannedMinutes)
 
   // Goal-based time distribution (for detailed mode)
   const timeByGoalMap = todayEntries.reduce(

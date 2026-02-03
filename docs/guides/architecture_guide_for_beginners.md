@@ -2,7 +2,7 @@
 
 このドキュメントでは、Kensanサービスの仕組みを図を使ってわかりやすく説明します。
 
-**最終更新: 2026-02-01**
+**最終更新: 2026-02-03**
 
 ---
 
@@ -414,7 +414,7 @@ graph TB
         FE["📱 フロントエンド"]
         API["🌐 FastAPI<br/>:8089"]
         Agent["🤖 AgentRunner<br/>マルチターン会話"]
-        Tools["🔧 Direct Tools<br/>18個のツール"]
+        Tools["🔧 Direct Tools<br/>39個のツール"]
         DB[("🗄️ PostgreSQL<br/>asyncpg直接接続")]
         Claude["🧠 Claude API"]
     end
@@ -431,20 +431,21 @@ graph TB
 - **Direct Tools** - ClaudeがDBを操作するためのツール群
 - **AgentRunner** - マルチターン会話を管理するコア
 
-### 5.2 Direct Tools（18個）
+### 5.2 Direct Tools（39個）
 
-Claudeが使えるツール一覧：
+AI（Claude/Gemini）が使える主要ツールのカテゴリ一覧：
 
-#### Database Tools（7個）- データ操作
-| ツール | 説明 | 書込 |
+#### Database Tools（21個）- データ操作
+| ツール例 | 説明 | 書込 |
 |--------|------|:----:|
 | `get_goals_and_milestones` | 目標とマイルストーン取得 | - |
 | `get_tasks` | タスク取得（フィルタ可） | - |
-| `create_task` | タスク作成 | ✓ |
-| `update_task` | タスク更新 | ✓ |
-| `get_time_blocks` | 予定取得 | - |
-| `create_time_block` | 予定作成 | ✓ |
+| `create_task` / `update_task` / `delete_task` | タスク CRUD | ✓ |
+| `get_time_blocks` / `create_time_block` | 予定の取得・作成 | ✓ |
 | `get_time_entries` | 作業実績取得 | - |
+| `get_notes` / `create_note` | ノートの取得・作成 | ✓ |
+| `get_routine_tasks` | ルーティンタスク取得 | - |
+| `get_memos` / `create_memo` | メモの取得・作成 | ✓ |
 
 #### Memory Tools（4個）- ユーザー記憶
 | ツール | 説明 |
@@ -454,20 +455,34 @@ Claudeが使えるツール一覧：
 | `add_user_fact` | ファクト手動追加 |
 | `get_recent_interactions` | 最近のやり取り取得 |
 
-#### Search Tools（3個）- 検索
+#### Search Tools（6個）- 検索
 | ツール | 説明 |
 |--------|------|
 | `semantic_search` | ベクトル類似検索（pgvector） |
 | `keyword_search` | 全文検索（tsvector） |
 | `hybrid_search` | セマンティック + キーワード複合 |
+| `search_notes` | ノート全文検索 |
+| `semantic_search_notes` | ノートベクトル検索 |
+| `reindex_notes` | インデックス再構築 |
 
-#### Storage Tools（4個）- ファイル
+#### Review Tools（3個）- レビュー
 | ツール | 説明 |
 |--------|------|
-| `upload_file` | R2にファイルアップロード |
-| `get_file` | ファイルメタデータ取得 |
-| `delete_file` | ファイル削除 |
-| `get_upload_url` | 署名付きアップロードURL生成 |
+| `get_reviews` | レビュー一覧取得 |
+| `get_review` | レビュー詳細取得 |
+| `generate_weekly_review` | 週次レビュー生成 |
+
+#### Analytics Tools（2個）- 分析
+| ツール | 説明 |
+|--------|------|
+| `get_analytics_summary` | 期間サマリー取得 |
+| `get_daily_summary` | 日次サマリー取得 |
+
+#### Web Tools（2個）- 外部情報取得
+| ツール | 説明 |
+|--------|------|
+| `web_search` | Web 検索（Tavily API） |
+| `web_fetch` | Web ページ取得・抽出 |
 
 ### 5.3 AgentRunnerの動作フロー
 
@@ -930,7 +945,7 @@ graph LR
 | Goバックエンドサービス | 6 |
 | Python AIサービス | 1 |
 | 共有パッケージ | 6 |
-| DBマイグレーション | 36 |
+| DBマイグレーション | 34 |
 
 ---
 

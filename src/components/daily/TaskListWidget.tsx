@@ -11,9 +11,17 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { WidgetError } from '@/components/common/WidgetError'
 import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useDraggable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
+import {
+  getDaysUntil,
+  isScheduledForToday,
+  getTaskFrequencyLabel,
+  getUrgencyLevel,
+  formatDaysUntil,
+  type UrgencyLevel,
+} from '@/lib/taskUtils'
 import {
   Target,
   GripVertical,
@@ -34,74 +42,6 @@ export interface TaskDragData {
   goalColor?: string
 }
 
-// 期限までの日数を計算
-function getDaysUntil(targetDate: string | undefined): number | null {
-  if (!targetDate) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(targetDate)
-  target.setHours(0, 0, 0, 0)
-  const diffTime = target.getTime() - today.getTime()
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-}
-
-// タスクが今日やるべきかどうかを判定（frequency設定に基づく）
-function isScheduledForToday(task: Task): boolean {
-  if (!task.frequency) return false
-
-  const today = new Date()
-  const dayOfWeek = today.getDay() // 0=日, 1=月, ..., 6=土
-
-  switch (task.frequency) {
-    case 'daily':
-      return true
-    case 'weekly':
-      // 平日のみ（月〜金 = 1〜5）
-      return dayOfWeek >= 1 && dayOfWeek <= 5
-    case 'custom':
-      return task.daysOfWeek?.includes(dayOfWeek) ?? false
-    default:
-      return false
-  }
-}
-
-// 繰り返し設定のラベル
-function getFrequencyLabel(task: Task): string | null {
-  if (!task.frequency) return null
-
-  switch (task.frequency) {
-    case 'daily':
-      return '毎日'
-    case 'weekly':
-      return '平日'
-    case 'custom': {
-      const days = ['日', '月', '火', '水', '木', '金', '土']
-      const selectedDays = (task.daysOfWeek ?? []).map(d => days[d]).join('')
-      return selectedDays || null
-    }
-    default:
-      return null
-  }
-}
-
-// 緊急度を判定
-type UrgencyLevel = 'danger' | 'warning' | 'normal' | 'no-deadline'
-
-function getUrgencyLevel(daysUntil: number | null): UrgencyLevel {
-  if (daysUntil === null) return 'no-deadline'
-  if (daysUntil <= 3) return 'danger'
-  if (daysUntil <= 7) return 'warning'
-  return 'normal'
-}
-
-// 残り日数のテキスト
-function formatDaysUntil(days: number | null): string {
-  if (days === null) return '期限なし'
-  if (days < 0) return `${Math.abs(days)}日超過`
-  if (days === 0) return '今日'
-  if (days === 1) return '明日'
-  return `残り${days}日`
-}
 
 // カードの背景色
 function getCardBgColor(level: UrgencyLevel): string {
@@ -238,7 +178,7 @@ interface TaskWithMeta {
 }
 
 export function TaskListWidget() {
-  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskStore()
+  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskManagerStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
   const taskData = useMemo(() => {
@@ -261,7 +201,7 @@ export function TaskListWidget() {
             milestone,
             daysUntil,
             isScheduledToday: isScheduledForToday(task),
-            frequencyLabel: getFrequencyLabel(task),
+            frequencyLabel: getTaskFrequencyLabel(task),
           })
         }
       }

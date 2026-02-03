@@ -36,14 +36,15 @@ Kensanは、エンジニアの自己研鑽を支援する統合プラットフ�
 | chi | v5 | HTTPルーター |
 | PostgreSQL | 16 | データベース（+ pgvector） |
 | pgx | v5 | DBドライバ |
-| zerolog | - | ロギング |
+| slog + otelslog | Go標準 + v0.14.0 | 構造化ログ（OpenTelemetry連携） |
 
 ### AIサービス (Python)
 | 技術 | 用途 |
 |------|------|
 | Python + FastAPI | AI APIサーバー |
 | asyncpg | DB直接接続 |
-| Claude API | AI推論 |
+| Claude API / Gemini API | AI推論（`AI_PROVIDER`設定で切替） |
+| OpenAI API | テキスト埋め込み |
 | pgvector | ベクトル検索 |
 
 ### インフラ / Observability
@@ -91,14 +92,14 @@ kensan-mockup/
 │   │   ├── memo/                 # クイックメモ (:8090)
 │   │   ├── note/                 # 統合ノート (:8091)
 │   │   └── routine/              # 定期タスク（docker-compose未登録）
-│   ├── shared/                   # 共有パッケージ（auth, config, database, middleware, errors, logging）
-│   ├── migrations/               # DBマイグレーション（36ファイル）
+│   ├── shared/                   # 共有パッケージ（auth, bootstrap, config, database, middleware, errors, telemetry, types）
+│   ├── migrations/               # DBマイグレーション（34ファイル）
 │   └── Makefile
 ├── kensan-ai/                    # AIサービス (Python/FastAPI)
 │   └── src/kensan_ai/
 │       ├── agents/               # AgentRunner
 │       ├── api/                  # FastAPIエンドポイント
-│       ├── tools/                # Direct Tools（18個）
+│       ├── tools/                # Direct Tools（39個）
 │       ├── context/              # コンテキスト管理
 │       ├── extraction/           # ファクト抽出
 │       ├── embeddings/           # ベクトル埋め込み
@@ -145,7 +146,7 @@ kensan-mockup/
 
 | サービス | ポート | 状態 | 概要 |
 |----------|--------|------|------|
-| kensan-ai | 8089 | ✅ | AIエージェント（ストリーミング対話）、Direct Tools（18個）、ファクト抽出、ベクトル検索 |
+| kensan-ai | 8089 | ✅ | AIエージェント（ストリーミング対話）、Direct Tools（39個）、ファクト抽出、ベクトル検索、Web検索 |
 
 ### インフラサービス
 

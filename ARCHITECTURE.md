@@ -54,7 +54,7 @@ graph TB
     end
 
     subgraph "外部API"
-        Claude["Anthropic Claude API<br/>チャット・レビュー・抽出"]
+        Claude["Claude / Gemini API<br/>チャット・レビュー・抽出<br/>(AI_PROVIDERで切替)"]
         OpenAI["OpenAI API<br/>テキスト埋め込み"]
     end
 
@@ -84,7 +84,7 @@ graph TB
 ### システムの特徴
 
 - **マイクロサービス構成**: ドメインごとに独立したGoサービス（共有DB）
-- **AIネイティブ**: Claude APIによるチャット、週次レビュー、ファクト自動抽出
+- **AIネイティブ**: Claude/Gemini APIによるチャット、週次レビュー、ファクト自動抽出（`AI_PROVIDER`環境変数で切替）
 - **タイムゾーン対応**: DBはUTC保存、フロントエンドでローカル変換
 - **マルチテナント**: 全テーブルに`user_id`カラムでデータ完全分離
 
@@ -106,12 +106,13 @@ graph TB
 | **バックエンド** | Go | 1.24.0 | サービス実装 |
 | | chi | v5.1.0 | HTTPルーター |
 | | pgx | v5.7.2 | PostgreSQLドライバ |
-| | zerolog | v1.33.0 | 構造化ログ |
+| | slog + otelslog | Go標準 + v0.14.0 | 構造化ログ（OpenTelemetry連携） |
 | | golang-jwt | v5.2.1 | JWT認証 |
 | **AIサービス** | Python | 3.12+ | AIサービス実装 |
 | | FastAPI | 0.115+ | Webフレームワーク |
 | | asyncpg | 0.30+ | 非同期DBドライバ |
-| | Anthropic SDK | 0.40+ | Claude API |
+| | Anthropic SDK | 0.40+ | Claude API（`AI_PROVIDER=anthropic`時） |
+| | Google GenAI SDK | 1.0+ | Gemini API（`AI_PROVIDER=google`時） |
 | | OpenAI SDK | 1.50+ | 埋め込みAPI |
 | **インフラ** | PostgreSQL | 16 | メインDB + pgvector |
 | | MinIO | - | オブジェクトストレージ (ノートコンテンツ) |
@@ -230,7 +231,7 @@ sequenceDiagram
     participant Tools as ツールレジストリ
     participant DB as PostgreSQL
 
-    U->>AI: POST /chat {message}
+    U->>AI: POST /agent/stream {message}
     AI->>AI: JWT → user_id抽出
     AI->>Ctx: 状況検出 (時刻ベース)
     Ctx->>DB: ai_contexts取得
@@ -428,7 +429,7 @@ graph TB
 
 ### 状態管理 (Zustand)
 
-12のZustandストアが各ドメインの状態を管理:
+15のZustandストアが各ドメインの状態を管理:
 
 | ストア | 状態 | 永続化 |
 |-------|------|--------|
@@ -569,7 +570,7 @@ graph TB
         AB["A/Bテスト<br/>(トラフィック分割)"]
     end
 
-    subgraph "Direct Tools (20+)"
+    subgraph "Direct Tools (39個)"
         DBTools["DB操作<br/>get_tasks, create_time_block, ..."]
         MemTools["メモリ<br/>get_user_memory, get_user_facts, ..."]
         SearchTools["検索<br/>semantic_search, keyword_search, ..."]

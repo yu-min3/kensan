@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/note/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
+	"github.com/kensan/backend/shared/sqlbuilder"
 	"log/slog"
 )
 
@@ -106,82 +106,44 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 
 // List retrieves notes for a user with optional filters (without content)
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter *note.NoteFilter) ([]*note.NoteListItem, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+
+	if filter != nil {
+		if len(filter.Types) > 0 {
+			typeStrs := make([]string, len(filter.Types))
+			for i, t := range filter.Types {
+				typeStrs[i] = string(t)
+			}
+			w.AddInClause("n.type", typeStrs)
+		}
+		sqlbuilder.AddFilter(w, "n.goal_id", filter.GoalID)
+		sqlbuilder.AddFilter(w, "n.milestone_id", filter.MilestoneID)
+		sqlbuilder.AddFilter(w, "n.task_id", filter.TaskID)
+		if filter.Format != nil {
+			w.AddCondition("n.format = $%d", string(*filter.Format))
+		}
+		sqlbuilder.AddFilterWithCast(w, "n.date", ">=", "", filter.DateFrom)
+		sqlbuilder.AddFilterWithCast(w, "n.date", "<=", "", filter.DateTo)
+		sqlbuilder.AddFilter(w, "n.archived", filter.Archived)
+		if filter.Query != nil && *filter.Query != "" {
+			w.AddLike([]string{"n.title", "n.content"}, *filter.Query)
+		}
+		if len(filter.TagIDs) > 0 {
+			for _, tagID := range filter.TagIDs {
+				w.AddExists("SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_id = $%d", tagID)
+			}
+		}
+	}
+
+	query := fmt.Sprintf(`
 		SELECT n.id, n.user_id, n.type, n.title, n.format, n.date, n.task_id,
 		       n.milestone_id, n.goal_id, n.milestone_name, n.goal_name, n.goal_color,
 		       n.related_time_entry_ids, n.file_url, n.archived, n.created_at, n.updated_at
 		FROM notes n
-		WHERE n.user_id = $1
-	`
+		%s ORDER BY n.created_at DESC
+	`, w.WhereClause())
 
-	args := []interface{}{userID}
-	argIndex := 2
-
-	if filter != nil {
-		if len(filter.Types) > 0 {
-			placeholders := make([]string, len(filter.Types))
-			for i, t := range filter.Types {
-				placeholders[i] = fmt.Sprintf("$%d", argIndex)
-				args = append(args, string(t))
-				argIndex++
-			}
-			query += fmt.Sprintf(` AND n.type IN (%s)`, strings.Join(placeholders, ", "))
-		}
-		if filter.GoalID != nil {
-			query += fmt.Sprintf(` AND n.goal_id = $%d`, argIndex)
-			args = append(args, *filter.GoalID)
-			argIndex++
-		}
-		if filter.MilestoneID != nil {
-			query += fmt.Sprintf(` AND n.milestone_id = $%d`, argIndex)
-			args = append(args, *filter.MilestoneID)
-			argIndex++
-		}
-		if filter.TaskID != nil {
-			query += fmt.Sprintf(` AND n.task_id = $%d`, argIndex)
-			args = append(args, *filter.TaskID)
-			argIndex++
-		}
-		if filter.Format != nil {
-			query += fmt.Sprintf(` AND n.format = $%d`, argIndex)
-			args = append(args, string(*filter.Format))
-			argIndex++
-		}
-		if filter.DateFrom != nil {
-			query += fmt.Sprintf(` AND n.date >= $%d`, argIndex)
-			args = append(args, *filter.DateFrom)
-			argIndex++
-		}
-		if filter.DateTo != nil {
-			query += fmt.Sprintf(` AND n.date <= $%d`, argIndex)
-			args = append(args, *filter.DateTo)
-			argIndex++
-		}
-		if filter.Archived != nil {
-			query += fmt.Sprintf(` AND n.archived = $%d`, argIndex)
-			args = append(args, *filter.Archived)
-			argIndex++
-		}
-		if filter.Query != nil && *filter.Query != "" {
-			searchPattern := "%" + strings.ToLower(*filter.Query) + "%"
-			query += fmt.Sprintf(` AND (LOWER(n.title) LIKE $%d OR LOWER(n.content) LIKE $%d)`, argIndex, argIndex)
-			args = append(args, searchPattern)
-			argIndex++
-		}
-		if len(filter.TagIDs) > 0 {
-			// Filter by tags using EXISTS subquery
-			for _, tagID := range filter.TagIDs {
-				query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_id = $%d)`, argIndex)
-				args = append(args, tagID)
-				argIndex++
-			}
-		}
-	}
-	_ = argIndex // Suppress unused variable warning
-
-	query += ` ORDER BY n.created_at DESC`
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +337,27 @@ func (r *PostgresRepository) Search(ctx context.Context, userID, query string, f
 		limit = 20
 	}
 
-	searchPattern := "%" + strings.ToLower(query) + "%"
+	w := sqlbuilder.NewWhereBuilder(userID)
+	// Add the search pattern as the second arg ($2) for use in both WHERE and SELECT
+	w.AddLike([]string{"n.title", "n.content"}, query)
 
-	sqlQuery := `
+	if filter != nil {
+		if len(filter.Types) > 0 {
+			typeStrs := make([]string, len(filter.Types))
+			for i, t := range filter.Types {
+				typeStrs[i] = string(t)
+			}
+			w.AddInClause("n.type", typeStrs)
+		}
+		sqlbuilder.AddFilter(w, "n.archived", filter.Archived)
+	}
+
+	limitClause := w.AddLimit(limit)
+
+	// Note: We use a separate $2 reference for the CASE expression in the score calculation.
+	// The search pattern is at arg position 2 because WhereBuilder puts user_id at $1
+	// and AddLike adds the pattern as the next arg.
+	sqlQuery := fmt.Sprintf(`
 		SELECT n.id, n.user_id, n.type, n.title, n.format, n.date, n.task_id,
 		       n.milestone_id, n.goal_id, n.milestone_name, n.goal_name, n.goal_color,
 		       n.related_time_entry_ids, n.file_url, n.archived, n.created_at, n.updated_at,
@@ -387,33 +367,10 @@ func (r *PostgresRepository) Search(ctx context.Context, userID, query string, f
 		           ELSE 0.0
 		       END as score
 		FROM notes n
-		WHERE n.user_id = $1 AND (LOWER(n.title) LIKE $2 OR LOWER(n.content) LIKE $2)
-	`
+		%s ORDER BY score DESC, n.created_at DESC %s
+	`, w.WhereClause(), limitClause)
 
-	args := []interface{}{userID, searchPattern}
-	argIndex := 3
-
-	if filter != nil {
-		if len(filter.Types) > 0 {
-			placeholders := make([]string, len(filter.Types))
-			for i, t := range filter.Types {
-				placeholders[i] = fmt.Sprintf("$%d", argIndex)
-				args = append(args, string(t))
-				argIndex++
-			}
-			sqlQuery += fmt.Sprintf(` AND n.type IN (%s)`, strings.Join(placeholders, ", "))
-		}
-		if filter.Archived != nil {
-			sqlQuery += fmt.Sprintf(` AND n.archived = $%d`, argIndex)
-			args = append(args, *filter.Archived)
-			argIndex++
-		}
-	}
-
-	sqlQuery += fmt.Sprintf(` ORDER BY score DESC, n.created_at DESC LIMIT $%d`, argIndex)
-	args = append(args, limit)
-
-	rows, err := r.pool.Query(ctx, sqlQuery, args...)
+	rows, err := r.pool.Query(ctx, sqlQuery, w.Args()...)
 	if err != nil {
 		return nil, err
 	}

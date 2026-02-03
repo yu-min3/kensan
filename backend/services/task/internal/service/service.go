@@ -2,26 +2,26 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	task "github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/repository"
 	"github.com/kensan/backend/shared/errors"
 )
 
-// Re-export shared errors for backward compatibility with handlers
-// Handlers can use service.ErrTaskNotFound or import shared/errors directly
+// Service-specific errors
 var (
-	ErrTaskNotFound                = errors.ErrTaskNotFound
-	ErrGoalNotFound                = errors.ErrGoalNotFound
-	ErrMilestoneNotFound           = errors.ErrMilestoneNotFound
-	ErrTagNotFound                 = errors.ErrTagNotFound
+	ErrTaskNotFound                = errors.NotFound("task")
+	ErrGoalNotFound                = errors.NotFound("goal")
+	ErrMilestoneNotFound           = errors.NotFound("milestone")
+	ErrTagNotFound                 = errors.NotFound("tag")
 	ErrTagAlreadyExists            = repository.ErrTagAlreadyExists
-	ErrEntityMemoNotFound          = errors.ErrEntityMemoNotFound
-	ErrTodoNotFound                = errors.ErrTodoNotFound
+	ErrEntityMemoNotFound          = errors.NotFound("entity memo")
+	ErrTodoNotFound                = errors.NotFound("todo")
 	ErrTodoCompletionAlreadyExists = repository.ErrTodoCompletionAlreadyExists
-	ErrInvalidStatus               = errors.ErrInvalidStatus
-	ErrInvalidEntityType           = errors.ErrInvalidEntityType
-	ErrInvalidFrequency            = errors.ErrInvalidFrequency
+	ErrInvalidStatus               = fmt.Errorf("invalid status: %w", errors.ErrInvalidInput)
+	ErrInvalidEntityType           = fmt.Errorf("invalid entity type: %w", errors.ErrInvalidInput)
+	ErrInvalidFrequency            = fmt.Errorf("invalid frequency: %w", errors.ErrInvalidInput)
 	ErrInvalidInput                = errors.ErrInvalidInput
 )
 
@@ -566,10 +566,10 @@ func (s *Service) GetEntityMemo(ctx context.Context, userID, memoID string) (*ta
 
 // CreateEntityMemo creates a new entity memo
 func (s *Service) CreateEntityMemo(ctx context.Context, userID string, input task.CreateEntityMemoInput) (*task.EntityMemo, error) {
-	if input.Content == "" {
+	if input.Content == "" || input.EntityID == "" {
 		return nil, ErrInvalidInput
 	}
-	if !input.EntityType.IsValid() {
+	if input.EntityType == "" || !input.EntityType.IsValid() {
 		return nil, ErrInvalidEntityType
 	}
 

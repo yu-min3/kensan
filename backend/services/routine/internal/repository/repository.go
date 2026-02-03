@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/routine/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
+	"github.com/kensan/backend/shared/sqlbuilder"
 )
 
 // PostgresRepository handles database operations for routine tasks
@@ -33,23 +33,16 @@ func wrapDBError(msg string, err error) error {
 
 // ListRoutines returns all routine tasks for a user with optional filters
 func (r *PostgresRepository) ListRoutines(ctx context.Context, userID string, filter routine.RoutineFilter) ([]routine.RoutineTask, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilter(w, "enabled", filter.Enabled)
+
+	query := fmt.Sprintf(`
 		SELECT id, user_id, name, frequency, days_of_week, estimated_minutes, default_start_time, enabled, created_at, updated_at
 		FROM routine_tasks
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+		%s ORDER BY created_at DESC
+	`, w.WhereClause())
 
-	if filter.Enabled != nil {
-		argCount++
-		query += fmt.Sprintf(" AND enabled = $%d", argCount)
-		args = append(args, *filter.Enabled)
-	}
-
-	query += " ORDER BY created_at DESC"
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query routine tasks", err)
 	}
@@ -125,67 +118,34 @@ func (r *PostgresRepository) CreateRoutine(ctx context.Context, userID string, i
 
 // UpdateRoutine updates an existing routine task
 func (r *PostgresRepository) UpdateRoutine(ctx context.Context, userID, routineID string, input routine.UpdateRoutineInput) (*routine.RoutineTask, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
-
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
-
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "name", input.Name)
 	if input.Frequency != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("frequency = $%d", argCount))
-		args = append(args, string(*input.Frequency))
+		b.AddFieldValue("frequency", string(*input.Frequency))
 	}
-
 	if input.DaysOfWeek != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("days_of_week = $%d", argCount))
-		args = append(args, input.DaysOfWeek)
+		b.AddFieldValue("days_of_week", input.DaysOfWeek)
 	}
+	sqlbuilder.AddField(b, "estimated_minutes", input.EstimatedMinutes)
+	sqlbuilder.AddField(b, "default_start_time", input.DefaultStartTime)
+	sqlbuilder.AddField(b, "enabled", input.Enabled)
 
-	if input.EstimatedMinutes != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("estimated_minutes = $%d", argCount))
-		args = append(args, *input.EstimatedMinutes)
-	}
-
-	if input.DefaultStartTime != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("default_start_time = $%d", argCount))
-		args = append(args, *input.DefaultStartTime)
-	}
-
-	if input.Enabled != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("enabled = $%d", argCount))
-		args = append(args, *input.Enabled)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetRoutineByID(ctx, userID, routineID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, routineID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(routineID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE routine_tasks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, name, frequency, days_of_week, estimated_minutes, default_start_time, enabled, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
-	row := r.pool.QueryRow(ctx, query, args...)
+	row := r.pool.QueryRow(ctx, query, b.Args()...)
 	rt, err := r.scanRoutineTaskRow(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
