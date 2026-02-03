@@ -131,7 +131,7 @@ services/<name>/
 
 ## 共通パッケージ
 
-`backend/shared/`に配置：
+`backend/shared/`に配置（Bootstrap, Config, Auth, Middleware, Telemetry, SQLBuilder, Errors, Types）：
 
 ### Bootstrap (`bootstrap/bootstrap.go`)
 
@@ -252,40 +252,64 @@ middleware.HandleServiceError(w, r, err, errorMappings, defaultMsg)
 }
 ```
 
+### SQL Builder (`sqlbuilder/builder.go`)
+
+動的SQLクエリ構築のための共通ユーティリティ:
+
+```go
+// UPDATE文の動的構築
+ub := sqlbuilder.NewUpdateBuilder("tasks", "id = $1 AND user_id = $2", taskID, userID)
+sqlbuilder.AddField(ub, "name", input.Name)           // *string: nilならスキップ
+sqlbuilder.AddField(ub, "due_date", input.DueDate)     // *types.DateOnly
+sqlbuilder.AddField(ub, "completed", input.Completed)   // *bool
+query, args := ub.Build()                               // "UPDATE tasks SET name=$3, ... WHERE id=$1 AND user_id=$2"
+
+// WHERE句の動的構築
+wb := sqlbuilder.NewWhereBuilder()
+wb.AddCondition("user_id = ?", userID)
+wb.AddConditionIfNotNil("status = ?", filter.Status)
+wb.AddInClause("type", slugInterfaces)                  // IN句
+wb.AddLike("title", filter.Query)                       // LIKE句
+wb.AddConditionIfTrue(filter.Archived, "archived = ?", true)
+whereClause, args := wb.Build()                         // "WHERE user_id = $1 AND status = $2 ..."
+```
+
+**特徴:**
+- ジェネリクス `AddField[T any]` でポインタ型の nil チェックを統一
+- パラメータ番号 ($1, $2...) を自動管理
+- 全5サービス（task, routine, memo, timeblock, note）のリポジトリで使用
+
 ### Errors (`errors/errors.go`)
 
 全サービス共通のエラーパッケージ：
 
 ```go
-// 基本エラー
+// 基本エラー（ジェネリックのみ、サービス固有のエラーは各サービスで定義）
 errors.ErrNotFound, ErrInvalidInput, ErrUnauthorized, ErrAlreadyExists
+errors.ErrRequired, ErrInvalidFormat, ErrDatabaseSchema
 
-// エンティティ固有のコンストラクタ
-errors.NotFound("task")     // → "task not found"
-errors.Required("email")    // → "email is required"
-
-// 事前定義エンティティエラー（後方互換性）
-errors.ErrTaskNotFound, ErrGoalNotFound, ErrMilestoneNotFound
-errors.ErrDiaryNotFound, ErrTimeBlockNotFound, ErrNoteNotFound
-
-// エンティティ固有のヘルパー関数
-errors.TaskNotFound()       // ErrTaskNotFoundを返す
-errors.GoalNotFound()       // ErrGoalNotFoundを返す
+// ジェネリックコンストラクタ
+errors.NotFound("task")         // → "task not found"
+errors.AlreadyExists("user")    // → "user already exists"
+errors.Required("email")        // → "email required"
+errors.InvalidFormat("date", "YYYY-MM-DD")
+errors.InvalidStatus("task")    // → wraps ErrInvalidInput
 
 // 型チェック
 if errors.IsNotFound(err) { ... }
 if errors.IsInvalidInput(err) { ... }
+
+// PostgreSQLエラーヘルパー
+errors.IsUniqueViolation(err), errors.IsForeignKeyViolation(err)
+errors.WrapDatabaseError(err)
 ```
 
 **サービスでの使用：**
 ```go
-// 標準errorsとの競合を避けるためエイリアスでインポート
-import sharedErrors "github.com/kensan/backend/shared/errors"
-
-// ハンドラの後方互換性のため再エクスポート
+// 各サービスがジェネリックコンストラクタでローカルエラーを定義
 var (
-    ErrDiaryNotFound = sharedErrors.ErrDiaryNotFound
-    ErrTitleRequired = sharedErrors.Required("title")
+    ErrTaskNotFound = errors.NotFound("task")
+    ErrInvalidFrequency = fmt.Errorf("invalid frequency: %w", errors.ErrInvalidInput)
 )
 ```
 
@@ -315,12 +339,12 @@ HTTPリクエスト
 Handler (HTTPレイヤー)
     - コンテキストからユーザーID抽出
     - リクエストボディ/パラメータをパース
-    - 入力バリデーション
     - サービス呼び出し
     - エラーをHTTPステータスにマッピング
     - JSONレスポンス返却
     ↓
 Service (ビジネスロジック)
+    - 入力バリデーション（必須フィールド等）
     - ドメインバリデーション
     - ビジネスルール
     - オーケストレーション
@@ -358,25 +382,22 @@ func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 
 ### サービスインターフェース
 
-各サービスは依存性注入のためインターフェースを定義：
+全サービスが依存性注入のためインターフェースを定義（`internal/service/interface.go`）:
 
 ```go
-// internal/service/interface.go
+// task-service: ISP準拠のReader/Writer分離
 type TaskReader interface {
     GetByID(ctx context.Context, userID, taskID string) (*Task, error)
     List(ctx context.Context, userID string, filter *Filter) ([]*Task, error)
 }
-
 type TaskWriter interface {
     Create(ctx context.Context, userID string, input *CreateInput) (*Task, error)
     Update(ctx context.Context, userID string, input *UpdateInput) (*Task, error)
     Delete(ctx context.Context, userID, taskID string) error
 }
+type TaskService interface { TaskReader; TaskWriter }
 
-type TaskService interface {
-    TaskReader
-    TaskWriter
-}
+// routine-service, memo-service, analytics-service も同様にinterface.goで定義
 ```
 
 ### リポジトリインターフェース（ISP準拠）

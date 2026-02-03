@@ -21,36 +21,37 @@ import { useTaskOnlyStore } from './useTaskStore'
  * Provides a similar API to the original useTaskStore
  */
 export function useTaskManagerStore() {
-  // Goal store
-  const goals = useGoalStore((state) => state.goals)
+  // Goal store (uses createCrudStore generic names)
+  const goals = useGoalStore((state) => state.items)
   const goalsLoading = useGoalStore((state) => state.isLoading)
   const goalsError = useGoalStore((state) => state.error)
-  const fetchGoals = useGoalStore((state) => state.fetchGoals)
-  const addGoal = useGoalStore((state) => state.addGoal)
-  const updateGoal = useGoalStore((state) => state.updateGoal)
-  const deleteGoal = useGoalStore((state) => state.deleteGoal)
-  const getGoalById = useGoalStore((state) => state.getGoalById)
+  const fetchGoals = useGoalStore((state) => state.fetchAll)
+  const addGoal = useGoalStore((state) => state.add)
+  const updateGoal = useGoalStore((state) => state.update)
+  const deleteGoal = useGoalStore((state) => state.remove)
+  const getGoalById = useGoalStore((state) => state.getById)
+  const reorderGoals = useGoalStore((state) => state.reorderGoals)
 
-  // Milestone store
-  const milestones = useMilestoneStore((state) => state.milestones)
+  // Milestone store (uses createCrudStore generic names)
+  const milestones = useMilestoneStore((state) => state.items)
   const milestonesLoading = useMilestoneStore((state) => state.isLoading)
   const milestonesError = useMilestoneStore((state) => state.error)
-  const fetchMilestones = useMilestoneStore((state) => state.fetchMilestones)
-  const addMilestone = useMilestoneStore((state) => state.addMilestone)
-  const updateMilestone = useMilestoneStore((state) => state.updateMilestone)
-  const deleteMilestone = useMilestoneStore((state) => state.deleteMilestone)
-  const getMilestoneById = useMilestoneStore((state) => state.getMilestoneById)
+  const fetchMilestones = useMilestoneStore((state) => state.fetchAll)
+  const addMilestone = useMilestoneStore((state) => state.add)
+  const updateMilestone = useMilestoneStore((state) => state.update)
+  const deleteMilestone = useMilestoneStore((state) => state.remove)
+  const getMilestoneById = useMilestoneStore((state) => state.getById)
   const getMilestonesByGoal = useMilestoneStore((state) => state.getMilestonesByGoal)
 
-  // Tag store
-  const tags = useTagStore((state) => state.tags)
+  // Tag store (uses createCrudStore generic names)
+  const tags = useTagStore((state) => state.items)
   const tagsLoading = useTagStore((state) => state.isLoading)
   const tagsError = useTagStore((state) => state.error)
-  const fetchTags = useTagStore((state) => state.fetchTags)
-  const addTag = useTagStore((state) => state.addTag)
-  const updateTag = useTagStore((state) => state.updateTag)
-  const deleteTag = useTagStore((state) => state.deleteTag)
-  const getTagById = useTagStore((state) => state.getTagById)
+  const fetchTags = useTagStore((state) => state.fetchAll)
+  const addTag = useTagStore((state) => state.add)
+  const updateTag = useTagStore((state) => state.update)
+  const deleteTag = useTagStore((state) => state.remove)
+  const getTagById = useTagStore((state) => state.getById)
   const getTagsByIds = useTagStore((state) => state.getTagsByIds)
 
   // Task store
@@ -99,6 +100,7 @@ export function useTaskManagerStore() {
     addGoal,
     updateGoal,
     deleteGoal,
+    reorderGoals,
     getGoalById,
 
     // Milestone operations

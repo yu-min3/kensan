@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { TimeRangeInput } from '@/components/ui/time-range-input'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import type { TaskInputMode } from '@/hooks/useTimeBlockDialog'
 import type { Goal, Milestone } from '@/types'
 import { AlertTriangle, Plus } from 'lucide-react'
@@ -90,7 +90,7 @@ export function TimeBlockDialog({
   isEditMode = false,
   isSubmitting = false,
 }: TimeBlockDialogProps) {
-  const { tasks, goals, milestones, addTask } = useTaskStore()
+  const { tasks, goals, milestones, addTask } = useTaskManagerStore()
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMilestoneId, setNewTaskMilestoneId] = useState<string | undefined>(undefined)

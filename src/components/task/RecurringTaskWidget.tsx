@@ -2,6 +2,12 @@ import { useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import {
+  getTaskFrequencyLabel,
+  getPlannedCountThisWeek,
+  getWeekRange,
+  calculateRate,
+} from '@/lib/taskUtils'
 import type { Goal, Milestone, Task } from '@/types'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { RefreshCw, CheckCircle2, Circle } from 'lucide-react'
@@ -23,65 +29,6 @@ interface RecurringTaskStats {
   frequencyLabel: string
 }
 
-// 今週の開始日（月曜）と終了日（日曜）を取得
-function getWeekRange(): { start: Date; end: Date; startStr: string; endStr: string } {
-  const today = new Date()
-  const dayOfWeek = today.getDay() // 0=日, 1=月, ..., 6=土
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-
-  const start = new Date(today)
-  start.setDate(today.getDate() + mondayOffset)
-  start.setHours(0, 0, 0, 0)
-
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
-  end.setHours(23, 59, 59, 999)
-
-  const formatDate = (d: Date) => d.toISOString().split('T')[0]
-
-  return {
-    start,
-    end,
-    startStr: formatDate(start),
-    endStr: formatDate(end),
-  }
-}
-
-// frequencyに基づいて今週の予定回数を計算
-function getPlannedCountThisWeek(task: Task): number {
-  if (!task.frequency) return 0
-
-  switch (task.frequency) {
-    case 'daily':
-      return 7
-    case 'weekly':
-      // 平日のみ（月〜金）
-      return 5
-    case 'custom':
-      return task.daysOfWeek?.length ?? 0
-    default:
-      return 0
-  }
-}
-
-// frequencyのラベル
-function getFrequencyLabel(task: Task): string {
-  if (!task.frequency) return ''
-
-  switch (task.frequency) {
-    case 'daily':
-      return '毎日'
-    case 'weekly':
-      return '平日'
-    case 'custom': {
-      const days = ['日', '月', '火', '水', '木', '金', '土']
-      const selectedDays = (task.daysOfWeek ?? []).map(d => days[d]).join('')
-      return selectedDays || 'カスタム'
-    }
-    default:
-      return ''
-  }
-}
 
 export function RecurringTaskWidget({ goals, milestones, tasks, className }: RecurringTaskWidgetProps) {
   const { timeEntries, fetchTimeEntriesRange } = useTimeBlockStore()
@@ -105,7 +52,7 @@ export function RecurringTaskWidget({ goals, milestones, tasks, className }: Rec
         ? goals.find(g => g.id === milestone.goalId)
         : undefined
 
-      const plannedThisWeek = getPlannedCountThisWeek(task)
+      const plannedThisWeek = getPlannedCountThisWeek(task.frequency, task.daysOfWeek)
 
       // TimeEntryでtaskIdが一致するものをカウント（今週分）
       const actualThisWeek = timeEntries.filter(entry => {
@@ -114,9 +61,7 @@ export function RecurringTaskWidget({ goals, milestones, tasks, className }: Rec
         return entryDate >= weekRange.start && entryDate <= weekRange.end
       }).length
 
-      const rate = plannedThisWeek > 0
-        ? Math.round((actualThisWeek / plannedThisWeek) * 100)
-        : 0
+      const rate = calculateRate(actualThisWeek, plannedThisWeek)
 
       return {
         task,
@@ -125,7 +70,7 @@ export function RecurringTaskWidget({ goals, milestones, tasks, className }: Rec
         plannedThisWeek,
         actualThisWeek,
         rate,
-        frequencyLabel: getFrequencyLabel(task),
+        frequencyLabel: getTaskFrequencyLabel(task) ?? '',
       } as RecurringTaskStats
     }).sort((a, b) => {
       // 達成率が低い順（要注意を上に）
@@ -137,7 +82,7 @@ export function RecurringTaskWidget({ goals, milestones, tasks, className }: Rec
   const overallStats = useMemo(() => {
     const totalPlanned = recurringTaskStats.reduce((sum, s) => sum + s.plannedThisWeek, 0)
     const totalActual = recurringTaskStats.reduce((sum, s) => sum + s.actualThisWeek, 0)
-    const rate = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0
+    const rate = calculateRate(totalActual, totalPlanned)
     return { totalPlanned, totalActual, rate }
   }, [recurringTaskStats])
 

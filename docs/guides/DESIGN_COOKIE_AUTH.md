@@ -1,6 +1,8 @@
 # Cookie-Based Authentication Design
 
-## Status: Proposal (未実装)
+## Status: Proposal (未実装・検討中)
+
+> **Note**: 本ドキュメントは設計提案です。現在の実装は localStorage + JWT Bearer トークン方式です（`src/stores/useAuthStore.ts`, `src/api/client.ts` 参照）。Cookie 方式への移行は未着手です。
 
 ## 背景
 

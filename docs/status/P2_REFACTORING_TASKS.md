@@ -1,5 +1,7 @@
 # P2 リファクタリングタスク
 
+> **⚠️ 注意**: 本ドキュメントは 2026-01-21 時点の計画です。作成後にサービス構成が大幅に変更されています（diary-service, record-service, sync-service は廃止、note-service に統合）。廃止サービスに関連するタスク（BE-P0-3 の diary/record/sync 対象、BE-P1-3 sync-service 英語化など）は無効です。FE 側のタスクも createCrudStore/createApiService の適用状況が進んでいるため、現在のコードベースと照合のうえ参照してください。
+
 作成日: 2026-01-21
 更新日: 2026-01-21
 

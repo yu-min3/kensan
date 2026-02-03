@@ -95,12 +95,6 @@ class HttpClient {
         throw new ApiError(response.status, errorCode, errorMessage)
       }
 
-      // Show toast notification for API errors
-      toast.error(`API Error [${response.status}]`, {
-        description: `${errorCode}: ${errorMessage}`,
-        duration: 5000,
-      })
-
       throw new ApiError(response.status, errorCode, errorMessage)
     }
 

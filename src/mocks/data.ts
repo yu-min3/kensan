@@ -25,13 +25,11 @@ const yesterday = getYesterday()
 const tomorrow = getTomorrow()
 
 // Helper to create UTC ISO datetime from local date (YYYY-MM-DD) and time (HH:mm) in Asia/Tokyo
+// Uses localToUtcDatetime for proper Intl-based timezone handling
+import { localToUtcDatetime } from '@/lib/timezone'
+
 function toUtcIso(localDate: string, localTime: string): string {
-  const [year, month, day] = localDate.split('-').map(Number)
-  const [hours, minutes] = localTime.split(':').map(Number)
-  // Asia/Tokyo is UTC+9
-  const localMs = Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
-  const utcMs = localMs - 9 * 60 * 60 * 1000
-  return new Date(utcMs).toISOString()
+  return localToUtcDatetime(localDate, localTime, 'Asia/Tokyo')
 }
 
 // ============================================

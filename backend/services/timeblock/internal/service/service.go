@@ -11,14 +11,14 @@ import (
 	"github.com/kensan/backend/shared/validation"
 )
 
-// Re-export shared errors for backward compatibility with handlers
+// Service-specific errors
 var (
-	ErrTimeBlockNotFound    = errors.ErrTimeBlockNotFound
-	ErrTimeEntryNotFound    = errors.ErrTimeEntryNotFound
-	ErrRunningTimerNotFound = errors.ErrTimerNotFound
+	ErrTimeBlockNotFound    = errors.NotFound("time block")
+	ErrTimeEntryNotFound    = errors.NotFound("time entry")
+	ErrRunningTimerNotFound = errors.NotFound("timer")
 	ErrTimerAlreadyRunning  = repository.ErrTimerAlreadyRunning
 	ErrInvalidInput         = errors.ErrInvalidInput
-	ErrInvalidDate          = errors.ErrInvalidDate
+	ErrInvalidDate          = errors.InvalidFormat("date", "YYYY-MM-DD")
 	ErrInvalidDatetime      = fmt.Errorf("invalid datetime: %w", errors.ErrInvalidInput)
 )
 

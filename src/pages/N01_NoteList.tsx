@@ -9,7 +9,7 @@ import { GoalBadge } from '@/components/common/GoalBadge'
 import { Badge } from '@/components/ui/badge'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { formatDateIso } from '@/lib/dateFormat'
 import type { NoteType } from '@/types'
@@ -26,7 +26,7 @@ export function N01NoteList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { items, isLoading, fetchNotes, search, searchResults, clearSearchResults } = useNoteStore()
   const { types } = useNoteTypeStore()
-  const { goals, tags } = useTaskStore()
+  const { goals, tags } = useTaskManagerStore()
 
   // Get initial filter from URL
   const initialType = searchParams.get('type') as NoteType | null

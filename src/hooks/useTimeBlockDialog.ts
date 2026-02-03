@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { getLocalTime } from '@/lib/timezone'
@@ -25,7 +25,7 @@ interface UseTimeBlockDialogOptions {
 export function useTimeBlockDialog(options: UseTimeBlockDialogOptions) {
   const { defaultDate } = options
   const { addTimeBlock, updateTimeBlock, deleteTimeBlock } = useTimeBlockStore()
-  const { getMilestoneById, getGoalById } = useTaskStore()
+  const { getMilestoneById, getGoalById } = useTaskManagerStore()
   const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
 
   const [state, setState] = useState<TimeBlockDialogState>({

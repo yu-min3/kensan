@@ -6,7 +6,7 @@ import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { NoteEditor, NoteEditorValue } from '@/components/note/NoteEditor'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { validateMetadata } from '@/components/note/MetadataForm'
 import { notesApi } from '@/api/services/notes'
@@ -34,7 +34,7 @@ export function N02NoteEdit() {
     archiveNote,
   } = useNoteStore()
   const { types, getBySlug, getConstraints, getMetadataSchema } = useNoteTypeStore()
-  const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskStore()
+  const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskManagerStore()
 
   const isNew = !id
   const initialType = (searchParams.get('type') as NoteType) || (types[0]?.slug ?? 'diary')

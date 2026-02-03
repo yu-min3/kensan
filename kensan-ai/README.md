@@ -1,26 +1,34 @@
 # Kensan AI
 
-AI service for Kensan learning management app.
+Kensan アプリケーションの AI サービス。Python (FastAPI) + Claude/Gemini API によるエージェントベースの対話・レビュー機能を提供する。
 
-## Features
+詳細なアーキテクチャは [ARCHITECTURE.md](ARCHITECTURE.md) を参照。
 
-- Chat endpoint for general AI assistance
-- Morning advice (planning support)
-- Evening reflection
-- Weekly review
-- User memory and facts storage
-- Interaction logging with feedback
+---
 
-## Running
+## 主な機能
 
-### Docker (recommended)
+- **エージェント対話** - Direct Tools (39個) を使った DB 直接操作つきチャット（SSE ストリーミング）
+- **Read/Write 分離** - 書き込み操作は提案→承認の 2 ステップ
+- **動的ツール選択** - メッセージ意図に基づき必要なツールのみを選択しトークン節約
+- **週次レビュー** - 構造化された振り返りレポート生成
+- **ファクト自動抽出** - 会話からユーザーの好み・習慣・スキルを非同期抽出
+- **コンテキスト管理** - 時刻ベースの状況検出、A/B テスト、変数置換
+- **セマンティック検索** - pgvector による埋め込みベクトル検索
+- **外部情報取得** - Tavily API による Web 検索・ページ取得
+
+---
+
+## セットアップ
+
+### Docker（推奨）
 
 ```bash
-# From project root
-make rebuild
+# プロジェクトルートから全サービス起動
+make up
 ```
 
-### Local development
+### ローカル開発
 
 ```bash
 cd kensan-ai
@@ -28,16 +36,49 @@ pip install -e .
 uvicorn kensan_ai.main:app --reload --port 8089
 ```
 
-## API Endpoints
+### テスト
 
-- `GET /health` - Health check
-- `POST /chat` - Chat with AI
-- `POST /chat/stream` - Streaming chat
-- `POST /advice` - Morning planning advice
-- `POST /reflect` - Evening reflection
-- `POST /review` - Weekly review
-- `POST /interactions/{id}/feedback` - Submit feedback
+```bash
+cd kensan-ai
+pytest
+pytest --cov=kensan_ai  # カバレッジ付き
+```
 
-## Environment Variables
+---
 
-See `.env.example` for configuration options.
+## API エンドポイント
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| GET | `/health` | ヘルスチェック |
+| POST | `/agent/stream` | エージェントストリーミング（SSE） |
+| POST | `/agent/approve` | 書き込みアクションの承認・実行 |
+| GET | `/conversations` | 会話一覧 |
+| GET | `/conversations/{id}` | 会話詳細 |
+| POST | `/ai/reviews/generate` | 週次レビュー生成 |
+| GET | `/ai/reviews` | レビュー一覧 |
+| GET | `/ai/reviews/{id}` | レビュー詳細 |
+| POST | `/interactions/{id}/feedback` | フィードバック送信 |
+
+---
+
+## 環境変数
+
+| 変数 | デフォルト | 説明 |
+|------|-----------|------|
+| `AI_PROVIDER` | `google` | AI プロバイダー (`anthropic` or `google`) |
+| `ANTHROPIC_API_KEY` | - | Anthropic API キー |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Anthropic モデル |
+| `GOOGLE_API_KEY` | - | Google GenAI API キー |
+| `GOOGLE_MODEL` | `gemini-2.0-flash` | Google モデル |
+| `OPENAI_API_KEY` | - | OpenAI API キー（埋め込み用） |
+| `DB_HOST` | `localhost` | PostgreSQL ホスト |
+| `DB_PORT` | `5432` | PostgreSQL ポート |
+| `DB_USER` | `kensan` | PostgreSQL ユーザー |
+| `DB_PASSWORD` | `kensan` | PostgreSQL パスワード |
+| `DB_NAME` | `kensan` | PostgreSQL データベース名 |
+| `JWT_SECRET` | `dev-secret-key` | JWT シークレット |
+| `TAVILY_API_KEY` | - | Tavily API キー（Web 検索用） |
+| `OTEL_ENABLED` | `false` | OpenTelemetry 有効化 |
+| `OTEL_COLLECTOR_URL` | `localhost:4318` | OTel Collector エンドポイント |
+| `LAKEHOUSE_ENABLED` | `false` | Lakehouse 書き込み有効化 |

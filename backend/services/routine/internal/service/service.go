@@ -2,16 +2,17 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kensan/backend/services/routine/internal"
 	"github.com/kensan/backend/services/routine/internal/repository"
 	"github.com/kensan/backend/shared/errors"
 )
 
-// Re-export shared errors for backward compatibility with handlers
+// Service-specific errors
 var (
-	ErrRoutineNotFound  = errors.ErrRoutineNotFound
-	ErrInvalidFrequency = errors.ErrInvalidFrequency
+	ErrRoutineNotFound  = errors.NotFound("routine task")
+	ErrInvalidFrequency = fmt.Errorf("invalid frequency: %w", errors.ErrInvalidInput)
 	ErrInvalidInput     = errors.ErrInvalidInput
 )
 

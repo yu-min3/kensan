@@ -234,14 +234,6 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validation
-	if input.Name == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "name", Message: "Name is required"},
-		})
-		return
-	}
-
 	t, err := h.service.CreateTask(r.Context(), userID, input)
 	if h.handleServiceError(w, r, err, "Failed to create task") {
 		return
@@ -423,13 +415,6 @@ func (h *Handler) CreateGoal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "name", Message: "Name is required"},
-		})
-		return
-	}
-
 	goal, err := h.service.CreateGoal(r.Context(), userID, input)
 	if h.handleServiceError(w, r, err, "Failed to create goal") {
 		return
@@ -549,34 +534,8 @@ func (h *Handler) CreateMilestone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validation
-	var validationErrors []middleware.ErrorDetail
-	if input.Name == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "name", Message: "Name is required",
-		})
-	}
-	if input.GoalID == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "goalId", Message: "Goal ID is required",
-		})
-	}
-	if len(validationErrors) > 0 {
-		middleware.ValidationError(w, r, validationErrors)
-		return
-	}
-
 	milestone, err := h.service.CreateMilestone(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrGoalNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "GOAL_NOT_FOUND", "Goal not found")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create milestone")
+	if h.handleServiceError(w, r, err, "Failed to create milestone") {
 		return
 	}
 
@@ -687,20 +646,8 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "name", Message: "Name is required"},
-		})
-		return
-	}
-
 	tag, err := h.service.CreateTag(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create tag")
+	if h.handleServiceError(w, r, err, "Failed to create tag") {
 		return
 	}
 
@@ -716,20 +663,8 @@ func (h *Handler) CreateNoteTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "name", Message: "Name is required"},
-		})
-		return
-	}
-
 	tag, err := h.service.CreateNoteTag(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create note tag")
+	if h.handleServiceError(w, r, err, "Failed to create note tag") {
 		return
 	}
 
@@ -847,43 +782,8 @@ func (h *Handler) CreateEntityMemo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validation
-	var validationErrors []middleware.ErrorDetail
-	if input.Content == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "content", Message: "Content is required",
-		})
-	}
-	if input.EntityID == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "entityId", Message: "Entity ID is required",
-		})
-	}
-	if input.EntityType == "" {
-		validationErrors = append(validationErrors, middleware.ErrorDetail{
-			Field: "entityType", Message: "Entity type is required",
-		})
-	}
-	if len(validationErrors) > 0 {
-		middleware.ValidationError(w, r, validationErrors)
-		return
-	}
-
 	memo, err := h.service.CreateEntityMemo(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidEntityType) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_ENTITY_TYPE", "Invalid entity type")
-			return
-		}
-		if errors.Is(err, service.ErrGoalNotFound) || errors.Is(err, service.ErrMilestoneNotFound) || errors.Is(err, service.ErrTaskNotFound) {
-			middleware.Error(w, r, http.StatusNotFound, "ENTITY_NOT_FOUND", "Entity not found")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create entity memo")
+	if h.handleServiceError(w, r, err, "Failed to create entity memo") {
 		return
 	}
 
@@ -1005,25 +905,8 @@ func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validation
-	if input.Name == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "name", Message: "Name is required"},
-		})
-		return
-	}
-
 	todo, err := h.service.CreateTodo(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidInput) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidFrequency) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_FREQUENCY", "Invalid frequency")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create todo")
+	if h.handleServiceError(w, r, err, "Failed to create todo") {
 		return
 	}
 

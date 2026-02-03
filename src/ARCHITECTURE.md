@@ -63,17 +63,17 @@ src/
 ├── components/
 │   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
-│   ├── common/                   # ドメインコンポーネント
+│   ├── common/                   # ドメインコンポーネント (EmptyState, LoadingSpinner, StatCard含む)
 │   ├── editor/                   # Markdown, Drawioエディタ
-│   ├── task/                     # Goal, Milestone, Taskダイアログ
+│   ├── task/                     # Goal, Milestone, Taskダイアログ + SortableGoalItem, SortableTaskItem, ChildTaskList
 │   ├── daily/                    # デイリーページセクション
 │   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm + validateMetadata)
 │   ├── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
 │   └── interactions/             # AI Interaction Explorer (InteractionTable, ConversationFlow)
 ├── pages/                        # ページコンポーネント（10ファイル）
 ├── stores/                       # Zustandストア（12ストア）
-├── hooks/                        # カスタムReactフック
-├── lib/                          # ユーティリティ（timezone, dateFormat, noteTypeIcons, actionFormatter, utils）
+├── hooks/                        # カスタムReactフック (useTaskManagement, useTimeBlockDialog等)
+├── lib/                          # ユーティリティ（timezone, dateFormat, taskUtils, noteTypeIcons, actionFormatter, arrayUtils, utils）
 ├── mocks/                        # MSWハンドラとモックデータ
 ├── types/                        # TypeScript型定義
 ├── config/                       # アプリ設定
@@ -196,6 +196,9 @@ graph TB
 | `FloatingMemoButton` | クイックメモFAB |
 | `TaskSelect` | タスクドロップダウン |
 | `TagSelect` | 複数選択タグ |
+| `EmptyState` | 空状態の統一表示（アイコン、メッセージ、アクション） |
+| `LoadingSpinner` | ローディングインジケータ |
+| `StatCard` | 統計値カード（ラベル、値、単位） |
 
 **TimeBlockDialogの機能:**
 - 予定（plan）/実績（entry）モード切替
@@ -387,72 +390,85 @@ fetchSettings(): Promise<void>
 
 タスク関連の状態は特化したドメインストアに分割:
 
-**useGoalStore** (`stores/useGoalStore.ts`)
+**useGoalStore** (`stores/useGoalStore.ts`) - createCrudStoreファクトリ使用
 ```typescript
-// 状態
-goals: Goal[]
+// createCrudStoreの標準インターフェース
+items: Goal[]           // goals配列
+isLoading: boolean
+error: string | null
+fetchAll(): Promise<void>
+add(data): Promise<Goal>
+update(id, data): Promise<Goal>
+remove(id): Promise<void>
+getById(id): Goal | undefined
+
+// 拡張
+reorderGoals(goalIds: string[]): Promise<void>
+```
+
+**useMilestoneStore** (`stores/useMilestoneStore.ts`) - createCrudStoreファクトリ使用
+```typescript
+// createCrudStoreの標準インターフェース + 拡張
+items: Milestone[]
+fetchAll(filter?): Promise<void>
+add(data): Promise<Milestone>
+update(id, data): Promise<Milestone>
+remove(id): Promise<void>
+getById(id): Milestone | undefined
+getMilestonesByGoal(goalId): Milestone[]
+```
+
+**useTagStore** (`stores/useTagStore.ts`) - createCrudStoreファクトリ使用
+```typescript
+// createCrudStoreの標準インターフェース + 拡張
+items: Tag[]
+fetchAll(): Promise<void>
+add(data): Promise<Tag>
+update(id, data): Promise<Tag>
+remove(id): Promise<void>
+getById(id): Tag | undefined
+getTagsByIds(ids: string[]): Tag[]
+```
+
+**useTaskManagerStore**（統合フック - 全ドメインストアを集約）
+```typescript
+// useGoalStore + useMilestoneStore + useTagStore + useTaskOnlyStore を統合
+// 各ストアのアクションをドメイン名付きで提供
+export function useTaskManagerStore() {
+  return {
+    goals, milestones, tags, tasks,
+    isLoading, error,
+    fetchAll,                    // 全ストアを並列フェッチ
+    // Goal操作: addGoal, updateGoal, deleteGoal, reorderGoals, getGoalById
+    // Milestone操作: addMilestone, updateMilestone, deleteMilestone, getMilestonesByGoal
+    // Tag操作: addTag, updateTag, deleteTag, getTagById, getTagsByIds
+    // Task操作: addTask, updateTask, deleteTask, toggleTaskComplete, reorderTasks, ...
+  }
+}
+```
+
+#### useTaskOnlyStore (`stores/useTaskStore.ts`)
+```typescript
+// タスク専用ストア（個別利用可）
+tasks: Task[]
 isLoading: boolean
 error: string | null
 
 // アクション
-fetchGoals(): Promise<void>
-addGoal(data): Promise<Goal>
-updateGoal(id, data): Promise<Goal>
-deleteGoal(id): Promise<void>
-getGoalById(id): Goal | undefined
-```
-
-**useMilestoneStore** (`stores/useMilestoneStore.ts`)
-```typescript
-// 状態
-milestones: Milestone[]
-
-// アクション
-fetchMilestones(): Promise<void>
-addMilestone(data): Promise<Milestone>
-updateMilestone(id, data): Promise<Milestone>
-deleteMilestone(id): Promise<void>
-getMilestonesByGoal(goalId): Milestone[]
-```
-
-**useTagStore** (`stores/useTagStore.ts`)
-```typescript
-// 状態
-tags: Tag[]
-
-// アクション
-fetchTags(): Promise<void>
-addTag(data): Promise<Tag>
-updateTag(id, data): Promise<Tag>
-deleteTag(id): Promise<void>
-```
-
-**useTaskManagerStore**（便利な統合フック）
-```typescript
-// 後方互換性のため全ストアアクションを再エクスポート
-export const useTaskManagerStore = () => ({
-    ...useGoalStore(),
-    ...useMilestoneStore(),
-    ...useTagStore(),
-    ...useTaskStore(),
-})
-```
-
-#### useTaskStore
-```typescript
-// 状態
-tasks: Task[]
-
-// アクション
 fetchTasks(): Promise<void>
-addTask(data): Promise<Task>
-updateTask(id, data): Promise<Task>
+addTask(data): Promise<void>
+updateTask(id, updates): Promise<void>
 deleteTask(id): Promise<void>
 toggleTaskComplete(id): Promise<void>
+reorderTasks(taskIds: string[]): Promise<void>
+bulkDeleteTasks(taskIds: string[]): Promise<void>
+bulkCompleteTasks(taskIds: string[], completed: boolean): Promise<void>
 
 // クエリ
+getTaskById(id): Task | undefined
 getTasksByMilestone(milestoneId): Task[]
 getChildTasks(parentId): Task[]
+getStandaloneTasks(): Task[]
 ```
 
 #### useTimeBlockStore
@@ -934,7 +950,7 @@ graph TB
         GoalStore[useGoalStore]
         MilestoneStore[useMilestoneStore]
         TagStore[useTagStore]
-        TaskStore[useTaskStore]
+        TaskStore[useTaskOnlyStore]
         TimeBlockStore[useTimeBlockStore]
         NoteTypeStore[useNoteTypeStore]
         NoteStore[useNoteStore]
@@ -1071,6 +1087,29 @@ export function useDialogState(initial = false) {
 // 使用例
 const [dialogOpen, setDialogOpen] = useDialogState()
 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+```
+
+### タスクユーティリティ (`lib/taskUtils.ts`)
+
+タスク関連の共有ビジネスロジック（複数コンポーネントから使用）:
+
+```typescript
+// 頻度表示
+getFrequencyLabel(frequency?, daysOfWeek?): string | null
+getTaskFrequencyLabel(task: Task): string | null
+getPlannedCountThisWeek(frequency?, daysOfWeek?): number
+isScheduledForToday(task: Task): boolean
+
+// 期限・緊急度
+type UrgencyLevel = 'danger' | 'warning' | 'normal' | 'no-deadline'
+getDaysUntil(targetDate?): number | null
+getUrgencyLevel(daysUntil): UrgencyLevel
+formatDaysUntil(days): string
+
+// 時間計算
+getWeekRange(): { start, end, startStr, endStr }
+calculateMinutesFromDatetimes(items: {startDatetime, endDatetime}[]): number
+calculateRate(actual, planned): number
 ```
 
 ### 配列ユーティリティ (`lib/arrayUtils.ts`)
@@ -1247,7 +1286,7 @@ VITE_ENABLE_MSW=true npm run dev
 
 // 使用例
 import { Button } from '@/components/ui/button'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 ```
 
 ---

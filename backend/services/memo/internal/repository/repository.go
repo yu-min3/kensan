@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	memo "github.com/kensan/backend/services/memo/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
+	"github.com/kensan/backend/shared/sqlbuilder"
 )
 
 // PostgresRepository handles database operations for memos
@@ -32,43 +33,35 @@ func wrapDBError(msg string, err error) error {
 
 // List returns memos for a user with optional filters
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter memo.MemoFilter) ([]memo.Memo, error) {
-	query := `
-		SELECT id, user_id, content, archived, created_at, updated_at
-		FROM memos
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+	w := sqlbuilder.NewWhereBuilder(userID)
 
 	// Filter by archived status
 	if !filter.IncludeAll {
 		if filter.Archived != nil {
-			argCount++
-			query += fmt.Sprintf(" AND archived = $%d", argCount)
-			args = append(args, *filter.Archived)
+			sqlbuilder.AddFilter(w, "archived", filter.Archived)
 		} else {
 			// Default: only show non-archived
-			query += " AND archived = false"
+			w.AddCondition("archived = $%d", false)
 		}
 	}
 
 	// Filter by date
 	if filter.Date != nil {
-		argCount++
-		query += fmt.Sprintf(" AND DATE(created_at) = $%d", argCount)
-		args = append(args, *filter.Date)
+		w.AddCondition("DATE(created_at) = $%d", *filter.Date)
 	}
 
-	query += " ORDER BY created_at DESC"
-
-	// Limit results
+	limitClause := ""
 	if filter.Limit > 0 {
-		argCount++
-		query += fmt.Sprintf(" LIMIT $%d", argCount)
-		args = append(args, filter.Limit)
+		limitClause = " " + w.AddLimit(filter.Limit)
 	}
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	query := fmt.Sprintf(`
+		SELECT id, user_id, content, archived, created_at, updated_at
+		FROM memos
+		%s ORDER BY created_at DESC%s
+	`, w.WhereClause(), limitClause)
+
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query memos", err)
 	}
@@ -154,44 +147,27 @@ func (r *PostgresRepository) Create(ctx context.Context, userID string, input me
 
 // Update updates an existing memo
 func (r *PostgresRepository) Update(ctx context.Context, userID, memoID string, input memo.UpdateMemoInput) (*memo.Memo, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "content", input.Content)
+	sqlbuilder.AddField(b, "archived", input.Archived)
 
-	if input.Content != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("content = $%d", argCount))
-		args = append(args, *input.Content)
-	}
-
-	if input.Archived != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("archived = $%d", argCount))
-		args = append(args, *input.Archived)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetByID(ctx, userID, memoID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, memoID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(memoID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE memos
 		SET %s
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, content, archived, created_at, updated_at
-	`, joinStrings(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var m memo.Memo
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&m.ID,
 		&m.UserID,
 		&m.Content,
@@ -224,13 +200,3 @@ func (r *PostgresRepository) Delete(ctx context.Context, userID, memoID string) 
 	return nil
 }
 
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}

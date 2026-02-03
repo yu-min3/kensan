@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { TimeBlockTimeline, calculateTimeFromY } from '@/components/common/TimeBlockTimeline'
 import { TimeBlockDialog } from '@/components/common/TimeBlockDialog'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { getLocalDate, getLocalTime } from '@/lib/timezone'
 import { useTimerStore } from '@/stores/useTimerStore'
@@ -112,7 +112,7 @@ export function TimeBlockSection({
   onDateChange: propOnDateChange,
 }: TimeBlockSectionProps) {
   const { timezone } = useSettingsStore()
-  const { tasks, getMilestoneById, getGoalById } = useTaskStore()
+  const { tasks, getMilestoneById, getGoalById } = useTaskManagerStore()
   const { currentTimer, startTimer } = useTimerStore()
   const {
     timeBlocks,
@@ -125,7 +125,7 @@ export function TimeBlockSection({
     deleteTimeEntry,
     addTimeEntry,
   } = useTimeBlockStore()
-  const { error: taskError } = useTaskStore()
+  const { error: taskError } = useTaskManagerStore()
 
   // 日付状態: propsがあればpropsを使用、なければ内部状態を使用（後方互換性）
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date>(new Date())

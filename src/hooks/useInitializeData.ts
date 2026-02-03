@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
@@ -19,7 +19,7 @@ export function useInitializeData() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   // Task store
-  const fetchTasks = useTaskStore((state) => state.fetchAll)
+  const { fetchAll: fetchTasks } = useTaskManagerStore()
 
   // TimeBlock store (timezone-aware fetch methods)
   const fetchTimeBlocksForLocalDate = useTimeBlockStore((state) => state.fetchTimeBlocksForLocalDate)

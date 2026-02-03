@@ -83,59 +83,10 @@ func InvalidFormat(field, expected string) error {
 	return fmt.Errorf("%s: %w (expected %s)", field, ErrInvalidFormat, expected)
 }
 
-// Validation errors for common fields
+// Validation errors for common format patterns
 var (
-	ErrInvalidDate      = InvalidFormat("date", "YYYY-MM-DD")
-	ErrInvalidTime      = InvalidFormat("time", "HH:mm")
-	ErrInvalidEmail     = InvalidFormat("email", "valid email address")
-	ErrInvalidTheme     = fmt.Errorf("theme: %w (must be light, dark, or system)", ErrInvalidInput)
-	ErrPasswordTooShort = fmt.Errorf("password: %w (must be at least 8 characters)", ErrInvalidInput)
-)
-
-// Service-specific "not found" errors for backward compatibility
-// These can be used directly or services can create their own using NotFound()
-var (
-	ErrUserNotFound       = NotFound("user")
-	ErrGoalNotFound       = NotFound("goal")
-	ErrMilestoneNotFound  = NotFound("milestone")
-	ErrTagNotFound        = NotFound("tag")
-	ErrTaskNotFound       = NotFound("task")
-	ErrTodoNotFound       = NotFound("todo")
-	ErrEntityMemoNotFound = NotFound("entity memo")
-	ErrDiaryNotFound      = NotFound("diary entry")
-	ErrRecordNotFound     = NotFound("record")
-	ErrRoutineNotFound    = NotFound("routine task")
-	ErrTimeBlockNotFound  = NotFound("time block")
-	ErrTimeEntryNotFound  = NotFound("time entry")
-	ErrTimerNotFound      = NotFound("timer")
-	ErrReportNotFound     = NotFound("report")
-	ErrMemoNotFound       = NotFound("memo")
-	ErrSettingsNotFound   = NotFound("settings")
-	ErrAPIKeyNotFound     = NotFound("API key")
-	ErrSyncStatusNotFound = NotFound("sync status")
-)
-
-// Service-specific errors
-var (
-	ErrInvalidCredentials  = fmt.Errorf("credentials: %w", ErrUnauthorized)
-	ErrUserExists          = AlreadyExists("user")
-	ErrTagExists           = AlreadyExists("tag")
-	ErrNoteExists          = AlreadyExists("note")
-	ErrTimerAlreadyRunning = AlreadyExists("timer")
-	ErrTodoCompletionExists = AlreadyExists("todo completion")
-	ErrNoDataForPeriod     = fmt.Errorf("no data found for the specified period")
-)
-
-// Validation errors for domain-specific validation
-var (
-	// ErrInvalidStatus is returned when an invalid status value is provided
-	ErrInvalidStatus = fmt.Errorf("invalid status: %w", ErrInvalidInput)
-
-	// ErrInvalidEntityType is returned when an invalid entity type is provided
-	ErrInvalidEntityType = fmt.Errorf("invalid entity type: %w", ErrInvalidInput)
-
-	// ErrInvalidFrequency is returned when an invalid frequency value is provided
-	ErrInvalidFrequency = fmt.Errorf("invalid frequency: %w", ErrInvalidInput)
+	ErrInvalidDate = InvalidFormat("date", "YYYY-MM-DD")
+	ErrInvalidTime = InvalidFormat("time", "HH:mm")
 )
 
 // IsNotFound checks if the error is a "not found" error
@@ -169,82 +120,13 @@ func IsInvalidFormat(err error) bool {
 }
 
 // ============================================================
-// Entity-specific "not found" error helper functions
-// These functions return errors that wrap ErrNotFound for consistent error handling
-// ============================================================
-
-// TaskNotFound returns a task not found error
-func TaskNotFound() error { return ErrTaskNotFound }
-
-// GoalNotFound returns a goal not found error
-func GoalNotFound() error { return ErrGoalNotFound }
-
-// MilestoneNotFound returns a milestone not found error
-func MilestoneNotFound() error { return ErrMilestoneNotFound }
-
-// TagNotFound returns a tag not found error
-func TagNotFound() error { return ErrTagNotFound }
-
-// TimeBlockNotFound returns a time block not found error
-func TimeBlockNotFound() error { return ErrTimeBlockNotFound }
-
-// TimeEntryNotFound returns a time entry not found error
-func TimeEntryNotFound() error { return ErrTimeEntryNotFound }
-
-// UserNotFound returns a user not found error
-func UserNotFound() error { return ErrUserNotFound }
-
-// NoteNotFound returns a note not found error
-func NoteNotFound() error { return NotFound("note") }
-
-// MemoNotFound returns a memo not found error
-func MemoNotFound() error { return ErrMemoNotFound }
-
-// DiaryNotFound returns a diary entry not found error
-func DiaryNotFound() error { return ErrDiaryNotFound }
-
-// RecordNotFound returns a learning record not found error
-func RecordNotFound() error { return ErrRecordNotFound }
-
-// RoutineNotFound returns a routine task not found error
-func RoutineNotFound() error { return ErrRoutineNotFound }
-
-// TodoNotFound returns a todo not found error
-func TodoNotFound() error { return ErrTodoNotFound }
-
-// EntityMemoNotFound returns an entity memo not found error
-func EntityMemoNotFound() error { return ErrEntityMemoNotFound }
-
-// TimerNotFound returns a timer not found error
-func TimerNotFound() error { return ErrTimerNotFound }
-
-// ============================================================
 // Validation error helper functions
-// These functions return errors that wrap ErrInvalidInput for consistent error handling
 // ============================================================
 
 // InvalidStatus returns an invalid status error for a specific entity
 func InvalidStatus(entity string) error {
 	return fmt.Errorf("invalid %s status: %w", entity, ErrInvalidInput)
 }
-
-// InvalidDate returns an invalid date error
-func InvalidDate() error { return ErrInvalidDate }
-
-// InvalidFrequency returns an invalid frequency error
-func InvalidFrequency() error { return ErrInvalidFrequency }
-
-// InvalidEntityType returns an invalid entity type error
-func InvalidEntityType() error { return ErrInvalidEntityType }
-
-// InvalidTime returns an invalid time error
-func InvalidTime() error { return ErrInvalidTime }
-
-// InvalidInput returns an invalid input error
-func InvalidInput() error { return ErrInvalidInput }
-
-// RequiredField returns a required field error
-func RequiredField(field string) error { return Required(field) }
 
 // ============================================================
 // PostgreSQL error helpers

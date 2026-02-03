@@ -2,7 +2,7 @@
 
 このドキュメントは、Kensanバックエンドの各マイクロサービスが提供するREST APIの仕様を定義します。
 
-**最終更新: 2026-02-01**
+**最終更新: 2026-02-03**
 
 ## 目次
 
@@ -46,7 +46,7 @@
 │    :8088    │  │    :8089    │              │ :9000/:9001  │
 └─────────────┘  └──────┬──────┘              └─────────────┘
                         │
-                   Claude API
+              Claude / Gemini API
 ```
 
 ### サービス一覧
@@ -570,7 +570,7 @@ AI機能の利用同意を記録
 
 ## AI Service (8089)
 
-Python (FastAPI) で実装されたAIエージェントサービス。Claude APIを使用し、DBに直接接続（asyncpg）してデータ取得・操作を行う。
+Python (FastAPI) で実装されたAIエージェントサービス。Claude API または Gemini API を使用し（`AI_PROVIDER`環境変数で切替: `anthropic` or `google`）、DBに直接接続（asyncpg）してデータ取得・操作を行う。39個の Direct Tools で DB 操作、メモリ管理、検索、レビュー、Web検索などを実行する。
 
 ### Health
 
