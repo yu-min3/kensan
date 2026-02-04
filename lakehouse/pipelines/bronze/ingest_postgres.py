@@ -1,8 +1,13 @@
 """
 Bronze Ingestion: PostgreSQL → Iceberg Bronze層
-差分取り込み: updated_at ベースの増分ロード
+差分取り込み: updated_at / created_at ベースの増分ロード
+
+- mutable テーブル (updated_at): 変更があれば全件 overwrite
+- append-only テーブル (since_column=created_at): 差分のみ append
+- .ingestion_state.json に最終取り込み時刻を記録
 """
 
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +18,8 @@ import pyarrow as pa
 # catalog/config.py を参照できるようにパスを追加
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "catalog"))
 from config import get_catalog, get_pg_dsn
+
+STATE_FILE = Path(__file__).parent.parent.parent / ".ingestion_state.json"
 
 # UUID型のカラム名（string変換が必要）
 UUID_COLUMNS = {
@@ -218,6 +225,26 @@ TABLES = {
 EPOCH = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
+def load_state() -> dict:
+    """ステートファイルから前回取り込み時刻を読み込み"""
+    if STATE_FILE.exists():
+        return json.loads(STATE_FILE.read_text())
+    return {}
+
+
+def save_state(state: dict):
+    """ステートファイルに取り込み時刻を保存"""
+    STATE_FILE.write_text(json.dumps(state, indent=2, default=str))
+
+
+def get_last_ingested(state: dict, table_name: str) -> datetime:
+    """テーブルの前回取り込み時刻を取得"""
+    ts = state.get(table_name)
+    if ts:
+        return datetime.fromisoformat(ts)
+    return EPOCH
+
+
 def fetch_rows(dsn: str, query: str, since: datetime) -> list[dict]:
     """PostgreSQLからデータを取得"""
     with psycopg.connect(dsn) as conn:
@@ -245,34 +272,62 @@ def rows_to_arrow(rows: list[dict], arrow_schema: pa.Schema) -> pa.Table:
     return pa.table(columns, schema=arrow_schema)
 
 
-def ingest_table(catalog, dsn: str, iceberg_table_name: str, config: dict):
-    """1テーブル分のingestion"""
+def get_max_timestamp(rows: list[dict], column: str) -> datetime:
+    """行リストからタイムスタンプカラムの最大値を取得"""
+    return max(row[column] for row in rows)
+
+
+def ingest_table(
+    catalog, dsn: str, iceberg_table_name: str, config: dict, state: dict
+) -> dict:
+    """1テーブル分のingestion。更新後のstateを返す。"""
     table = catalog.load_table(iceberg_table_name)
+    since_column = config.get("since_column", "updated_at")
+    is_append_only = since_column == "created_at"
+    since = get_last_ingested(state, iceberg_table_name)
+    is_initial = since == EPOCH
 
-    # TODO: 前回取り込み時刻を記録する仕組み（Phase2）
-    # 現時点では毎回全件取り込み
-    since = EPOCH
+    mode = "append" if is_append_only and not is_initial else "overwrite"
+    if mode == "overwrite" and not is_initial:
+        # mutable テーブル: 変更があるかチェックしてから全件取得
+        check_rows = fetch_rows(dsn, config["query"], since)
+        if not check_rows:
+            print(f"  No changes for {iceberg_table_name} (since {since.isoformat()})")
+            return state
+        # 変更があったので全件再取得
+        since = EPOCH
 
-    print(f"  Fetching from PostgreSQL: {iceberg_table_name} (since {since.isoformat()})...")
+    print(f"  Fetching: {iceberg_table_name} ({mode}, since {since.isoformat()})...")
     rows = fetch_rows(dsn, config["query"], since)
 
     if not rows:
         print(f"  No new rows for {iceberg_table_name}")
-        return
+        return state
 
     arrow_table = rows_to_arrow(rows, config["arrow_schema"])
-    table.overwrite(arrow_table)
-    print(f"  Ingested {len(rows)} rows into {iceberg_table_name}")
+
+    if mode == "append":
+        table.append(arrow_table)
+    else:
+        table.overwrite(arrow_table)
+
+    max_ts = get_max_timestamp(rows, since_column)
+    state[iceberg_table_name] = max_ts.isoformat()
+    print(f"  Ingested {len(rows)} rows into {iceberg_table_name} ({mode})")
+    return state
 
 
 def main():
     catalog = get_catalog()
     dsn = get_pg_dsn()
+    state = load_state()
 
     print("Bronze ingestion started.")
     for table_name, config in TABLES.items():
-        ingest_table(catalog, dsn, table_name, config)
-    print("Bronze ingestion complete.")
+        state = ingest_table(catalog, dsn, table_name, config, state)
+
+    save_state(state)
+    print(f"Bronze ingestion complete. State saved to {STATE_FILE.name}")
 
 
 if __name__ == "__main__":

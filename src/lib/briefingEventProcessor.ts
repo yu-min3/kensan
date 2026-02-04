@@ -1,67 +1,30 @@
 import type { AgentStreamEvent } from '@/api/services/agent'
-import type { BriefingCardType } from '@/types/briefing'
 import type { ActionItem } from '@/stores/useChatStore'
 import { useBriefingStore } from '@/stores/useBriefingStore'
 
 /**
- * Process a single SSE event and update the briefing store accordingly.
- * Maps tool_call/tool_result events to specific cards using the card_type field.
+ * Process a single SSE event from the AI stream and update the briefing store.
+ *
+ * Card data is fetched separately by useBriefingData.
+ * This processor only handles:
+ * - text → insightText (AI-generated analysis)
+ * - action_proposal → proposed actions (e.g., timeblock creation)
+ * - done → mark phase as ready
+ * - error → mark phase as error
  */
 export function processBriefingEvent(event: AgentStreamEvent): void {
   const store = useBriefingStore.getState()
 
   switch (event.type) {
-    case 'tool_call': {
-      const toolName = event.data.name as string
-      store.activateStep(toolName)
-      break
-    }
-
-    case 'tool_result': {
-      const toolName = event.data.name as string
-      const cardType = event.data.card_type as BriefingCardType | undefined
-      const result = event.data.result
-
-      store.completeStep(toolName)
-
-      if (cardType) {
-        store.updateCard(cardType, {
-          status: 'ready',
-          data: { result },
-        })
-      }
+    case 'text': {
+      const content = event.data.content as string
+      store.appendInsightText(content)
       break
     }
 
     case 'action_proposal': {
-      const cardType = event.data.card_type as BriefingCardType | undefined
       const actions = event.data.actions as ActionItem[]
-
-      if (cardType) {
-        store.updateCard(cardType, {
-          status: 'action_pending',
-          actions,
-          actionStatus: 'pending',
-        })
-      }
-      break
-    }
-
-    case 'text': {
-      const content = event.data.content as string
-      const cardType = event.data.card_type as BriefingCardType | undefined
-
-      if (cardType === 'ai_insight') {
-        store.appendInsightText(content)
-        store.updateCard('ai_insight', { status: 'ready' })
-      } else if (cardType) {
-        // Text for a specific card (e.g., learning diary draft)
-        store.updateCard(cardType, {
-          status: 'ready',
-          data: { text: content },
-        })
-      }
-      // Non-card text is ignored in briefing mode (no chat panel)
+      store.setProposedActions(actions)
       break
     }
 
@@ -70,7 +33,6 @@ export function processBriefingEvent(event: AgentStreamEvent): void {
       if (conversationId) {
         store.setConversationId(conversationId)
       }
-      store.completeStep('insight')
       store.setPhase('ready')
       break
     }
@@ -80,6 +42,8 @@ export function processBriefingEvent(event: AgentStreamEvent): void {
       break
     }
 
+    // tool_call, tool_result, keepalive — ignored
+    // (AI may still call tools internally, but we don't depend on them for cards)
     default:
       break
   }

@@ -9,3 +9,10 @@ uv.lock
 # DuckDB
 *.duckdb
 *.duckdb.wal
+
+# Ingestion state
+.ingestion_state.json
+
+# Dagster
+dagster_storage/
+.dagster/

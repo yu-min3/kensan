@@ -24,6 +24,11 @@ PostgreSQL ──batch──▶ Bronze ──PyArrow──▶ Silver ──PyArr
 | PostgreSQL | Kensanアプリ DB（データソース） | 5432 |
 | MinIO | S3互換オブジェクトストレージ（Parquetファイル格納） | 9000 (API) / 9001 (Console) |
 | Nessie | Iceberg REST Catalog（テーブルメタデータ管理） | 19120 |
+| Dremio CE | SQL クエリエンジン（Web UI + Arrow Flight SQL） | 9047 (UI) / 31010 (ODBC) / 32010 (Flight SQL) |
+| OpenMetadata | メタデータカタログ（データディスカバリ・リネージ） | 8585 (UI/API) / 8586 (Admin) |
+| OpenMetadata Postgres | OpenMetadata 専用 DB | 5433 |
+| Elasticsearch | OpenMetadata 検索エンジン | 9200 |
+| Airflow (Ingestion) | OpenMetadata メタデータ収集 | 8080 |
 
 ### ツール
 
@@ -66,6 +71,8 @@ make pipeline
 | `make pipeline` | ingest + transform + aggregate を一括実行 |
 | `make query` | DuckDB インタラクティブシェル起動 |
 | `make summary` | Gold/Silverテーブルのサマリーを表示 |
+| `make dremio` | Dremio CE を起動（Web UI: http://localhost:9047） |
+| `make openmetadata` | OpenMetadata を起動（UI: http://localhost:8585） |
 | `make health` | 各サービスのヘルスチェック |
 | `make logs` | コンテナログをtail |
 | `make clean` | コンテナとボリュームを削除 |
@@ -88,8 +95,14 @@ PostgreSQLのデータをそのまま格納。`_ingested_at` カラムを付与�
 | `bronze.external_tool_results_raw` | kensan-ai直接書込 | `month(executed_at)` | Direct append |
 
 **データフロー 2系統:**
-1. **PG → Bronze (batch)**: `ingest_postgres.py` による定期バッチ取り込み
+1. **PG → Bronze (batch)**: `ingest_postgres.py` による差分バッチ取り込み
 2. **kensan-ai → Bronze (direct)**: 外部ツール結果を kensan-ai の LakehouseWriter が fire & forget で直接 append
+
+**差分取り込み:**
+- `.ingestion_state.json` に各テーブルの最終取り込み時刻を記録
+- **mutable テーブル** (time_entries, tasks, notes, ai_contexts): 変更があれば全件 overwrite、なければスキップ
+- **append-only テーブル** (ai_interactions, ai_facts, ai_reviews): 前回以降の新規行のみ append
+- 初回実行時（ステートファイルなし）は全テーブル全件 overwrite
 
 ### Silver層（整形済み）
 
@@ -183,6 +196,106 @@ SELECT week_start, rated_count, round(avg_rating, 2) AS avg_rating,
 FROM gold_ai_quality_weekly ORDER BY week_start DESC;
 ```
 
+## Dremio CE セットアップ
+
+Dremio は Nessie + MinIO 上の Iceberg テーブルに SQL でアクセスするためのクエリエンジン。
+
+### 起動
+
+```bash
+make dremio
+# → http://localhost:9047
+```
+
+### 初回セットアップ
+
+1. http://localhost:9047 にアクセスし、admin アカウントを作成
+2. Sources → Add Source → **Nessie** を選択
+3. 以下を設定:
+
+| 項目 | 値 |
+|------|-----|
+| Name | `lakehouse` |
+| Nessie Endpoint URL | `http://nessie:19120/api/v2` |
+| Authentication | None |
+
+**Storage** セクション:
+
+| 項目 | 値 |
+|------|-----|
+| AWS Root Path | `kensan-lakehouse` |
+| AWS Access Key | `kensan` |
+| AWS Secret Key | `kensan-minio` |
+| Encrypt connection | OFF |
+
+**Connection Properties** に以下を追加:
+
+| Key | Value |
+|-----|-------|
+| `fs.s3a.endpoint` | `minio:9000` |
+| `fs.s3a.path.style.access` | `true` |
+| `dremio.s3.compat` | `true` |
+| `fs.s3a.connection.ssl.enabled` | `false` |
+
+4. Save すると bronze/silver/gold テーブルが表示される
+
+### クエリ例
+
+SQL Runner で実行:
+
+```sql
+SELECT * FROM lakehouse.bronze.time_entries_raw LIMIT 10;
+SELECT goal_name, SUM(duration_minutes)/60 AS hours
+FROM lakehouse.silver.time_entries GROUP BY goal_name ORDER BY hours DESC;
+```
+
+## OpenMetadata セットアップ
+
+OpenMetadata はメタデータカタログツール。PostgreSQL/Dremio/Nessie のテーブルメタデータを自動収集し、データディスカバリ・リネージを提供する。
+
+### 起動
+
+```bash
+make openmetadata
+# → OpenMetadata UI: http://localhost:8585
+# → Airflow UI:      http://localhost:8080
+```
+
+### 初回セットアップ
+
+1. http://localhost:8585 にアクセス（admin@open-metadata.org / admin）
+2. Settings → Services → Databases → Add New Service で接続追加:
+
+**Kensan PostgreSQL:**
+
+| 項目 | 値 |
+|------|-----|
+| Service Type | Postgres |
+| Host | postgres |
+| Port | 5432 |
+| Username | kensan |
+| Password | kensan |
+| Database | kensan |
+
+**Dremio:**
+
+| 項目 | 値 |
+|------|-----|
+| Service Type | Dremio |
+| Host | dremio |
+| Port | 9047 |
+
+3. 各サービスで Ingestion Pipeline を作成 → Run してメタデータが収集されることを確認
+
+### メモリ見積もり（追加分 ~3-4GB）
+
+| サービス | ヒープ/メモリ |
+|----------|-------------|
+| OpenMetadata Server | 1GB |
+| Elasticsearch | 512MB |
+| OpenMetadata Postgres | ~256MB |
+| Ingestion (Airflow) | ~1-2GB |
+
 ## Nessie設定の注意点
 
 Nessie Catalog の S3 認証は **URN シークレット参照パターン** を使う。
@@ -252,6 +365,8 @@ lakehouse/
 |-------|------|------|
 | 1 | MinIO + Nessie + PyIceberg + DuckDB基盤 | ✅ 完了 |
 | 1.5 | AI Data Lakehouse統合（Bronze/Silver/Gold AI テーブル、外部ツール連携） | ✅ 完了 |
-| 2 | Argo Workflows で定期実行、Nessie branching | 未着手 |
+| 2 | 差分取り込み（ステートファイル、append-only/mutable テーブル分離） | ✅ 完了 |
+| 2.5 | Dremio CE によるインタラクティブ SQL クエリ | ✅ 完了 |
+| 2.6 | OpenMetadata によるメタデータカタログ | ✅ 完了 |
 | 3 | k8s デプロイ、Trino 追加、OTel Collector 連携 | 未着手 |
 | 4 | Gold層を kensan-ai のコンテキストとして利用 | 未着手 |

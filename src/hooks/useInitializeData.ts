@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
+import { useGoalStore } from '@/stores/useGoalStore'
+import { useMilestoneStore } from '@/stores/useMilestoneStore'
+import { useTagStore } from '@/stores/useTagStore'
+import { useTaskOnlyStore } from '@/stores/useTaskStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
@@ -18,8 +21,14 @@ export function useInitializeData() {
   // Auth store
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
-  // Task store
-  const { fetchAll: fetchTasks } = useTaskManagerStore()
+  // Task-related stores (individual selectors for stable references)
+  const fetchGoals = useGoalStore((state) => state.fetchAll)
+  const fetchMilestones = useMilestoneStore((state) => state.fetchAll)
+  const fetchTags = useTagStore((state) => state.fetchAll)
+  const fetchTasksOnly = useTaskOnlyStore((state) => state.fetchTasks)
+  const fetchAllTasks = useCallback(async () => {
+    await Promise.all([fetchGoals(), fetchMilestones(), fetchTags(), fetchTasksOnly()])
+  }, [fetchGoals, fetchMilestones, fetchTags, fetchTasksOnly])
 
   // TimeBlock store (timezone-aware fetch methods)
   const fetchTimeBlocksForLocalDate = useTimeBlockStore((state) => state.fetchTimeBlocksForLocalDate)
@@ -62,7 +71,7 @@ export function useInitializeData() {
         // Fetch data from all stores in parallel
         // Use Promise.allSettled to allow partial success
         const results = await Promise.allSettled([
-          fetchTasks(),
+          fetchAllTasks(),
           fetchTimeBlocksForLocalDate(todayLocal, currentTimezone),
           fetchTimeEntriesForLocalDate(todayLocal, currentTimezone),
           fetchNotes(),
@@ -131,7 +140,7 @@ export function useInitializeData() {
       }
     }
     init()
-  }, [isAuthenticated, fetchTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, fetchNoteTypes, timezone])
+  }, [isAuthenticated, fetchAllTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, fetchNoteTypes, timezone])
 
   return { initialized, isLoading, error }
 }

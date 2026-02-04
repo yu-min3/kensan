@@ -744,14 +744,14 @@ flowchart TB
 
 ### 状況検出 (`context/detector.py`)
 
-時刻ベースのコンテキスト選択:
+明示指定ベースのコンテキスト選択（時刻ベースの自動判定は廃止）:
 
 ```python
 class Situation(Enum):
-    MORNING = "morning"   # 05:00-10:00
-    EVENING = "evening"   # 17:00-22:00
-    WEEKLY = "weekly"     # 明示指定のみ
     CHAT = "chat"         # デフォルト
+    BRIEFING = "briefing" # 朝ブリーフィング
+    EVENING = "evening"   # 夕方振り返り
+    WEEKLY = "weekly"     # 週次レビュー
 
 def detect_situation(
     explicit: str | None = None,
@@ -759,12 +759,6 @@ def detect_situation(
 ) -> Situation:
     if explicit:
         return Situation(explicit)
-
-    hour = datetime.now(ZoneInfo(timezone)).hour
-    if 5 <= hour < 10:
-        return Situation.MORNING
-    elif 17 <= hour < 22:
-        return Situation.EVENING
     return Situation.CHAT
 ```
 
@@ -1001,20 +995,17 @@ ORDER BY score DESC
 
 ```mermaid
 flowchart LR
-    subgraph "リアルタイム (チャットごと)"
+    subgraph "リアルタイム (チャットごと、バックグラウンド)"
         Chat[ユーザーチャット]
         Logger[InteractionLogger]
         Extractor[FactExtractor]
+        Summarizer[ProfileSummarizer]
     end
 
     subgraph "ストレージ"
         Interactions[(ai_interactions)]
         Facts[(user_facts)]
         Memory[(user_memory)]
-    end
-
-    subgraph "バッチ (夜間)"
-        Summarizer[ProfileSummarizer]
     end
 
     subgraph "将来のチャット"
@@ -1026,8 +1017,7 @@ flowchart LR
     Logger --> Interactions
     Logger -.->|async| Extractor
     Extractor --> Facts
-
-    Facts --> Summarizer
+    Facts -.->|新factあれば| Summarizer
     Summarizer --> Memory
 
     Memory --> Variable
@@ -1613,11 +1603,12 @@ AgentRunner.run()
     ├─ 結果を追加、ループ継続
     └─ AgentResultを返却
     ↓
-InteractionLogger.log()
+asyncio.create_task(_post_stream_pipeline())
+    ├─ InteractionLogger.log()
+    ├─ FactExtractor.extract_and_save()
+    └─ ProfileSummarizer.summarize_user() (新factあれば)
     ↓
-asyncio.create_task(FactExtractor.extract_and_save())
-    ↓
-ChatResponseを返却
+StreamingResponseを返却
 ```
 
 ### メモリ構築フロー (テキスト)
@@ -1625,17 +1616,15 @@ ChatResponseを返却
 ```
 チャットインタラクション
     ↓
-InteractionLogger.log()
-    ↓
-FactExtractor.extract_and_save() (バックグラウンド)
-    ├─ Claudeがファクトを抽出
-    ├─ バリデーション & 重複排除
-    └─ user_factsに保存
-    ↓
-バッチジョブ (夜間): ProfileSummarizer
-    ├─ 新しいファクトを持つユーザーを検索
-    ├─ Claudeでプロフィール要約を生成
-    └─ user_memoryをupsert
+_post_stream_pipeline() (バックグラウンド asyncio.create_task)
+    ├─ InteractionLogger.log() → ai_interactions に保存
+    ├─ FactExtractor.extract_and_save()
+    │   ├─ LLMがファクトを抽出
+    │   ├─ バリデーション & 重複排除
+    │   └─ user_facts に保存
+    └─ ProfileSummarizer.summarize_user() (新factあれば即時実行)
+        ├─ LLMでプロフィール要約を生成
+        └─ user_memory をupsert
     ↓
 将来のチャットで{user_memory}変数を使用
 ```

@@ -112,11 +112,12 @@ class TestSelectToolsSituation:
         assert "get_reviews" in result
         assert "create_task" not in result
 
-    def test_morning_situation(self):
-        """morning → planning + task + goals (read/write両方)"""
-        result = select_tools("今日の計画", BASE, situation="morning")
+    def test_briefing_situation(self):
+        """briefing → planning + task + goals_read + analytics"""
+        result = select_tools("今日の計画", BASE, situation="briefing")
         assert "create_time_block" in result
         assert "create_task" in result
+        assert "get_analytics_summary" in result
 
     def test_evening_situation(self):
         """evening → analytics + notes + memory"""

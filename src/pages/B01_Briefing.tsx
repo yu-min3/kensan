@@ -1,33 +1,72 @@
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { BriefingLayout } from '@/components/briefing/BriefingLayout'
-import { BriefingCard } from '@/components/briefing/BriefingCard'
 import { YesterdaySummaryCard } from '@/components/briefing/cards/YesterdaySummaryCard'
 import { TodayFocusCard } from '@/components/briefing/cards/TodayFocusCard'
 import { TimeblockProposalCard } from '@/components/briefing/cards/TimeblockProposalCard'
 import { CarryoverTasksCard } from '@/components/briefing/cards/CarryoverTasksCard'
 import { AiInsightCard } from '@/components/briefing/cards/AiInsightCard'
-import type { BriefingCard as BriefingCardData } from '@/types/briefing'
+import type { BriefingData } from '@/hooks/useBriefingData'
 
-function renderMorningCard(card: BriefingCardData) {
-  switch (card.type) {
-    case 'yesterday_summary':
-      return <YesterdaySummaryCard card={card} />
-    case 'today_focus':
-      return <TodayFocusCard card={card} />
-    case 'timeblock_proposal':
-      return <TimeblockProposalCard card={card} />
-    case 'carryover_tasks':
-      return <CarryoverTasksCard card={card} />
-    case 'ai_insight':
-      return <AiInsightCard card={card} mode="morning" />
-    default:
-      return (
-        <BriefingCard card={card}>
-          <p className="text-sm text-muted-foreground">不明なカードタイプ</p>
-        </BriefingCard>
-      )
-  }
+function MorningCards({ data }: { data: BriefingData }) {
+  return (
+    <div className="space-y-4">
+      {/* 2-column grid for data cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-medium">昨日の実績</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <YesterdaySummaryCard entries={data.yesterdayEntries} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-medium">今日のフォーカス</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <TodayFocusCard tasks={data.todayFocusTasks} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-medium">タイムブロック提案</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <TimeblockProposalCard />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-medium">持ち越しタスク</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <CarryoverTasksCard tasks={data.carryoverTasks} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Full-width AI insight card */}
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm font-medium">AIインサイト</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <AiInsightCard mode="morning" />
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 export function B01Briefing() {
-  return <BriefingLayout mode="morning" renderCard={renderMorningCard} />
+  return (
+    <BriefingLayout
+      mode="morning"
+      renderCards={(data) => <MorningCards data={data} />}
+    />
+  )
 }

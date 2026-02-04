@@ -1,7 +1,9 @@
 """API routes for kensan-ai."""
 
+import asyncio
 import json
 import logging
+import time as time_module
 import uuid as uuid_module
 from datetime import date
 from uuid import UUID
@@ -29,6 +31,8 @@ from kensan_ai.agents.chat import select_tools
 from kensan_ai.context import Situation, ContextResolver, detect_situation
 from kensan_ai.tools import execute_tool
 from kensan_ai.logging import InteractionLogger
+from kensan_ai.extraction.fact_extractor import get_fact_extractor
+from kensan_ai.batch.profile_summarizer import ProfileSummarizer
 from kensan_ai.db.queries import interactions as interactions_queries
 from kensan_ai.lib.parsers import parse_uuid as lib_parse_uuid, parse_date as lib_parse_date
 from kensan_ai.telemetry import get_tracer
@@ -105,6 +109,63 @@ def _get_user_id_from_header(authorization: str | None) -> UUID:
 async def health_check() -> HealthResponse:
     """Health check endpoint."""
     return HealthResponse()
+
+
+# =============================================================================
+# Post-Stream Pipeline
+# =============================================================================
+
+
+async def _post_stream_pipeline(
+    user_id: UUID,
+    situation: str,
+    user_input: str,
+    ai_output: str,
+    conv_id: str,
+    context_id: UUID | None,
+    tokens_input: int,
+    tokens_output: int,
+    latency_ms: int,
+) -> None:
+    """Background pipeline after stream completes: log, extract facts, update profile."""
+    try:
+        # 1. Log interaction
+        conv_uuid: UUID | None = None
+        try:
+            conv_uuid = UUID(conv_id)
+        except ValueError:
+            pass
+
+        interaction_id = await InteractionLogger.log(
+            user_id=user_id,
+            session_id=user_id,
+            situation=situation,
+            user_input=user_input,
+            ai_output=ai_output,
+            tool_calls=None,
+            tokens_input=tokens_input,
+            tokens_output=tokens_output,
+            latency_ms=latency_ms,
+            context_id=context_id,
+            conversation_id=conv_uuid,
+        )
+
+        # 2. Extract and save facts
+        extractor = get_fact_extractor()
+        saved = await extractor.extract_and_save(
+            user_id=user_id,
+            user_input=user_input,
+            ai_output=ai_output,
+            interaction_id=interaction_id,
+        )
+
+        # 3. Update profile if new facts were found
+        if saved > 0:
+            summarizer = ProfileSummarizer()
+            await summarizer.summarize_user(user_id)
+
+    except Exception as e:
+        logger.error(f"Post-stream pipeline error: {e}")
 
 
 # =============================================================================
@@ -190,6 +251,11 @@ async def agent_stream(
     # 5. Stream SSE events
     async def event_generator():
         pending_actions: list[PendingAction] = []
+        collected_text: list[str] = []
+        tokens_input = 0
+        tokens_output = 0
+        start_time = time_module.monotonic()
+
         async for event_str in agent.stream_sse(
             user_message=request.message,
             user_id=str(user_id),
@@ -198,8 +264,16 @@ async def agent_stream(
         ):
             yield event_str
 
-            # Parse action_proposal events to store pending actions
-            if event_str.startswith("event: action_proposal"):
+            # Parse SSE events to collect data for post-stream pipeline
+            if event_str.startswith("event: text"):
+                try:
+                    data_line = event_str.split("\ndata: ", 1)[1].rstrip("\n")
+                    data = json.loads(data_line)
+                    collected_text.append(data.get("content", ""))
+                except (IndexError, json.JSONDecodeError):
+                    pass
+
+            elif event_str.startswith("event: action_proposal"):
                 data_line = event_str.split("\ndata: ", 1)[1].rstrip("\n")
                 data = json.loads(data_line)
                 for action in data.get("actions", []):
@@ -210,9 +284,37 @@ async def agent_stream(
                         input=action["input"],
                     ))
 
+            elif event_str.startswith("event: done"):
+                try:
+                    data_line = event_str.split("\ndata: ", 1)[1].rstrip("\n")
+                    data = json.loads(data_line)
+                    tokens = data.get("tokens", {})
+                    tokens_input = tokens.get("input", 0)
+                    tokens_output = tokens.get("output", 0)
+                except (IndexError, json.JSONDecodeError):
+                    pass
+
         # Save state with pending actions
         state.pending_actions = pending_actions
         conversation_store.set(state)
+
+        # Launch post-stream pipeline in background
+        ai_output = "".join(collected_text)
+        latency_ms = int((time_module.monotonic() - start_time) * 1000)
+        if ai_output:
+            asyncio.create_task(
+                _post_stream_pipeline(
+                    user_id=user_id,
+                    situation=situation.value,
+                    user_input=request.message,
+                    ai_output=ai_output,
+                    conv_id=conv_id,
+                    context_id=context.id if context else None,
+                    tokens_input=tokens_input,
+                    tokens_output=tokens_output,
+                    latency_ms=latency_ms,
+                )
+            )
 
     return StreamingResponse(
         event_generator(),
