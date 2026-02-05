@@ -9,6 +9,7 @@ export class NoteEditPage {
   readonly closeButton: Locator
   readonly editor: Locator
   readonly titleInput: Locator
+  readonly drawioToggle: Locator
 
   constructor(page: Page) {
     this.page = page
@@ -20,6 +21,7 @@ export class NoteEditPage {
     this.closeButton = page.getByRole('button', { name: '閉じる' })
     this.editor = page.locator('[contenteditable="true"]')
     this.titleInput = page.getByPlaceholder('タイトルを入力')
+    this.drawioToggle = page.getByRole('switch')
   }
 
   async goto(id?: string) {
@@ -52,5 +54,12 @@ export class NoteEditPage {
     await this.deleteButton.click()
     // ConfirmPopover shows a confirmation button
     await this.page.getByRole('button', { name: '削除' }).nth(1).click()
+  }
+
+  async toggleDrawio(enable: boolean) {
+    const isChecked = await this.drawioToggle.getAttribute('aria-checked') === 'true'
+    if (enable !== isChecked) {
+      await this.drawioToggle.click()
+    }
   }
 }

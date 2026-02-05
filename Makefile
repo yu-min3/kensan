@@ -1,4 +1,5 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore \
+       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down
 
 # Default target
 .DEFAULT_GOAL := help
@@ -105,6 +106,38 @@ dev:
 dev-backend: db backend
 	@echo ""
 	@echo "Backend services started. Now run 'npm run dev' for frontend."
+
+# =============================================================================
+# Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
+# =============================================================================
+
+## Start lakehouse base (Nessie + Dagster)
+lakehouse:
+	$(MAKE) -C lakehouse up
+
+## Start lakehouse + Dremio
+lakehouse-dremio:
+	$(MAKE) -C lakehouse dremio-up
+
+## Start lakehouse + Trino + Superset
+lakehouse-trino:
+	$(MAKE) -C lakehouse trino-up
+
+## Start lakehouse + all query engines
+lakehouse-all:
+	$(MAKE) -C lakehouse all-up
+
+## Stop all lakehouse services
+lakehouse-down:
+	$(MAKE) -C lakehouse all-down
+
+## Start OpenMetadata
+openmetadata:
+	$(MAKE) -C lakehouse openmetadata-up
+
+## Stop OpenMetadata
+openmetadata-down:
+	$(MAKE) -C lakehouse openmetadata-down
 
 # =============================================================================
 # Health Check
@@ -229,6 +262,15 @@ help:
 	@echo "Database:"
 	@echo "  db-backup              Backup database to backups/"
 	@echo "  db-restore FILE=x.sql  Restore database from backup"
+	@echo ""
+	@echo "Lakehouse:"
+	@echo "  lakehouse         Base stack (Nessie + Dagster)"
+	@echo "  lakehouse-dremio  Base + Dremio"
+	@echo "  lakehouse-trino   Base + Trino + Superset"
+	@echo "  lakehouse-all     Base + all query engines"
+	@echo "  lakehouse-down    Stop all lakehouse services"
+	@echo "  openmetadata      OpenMetadata + Airflow"
+	@echo "  openmetadata-down Stop OpenMetadata"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

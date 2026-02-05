@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useDialogState } from '@/hooks/useDialogState'
+import { useTaskDetailPanel } from '@/hooks/useTaskDetailPanel'
 import { DEFAULT_COLORS } from '@/types'
 import type { Goal, Milestone, Task, Tag } from '@/types'
-import type { TaskFormData } from '@/components/task/TaskDialog'
 import type { GoalFormData } from '@/components/task/GoalDialog'
 import type { MilestoneFormData } from '@/components/task/MilestoneDialog'
 import type { TagFormData } from '@/components/task/TagDialog'
@@ -17,15 +17,6 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 
 // Form initial data
-const initialTaskFormData: TaskFormData = {
-  name: '',
-  milestoneId: '',
-  parentTaskId: undefined,
-  tagIds: [],
-  frequency: undefined,
-  daysOfWeek: undefined,
-}
-
 const initialTagFormData: TagFormData = {
   name: '',
   color: DEFAULT_COLORS[0],
@@ -67,8 +58,6 @@ export function useTaskManagement() {
     addTag,
     updateTag,
     deleteTag,
-    addTask,
-    updateTask,
     deleteTask,
     reorderTasks,
     reorderGoals,
@@ -103,8 +92,10 @@ export function useTaskManagement() {
     })
   )
 
+  // Task detail panel
+  const taskDetailPanel = useTaskDetailPanel()
+
   // Dialogs
-  const taskDialog = useDialogState<TaskFormData>(initialTaskFormData)
   const goalDialog = useDialogState<GoalFormData>(initialGoalFormData)
   const milestoneDialog = useDialogState<MilestoneFormData>(initialMilestoneFormData)
   const tagDialog = useDialogState<TagFormData>(initialTagFormData)
@@ -387,43 +378,14 @@ export function useTaskManagement() {
 
   // Task CRUD handlers
   const openNewTaskDialog = (milestoneId?: string, parentId?: string) => {
-    taskDialog.open({
-      milestoneId: milestoneId || selectedMilestoneId || '',
+    taskDetailPanel.openNewTask({
+      milestoneId: milestoneId || selectedMilestoneId || undefined,
       parentTaskId: parentId,
     })
   }
 
   const openEditTaskDialog = (task: Task) => {
-    taskDialog.openEdit(task.id, {
-      name: task.name,
-      milestoneId: task.milestoneId || '',
-      parentTaskId: task.parentTaskId,
-      tagIds: task.tagIds || [],
-      frequency: task.frequency,
-      daysOfWeek: task.daysOfWeek,
-    })
-  }
-
-  const handleSaveTask = async (data: TaskFormData, editingId: string | null) => {
-    if (editingId) {
-      await updateTask(editingId, {
-        name: data.name,
-        milestoneId: data.milestoneId || undefined,
-        parentTaskId: data.parentTaskId,
-        tagIds: data.tagIds,
-        frequency: data.frequency,
-        daysOfWeek: data.daysOfWeek,
-      })
-    } else {
-      await addTask({
-        name: data.name,
-        milestoneId: data.milestoneId || undefined,
-        parentTaskId: data.parentTaskId,
-        tagIds: data.tagIds,
-        frequency: data.frequency,
-        daysOfWeek: data.daysOfWeek,
-      })
-    }
+    taskDetailPanel.openTask(task.id)
   }
 
   const handleDeleteTask = async (id: string) => {
@@ -497,10 +459,13 @@ export function useTaskManagement() {
     handleSaveMilestone, handleDeleteMilestone, handleCompleteMilestone,
     getMilestoneCompleteMessage,
     openNewTaskDialog, openEditTaskDialog,
-    handleSaveTask, handleDeleteTask,
+    handleDeleteTask,
     openEditTagDialog, handleSaveTag, handleDeleteTag,
 
     // Dialogs
-    taskDialog, goalDialog, milestoneDialog, tagDialog,
+    goalDialog, milestoneDialog, tagDialog,
+
+    // Detail panel
+    taskDetailPanel,
   }
 }

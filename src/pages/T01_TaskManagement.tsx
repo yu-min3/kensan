@@ -5,13 +5,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TagBadge } from '@/components/common/TagBadge'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
-import { TaskDialog } from '@/components/task/TaskDialog'
 import { GoalDialog } from '@/components/task/GoalDialog'
 import { MilestoneDialog } from '@/components/task/MilestoneDialog'
 import { TagDialog } from '@/components/task/TagDialog'
 import { SortableGoalItem } from '@/components/task/SortableGoalItem'
 import { SortableTaskItem } from '@/components/task/SortableTaskItem'
 import { ChildTaskList } from '@/components/task/ChildTaskList'
+import { TaskDetailPanel } from '@/components/task/TaskDetailPanel'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { EmptyState } from '@/components/common/EmptyState'
 import { useTaskManagement } from '@/hooks/useTaskManagement'
 import {
@@ -369,10 +370,21 @@ export function T01TaskManagement() {
       </div>
 
       {/* Dialogs */}
-      <TaskDialog dialog={tm.taskDialog} goals={tm.goals} milestones={tm.milestones} tags={tm.tags} tasks={tm.tasks} onSave={tm.handleSaveTask} />
       <GoalDialog dialog={tm.goalDialog} onSave={tm.handleSaveGoal} />
       <MilestoneDialog dialog={tm.milestoneDialog} goals={tm.goals} onSave={tm.handleSaveMilestone} />
       <TagDialog dialog={tm.tagDialog} onSave={tm.handleSaveTag} />
+
+      {/* Task Detail Panel (create + edit) */}
+      <Sheet open={tm.taskDetailPanel.isOpen} onOpenChange={open => { if (!open) tm.taskDetailPanel.closeTask() }}>
+        <SheetContent>
+          <TaskDetailPanel
+            taskId={tm.taskDetailPanel.selectedTaskId}
+            createContext={tm.taskDetailPanel.newTaskContext}
+            onCreated={tm.taskDetailPanel.switchToCreatedTask}
+            onClose={tm.taskDetailPanel.closeTask}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

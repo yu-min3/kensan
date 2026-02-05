@@ -193,7 +193,7 @@ export interface NoteMetadataItem {
 }
 
 // コンテンツタイプ（複数コンテンツ対応）
-export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code'
+export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code' | 'mindmap'
 export type StorageProvider = 'minio' | 'r2' | 's3' | 'local'
 export type IndexStatus = 'pending' | 'processing' | 'indexed' | 'failed'
 

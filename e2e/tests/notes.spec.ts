@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { createNote, listNoteContents, createNoteContent } from '../helpers/api'
 
 test.describe('ノート管理', () => {
   test('ノート一覧が表示される', async ({ noteListPage }) => {
@@ -123,5 +124,152 @@ test.describe('ノート管理', () => {
     if (noResults) {
       await page.waitForTimeout(500)
     }
+  })
+
+  test('新規ノート: draw.io トグルONで作成→保存→note_contentsにmarkdownとdrawioが作成される', async ({ noteEditPage, page }) => {
+    await page.goto('/notes/new?type=general')
+    const editorPanel = page.locator('.lg\\:col-span-3')
+
+    // Fill title
+    await expect(noteEditPage.titleInput).toBeVisible()
+    await noteEditPage.titleInput.fill('[E2E] drawio付きノート')
+
+    // Type markdown content
+    const editor = page.locator('[contenteditable="true"]')
+    await editor.click()
+    await page.keyboard.type('Markdownコンテンツ')
+
+    // Toggle draw.io ON
+    await expect(noteEditPage.drawioToggle).toBeVisible()
+    await noteEditPage.toggleDrawio(true)
+
+    // draw.io editor section should appear in the editor panel
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).toBeVisible()
+
+    // Wait for save button to be enabled then save
+    await expect(noteEditPage.saveButton).toBeEnabled({ timeout: 5_000 })
+    await Promise.all([
+      page.waitForURL('**/notes', { timeout: 15_000 }),
+      noteEditPage.saveButton.click(),
+    ])
+
+    // Verify the note appears in the list
+    await expect(page.locator('a[href^="/notes/"]').filter({ hasText: '[E2E] drawio付きノート' })).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('draw.io トグルON/OFF切り替え', async ({ noteEditPage, page }) => {
+    await page.goto('/notes/new?type=general')
+    const editorPanel = page.locator('.lg\\:col-span-3')
+
+    await expect(noteEditPage.titleInput).toBeVisible()
+    await noteEditPage.titleInput.fill('[E2E] drawioトグルテスト')
+
+    const editor = page.locator('[contenteditable="true"]')
+    await editor.click()
+    await page.keyboard.type('テスト内容')
+
+    // Toggle draw.io ON
+    await noteEditPage.toggleDrawio(true)
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).toBeVisible()
+
+    // Toggle draw.io OFF
+    await noteEditPage.toggleDrawio(false)
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).not.toBeVisible()
+
+    // Toggle draw.io ON again
+    await noteEditPage.toggleDrawio(true)
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).toBeVisible()
+
+    // Save and verify
+    await expect(noteEditPage.saveButton).toBeEnabled({ timeout: 5_000 })
+    await Promise.all([
+      page.waitForURL('**/notes', { timeout: 15_000 }),
+      noteEditPage.saveButton.click(),
+    ])
+    await expect(page.locator('a[href^="/notes/"]').filter({ hasText: '[E2E] drawioトグルテスト' })).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('既存ノートの編集: note_contentsが読み込まれる', async ({ noteEditPage, page }) => {
+    // Create a note with note_contents via API
+    const note = await createNote({
+      type: 'general',
+      title: '[E2E] コンテンツ読み込みテスト',
+      content: 'API経由のMarkdown',
+      format: 'markdown',
+    })
+
+    // Create markdown and drawio contents via API
+    await createNoteContent(note.id, {
+      contentType: 'markdown',
+      content: 'API経由のMarkdown',
+      sortOrder: 0,
+    })
+    await createNoteContent(note.id, {
+      contentType: 'drawio',
+      content: '<mxGraphModel><root></root></mxGraphModel>',
+      sortOrder: 1,
+    })
+
+    // Open the note in the editor
+    await page.goto(`/notes/${note.id}`)
+    await expect(noteEditPage.heading).toBeVisible({ timeout: 10_000 })
+    const editorPanel = page.locator('.lg\\:col-span-3')
+
+    // draw.io toggle should be ON (since drawio content exists)
+    await expect(noteEditPage.drawioToggle).toBeVisible()
+    const ariaChecked = await noteEditPage.drawioToggle.getAttribute('aria-checked')
+    expect(ariaChecked).toBe('true')
+
+    // draw.io editor section should be visible
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).toBeVisible()
+  })
+
+  test('既存ノートのdraw.ioトグルOFF→保存でdrawio contentが削除される', async ({ noteEditPage, page }) => {
+    // Create a note with drawio content via API
+    const note = await createNote({
+      type: 'general',
+      title: '[E2E] drawio削除テスト',
+      content: 'テストMarkdown',
+      format: 'markdown',
+    })
+
+    await createNoteContent(note.id, {
+      contentType: 'markdown',
+      content: 'テストMarkdown',
+      sortOrder: 0,
+    })
+    await createNoteContent(note.id, {
+      contentType: 'drawio',
+      content: '<mxGraphModel><root></root></mxGraphModel>',
+      sortOrder: 1,
+    })
+
+    // Open note
+    await page.goto(`/notes/${note.id}`)
+    await expect(noteEditPage.heading).toBeVisible({ timeout: 10_000 })
+    const editorPanel = page.locator('.lg\\:col-span-3')
+
+    // draw.io should be ON
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).toBeVisible()
+
+    // Toggle draw.io OFF
+    await noteEditPage.toggleDrawio(false)
+    await expect(editorPanel.getByText('draw.io 図', { exact: true }).first()).not.toBeVisible()
+
+    // Save
+    await expect(noteEditPage.saveButton).toBeEnabled({ timeout: 5_000 })
+    await Promise.all([
+      page.waitForURL('**/notes', { timeout: 15_000 }),
+      noteEditPage.saveButton.click(),
+    ])
+
+    // Verify via API that drawio content was deleted
+    const contents = await listNoteContents(note.id)
+    const drawioContents = contents.filter((c) => c.contentType === 'drawio')
+    expect(drawioContents.length).toBe(0)
+
+    // markdown content should still exist
+    const mdContents = contents.filter((c) => c.contentType === 'markdown')
+    expect(mdContents.length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -53,9 +53,10 @@ export function ChildTaskList({
           />
           <span
             className={cn(
-              'flex-1 text-sm',
+              'flex-1 text-sm cursor-pointer hover:text-primary',
               childTask.completed && 'line-through text-muted-foreground'
             )}
+            onClick={() => onEdit(childTask)}
           >
             {childTask.name}
           </span>

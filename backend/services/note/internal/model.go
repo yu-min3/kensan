@@ -217,12 +217,13 @@ const (
 	ContentTypeImage    ContentType = "image"
 	ContentTypePDF      ContentType = "pdf"
 	ContentTypeCode     ContentType = "code"
+	ContentTypeMindmap  ContentType = "mindmap"
 )
 
 // IsValid checks if the content type is valid
 func (t ContentType) IsValid() bool {
 	switch t {
-	case ContentTypeMarkdown, ContentTypeDrawio, ContentTypeImage, ContentTypePDF, ContentTypeCode:
+	case ContentTypeMarkdown, ContentTypeDrawio, ContentTypeImage, ContentTypePDF, ContentTypeCode, ContentTypeMindmap:
 		return true
 	}
 	return false

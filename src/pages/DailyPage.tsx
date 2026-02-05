@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { TaskDetailPanel } from '@/components/task/TaskDetailPanel'
+import { useTaskDetailPanel } from '@/hooks/useTaskDetailPanel'
 import { DailySummary } from '@/components/daily/DailySummary'
 import { TimeBlockSection } from '@/components/daily/TimeBlockSection'
 import { TaskListWidget, type TaskDragData } from '@/components/daily/TaskListWidget'
@@ -29,6 +32,7 @@ import {
 export function DailyPage() {
   const { userName } = useSettingsStore()
   const { addTimeBlock } = useTimeBlockStore()
+  const taskDetailPanel = useTaskDetailPanel()
 
   // 選択中の日付（状態リフトアップ）
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -167,7 +171,7 @@ export function DailyPage() {
 
           {/* 右サイド: タスクリスト */}
           <div className="hidden lg:block">
-            <TaskListWidget />
+            <TaskListWidget onTaskClick={taskDetailPanel.openTask} />
           </div>
         </div>
 
@@ -189,6 +193,18 @@ export function DailyPage() {
             </Link>
           </div>
         </section>
+
+        {/* Task Detail Panel */}
+        <Sheet open={taskDetailPanel.isOpen} onOpenChange={open => { if (!open) taskDetailPanel.closeTask() }}>
+          <SheetContent>
+            <TaskDetailPanel
+              taskId={taskDetailPanel.selectedTaskId}
+              createContext={taskDetailPanel.newTaskContext}
+              onCreated={taskDetailPanel.switchToCreatedTask}
+              onClose={taskDetailPanel.closeTask}
+            />
+          </SheetContent>
+        </Sheet>
 
         {/* ドラッグオーバーレイ */}
         <DragOverlay>

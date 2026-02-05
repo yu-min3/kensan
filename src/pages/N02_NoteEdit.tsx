@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { NoteEditor, NoteEditorValue } from '@/components/note/NoteEditor'
+import { NoteMetadataSidebar } from '@/components/note/NoteMetadataSidebar'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
+import { useNoteContents } from '@/hooks/useNoteContents'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { validateMetadata } from '@/components/note/MetadataForm'
 import { notesApi } from '@/api/services/notes'
@@ -18,7 +19,6 @@ import {
   X,
   Archive,
   ArchiveRestore,
-  Clock,
 } from 'lucide-react'
 
 export function N02NoteEdit() {
@@ -42,6 +42,8 @@ export function N02NoteEdit() {
   const typeConstraints = getConstraints(initialType)
   const isDateRequired = typeConstraints?.dateRequired ?? false
 
+  const noteContents = useNoteContents()
+
   // Local state for the editor
   const [editorValue, setEditorValue] = useState<NoteEditorValue>({
     type: initialType,
@@ -54,19 +56,28 @@ export function N02NoteEdit() {
     goalId: undefined,
     tagIds: [],
     typeMetadata: {},
+    hasDrawio: false,
+    hasMindmap: false,
   })
 
   const [isLoading, setIsLoading] = useState(!isNew)
   const [isSaving, setIsSaving] = useState(false)
   const [existingNote, setExistingNote] = useState<Note | null>(null)
   const currentNoteIdRef = useRef<string | undefined>(id)
+  // Track content IDs for create/update decisions on save
+  const markdownContentIdRef = useRef<string | undefined>(undefined)
+  const drawioContentIdRef = useRef<string | undefined>(undefined)
+  const mindmapContentIdRef = useRef<string | undefined>(undefined)
 
-  // Fetch existing note
+  // Fetch existing note + note_contents
   useEffect(() => {
     if (id) {
       setIsLoading(true)
-      fetchNote(id)
-        .then((note) => {
+      Promise.all([
+        fetchNote(id),
+        noteContents.fetchContents(id),
+      ])
+        .then(([note, contents]) => {
           setExistingNote(note)
           // Convert note metadata to typeMetadata record
           const typeMetadata: Record<string, string> = {}
@@ -77,17 +88,57 @@ export function N02NoteEdit() {
               }
             }
           }
+
+          // Separate markdown and drawio from note_contents
+          const mdContent = contents.find(c => c.contentType === 'markdown')
+          const drawioContent = contents.find(c => c.contentType === 'drawio')
+          const mindmapContent = contents.find(c => c.contentType === 'mindmap')
+
+          markdownContentIdRef.current = mdContent?.id
+          drawioContentIdRef.current = drawioContent?.id
+          mindmapContentIdRef.current = mindmapContent?.id
+
+          // Determine content values
+          let markdownText = note.content
+          let drawioText: string | undefined
+          let hasDrawio = false
+          let mindmapText: string | undefined
+          let hasMindmap = false
+
+          if (mdContent?.content) {
+            markdownText = mdContent.content
+          }
+          if (drawioContent?.content) {
+            drawioText = drawioContent.content
+            hasDrawio = true
+          }
+          if (mindmapContent?.content) {
+            mindmapText = mindmapContent.content
+            hasMindmap = true
+          }
+
+          if (note.format === 'drawio' && !mdContent) {
+            // Legacy drawio-only note: treat notes.content as drawio
+            drawioText = note.content
+            hasDrawio = true
+            markdownText = ''
+          }
+
           setEditorValue({
             type: note.type,
             title: note.title,
-            content: note.content,
-            format: note.format,
+            content: markdownText,
+            format: 'markdown',
             date: note.date,
             taskId: note.taskId,
             milestoneId: note.milestoneId,
             goalId: note.goalId,
             tagIds: note.tagIds || [],
             typeMetadata,
+            drawioContent: drawioText,
+            hasDrawio,
+            mindmapContent: mindmapText,
+            hasMindmap,
           })
           setIsLoading(false)
         })
@@ -96,6 +147,7 @@ export function N02NoteEdit() {
           navigate('/notes', { replace: true })
         })
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fetchNote, navigate])
 
   // Get denormalized names for saving
@@ -133,7 +185,6 @@ export function N02NoteEdit() {
     if (currentNoteIdRef.current) return currentNoteIdRef.current
 
     // Create a draft note to get an ID for file uploads.
-    // Backend allows empty content/date on creation (draft workflow).
     const ev = editorValueRef.current
     const note = await createNote({
       type: ev.type,
@@ -163,7 +214,7 @@ export function N02NoteEdit() {
         type: editorValue.type,
         title: editorValue.title?.trim() || undefined,
         content: editorValue.content,
-        format: editorValue.format,
+        format: 'markdown' as const,
         date: editorValue.date,
         taskId: editorValue.taskId,
         milestoneId: editorValue.milestoneId,
@@ -175,13 +226,74 @@ export function N02NoteEdit() {
         metadata: buildMetadata(),
       }
 
+      let savedNoteId: string | undefined
       if (currentNoteIdRef.current && isNew) {
-        // Draft was created for image upload, update it
         await updateNote(currentNoteIdRef.current, noteData)
+        savedNoteId = currentNoteIdRef.current
       } else if (isNew) {
-        await createNote(noteData)
+        const created = await createNote(noteData)
+        savedNoteId = created.id
+        currentNoteIdRef.current = created.id
       } else if (id) {
         await updateNote(id, noteData)
+        savedNoteId = id
+      }
+
+      // Save note_contents (markdown + drawio)
+      if (savedNoteId) {
+        // Markdown content
+        if (markdownContentIdRef.current) {
+          await noteContents.updateContent(savedNoteId, markdownContentIdRef.current, {
+            content: editorValue.content,
+          })
+        } else {
+          const created = await noteContents.createContent(savedNoteId, {
+            contentType: 'markdown',
+            content: editorValue.content,
+            sortOrder: 0,
+          })
+          markdownContentIdRef.current = created.id
+        }
+
+        // Drawio content
+        if (editorValue.hasDrawio) {
+          if (drawioContentIdRef.current) {
+            await noteContents.updateContent(savedNoteId, drawioContentIdRef.current, {
+              content: editorValue.drawioContent || '',
+            })
+          } else {
+            const created = await noteContents.createContent(savedNoteId, {
+              contentType: 'drawio',
+              content: editorValue.drawioContent || '',
+              sortOrder: 1,
+            })
+            drawioContentIdRef.current = created.id
+          }
+        } else if (drawioContentIdRef.current) {
+          // hasDrawio toggled off — delete the drawio content
+          await noteContents.deleteContent(savedNoteId, drawioContentIdRef.current)
+          drawioContentIdRef.current = undefined
+        }
+
+        // Mindmap content
+        if (editorValue.hasMindmap) {
+          if (mindmapContentIdRef.current) {
+            await noteContents.updateContent(savedNoteId, mindmapContentIdRef.current, {
+              content: editorValue.mindmapContent || '',
+            })
+          } else {
+            const created = await noteContents.createContent(savedNoteId, {
+              contentType: 'mindmap',
+              content: editorValue.mindmapContent || '',
+              sortOrder: 2,
+            })
+            mindmapContentIdRef.current = created.id
+          }
+        } else if (mindmapContentIdRef.current) {
+          // hasMindmap toggled off — delete the mindmap content
+          await noteContents.deleteContent(savedNoteId, mindmapContentIdRef.current)
+          mindmapContentIdRef.current = undefined
+        }
       }
 
       navigate('/notes')
@@ -207,7 +319,6 @@ export function N02NoteEdit() {
     if (id && existingNote) {
       try {
         await archiveNote(id, !existingNote.archived)
-        // Refetch to update local state
         const updated = await fetchNote(id)
         setExistingNote(updated)
       } catch (error) {
@@ -224,7 +335,6 @@ export function N02NoteEdit() {
     if (constraints?.titleRequired && !editorValue.title?.trim()) return false
     if (constraints?.dateRequired && !editorValue.date) return false
 
-    // Validate type-specific metadata
     const metadataSchema = getMetadataSchema(editorValue.type)
     if (metadataSchema.length > 0) {
       const metadataErrors = validateMetadata(metadataSchema, editorValue.typeMetadata ?? {})
@@ -248,7 +358,7 @@ export function N02NoteEdit() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -318,10 +428,20 @@ export function N02NoteEdit() {
         </div>
       </div>
 
+      {/* Left: Editor / Right: Metadata */}
       <div className="grid gap-6 lg:grid-cols-4">
-        {/* Editor */}
+        {/* Left panel - Title + Content */}
         <div className="lg:col-span-3">
           <NoteEditor
+            value={editorValue}
+            onChange={setEditorValue}
+            onImageUpload={handleImageUpload}
+          />
+        </div>
+
+        {/* Right panel - All metadata */}
+        <div>
+          <NoteMetadataSidebar
             value={editorValue}
             onChange={setEditorValue}
             goals={goals}
@@ -330,80 +450,8 @@ export function N02NoteEdit() {
             tags={tags}
             onCreateTag={(name, color) => addTag({ name, color })}
             showTypeSelector={isNew}
-            showMetadata={true}
-            onImageUpload={handleImageUpload}
+            existingNote={existingNote}
           />
-        </div>
-
-        {/* Side panel */}
-        <div className="space-y-4">
-          {/* Info card */}
-          {existingNote && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  情報
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">作成日</span>
-                  <span>{format(existingNote.createdAt, 'yyyy-MM-dd HH:mm')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">更新日</span>
-                  <span>{format(existingNote.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
-                </div>
-                {existingNote.archived && (
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mt-2">
-                    <Archive className="h-4 w-4" />
-                    アーカイブ済み
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Related time entries */}
-          {existingNote?.relatedTimeEntryIds && existingNote.relatedTimeEntryIds.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  関連する時間記録
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {existingNote.relatedTimeEntryIds.map((entryId) => (
-                    <div
-                      key={entryId}
-                      className="text-sm p-2 rounded bg-muted"
-                    >
-                      時間記録 #{entryId}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tips */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">ヒント</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
-              {typeConfig?.description && (
-                <p>{typeConfig.description}</p>
-              )}
-              <p className="pt-2">
-                Markdownまたはdraw.io形式で記述できます。
-                draw.ioは図解やアーキテクチャ図の作成に便利です。
-              </p>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

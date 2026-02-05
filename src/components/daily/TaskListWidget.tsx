@@ -79,9 +79,10 @@ interface DraggableTaskCardProps {
   daysUntil: number | null
   isScheduledToday: boolean
   frequencyLabel: string | null
+  onTaskClick?: (taskId: string) => void
 }
 
-function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel, onTaskClick }: DraggableTaskCardProps) {
   const dragData: TaskDragData = {
     type: 'task',
     taskId: task.id,
@@ -126,7 +127,15 @@ function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday,
         ) : (
           <UrgencyIndicator level={level} />
         )}
-        <span className="text-sm font-medium flex-1 leading-tight">{task.name}</span>
+        <span
+          className="text-sm font-medium flex-1 leading-tight cursor-pointer hover:text-primary"
+          onClick={e => {
+            e.stopPropagation()
+            onTaskClick?.(task.id)
+          }}
+        >
+          {task.name}
+        </span>
         <EntityMemoPopover entityType="task" entityId={task.id} />
         {frequencyLabel && (
           <span className={cn(
@@ -177,7 +186,11 @@ interface TaskWithMeta {
   frequencyLabel: string | null
 }
 
-export function TaskListWidget() {
+interface TaskListWidgetProps {
+  onTaskClick?: (taskId: string) => void
+}
+
+export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
   const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskManagerStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
@@ -269,6 +282,7 @@ export function TaskListWidget() {
                   daysUntil={daysUntil}
                   isScheduledToday={isScheduledToday}
                   frequencyLabel={frequencyLabel}
+                  onTaskClick={onTaskClick}
                 />
               ))
             )}

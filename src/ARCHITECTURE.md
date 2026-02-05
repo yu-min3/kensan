@@ -64,8 +64,8 @@ src/
 │   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
 │   ├── common/                   # ドメインコンポーネント (EmptyState, LoadingSpinner, StatCard含む)
-│   ├── editor/                   # Markdown, Drawioエディタ
-│   ├── task/                     # Goal, Milestone, Taskダイアログ + SortableGoalItem, SortableTaskItem, ChildTaskList
+│   ├── editor/                   # Markdown, Drawio, Mindmapエディタ
+│   ├── task/                     # Goal, Milestone, Taskダイアログ + SortableGoalItem, SortableTaskItem, ChildTaskList, TaskDetailPanel
 │   ├── daily/                    # デイリーページセクション
 │   ├── note/                     # ノートエディタコンポーネント (NoteEditor, MetadataForm + validateMetadata)
 │   ├── agent/                    # AIチャットUI (ChatPanel, ChatMessage, ChatInput, ActionProposal, MarkdownContent)
@@ -80,7 +80,7 @@ src/
 │   └── interactions/             # AI Interaction Explorer (InteractionTable, ConversationFlow)
 ├── pages/                        # ページコンポーネント（12ファイル）
 ├── stores/                       # Zustandストア（13ストア）
-├── hooks/                        # カスタムReactフック (useTaskManagement, useTimeBlockDialog等)
+├── hooks/                        # カスタムReactフック (useTaskManagement, useTaskDetailPanel, useTimeBlockDialog等)
 ├── lib/                          # ユーティリティ（timezone, dateFormat, taskUtils, noteTypeIcons, actionFormatter, arrayUtils, utils）
 ├── mocks/                        # MSWハンドラとモックデータ
 ├── types/                        # TypeScript型定義
@@ -137,6 +137,7 @@ graph TB
         Button[Button]
         Card[Card]
         Dialog[Dialog]
+        Sheet[Sheet]
         Input[Input]
         Select[Select]
         Checkbox[Checkbox]
@@ -162,6 +163,9 @@ graph TB
     Daily --> Timeline
     Daily --> TaskCard
     Tasks --> TaskCard
+    Tasks --> TaskDetailPanel[TaskDetailPanel]
+    Daily --> TaskDetailPanel
+    TaskDetailPanel --> Sheet
     Tasks --> TimeBlockDialog
     Timeline --> TimeBlockDialog
 
@@ -183,7 +187,7 @@ graph TB
 #### 1. UIコンポーネント (`components/ui/`)
 
 プリミティブでステートレスなshadcn/uiコンポーネント:
-- Button, Input, Card, Dialog, Select, Checkbox
+- Button, Input, Card, Dialog, Sheet, Select, Checkbox
 - Tabs, Dropdown, Popover, Badge, Progress
 - Calendar, Textarea, ScrollArea, TimeRangeInput
 
@@ -1113,6 +1117,32 @@ export function useInitializeData() {
     init()
   }, [isAuthenticated])
 }
+```
+
+### タスク詳細パネルパターン
+
+タスク名クリックで右からスライドインする詳細パネル（`Sheet` UIプリミティブ使用）。
+T01_TaskManagementとDailyPageで共通利用。
+
+```typescript
+// hooks/useTaskDetailPanel.ts - ページローカルフック
+const taskDetailPanel = useTaskDetailPanel()
+// → { selectedTaskId, openTask, closeTask, isOpen }
+
+// components/task/TaskDetailPanel.tsx - パネル本体
+// Props: { taskId: string | null, onClose: () => void }
+// 構成: ヘッダー（完了チェック + インライン編集タスク名）
+//       プロパティ（マイルストーン, タグ, 期限, 見積時間, 繰り返し）
+//       メモセクション（EntityMemoSection）
+//       サブタスクリスト（子タスクナビゲーション対応）
+//       フッター（削除 + タイムスタンプ）
+
+// 使用例
+<Sheet open={taskDetailPanel.isOpen} onOpenChange={...}>
+  <SheetContent>
+    <TaskDetailPanel taskId={taskDetailPanel.selectedTaskId} onClose={taskDetailPanel.closeTask} />
+  </SheetContent>
+</Sheet>
 ```
 
 ### ダイアログ状態パターン

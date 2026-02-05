@@ -56,6 +56,17 @@ make dev-backend     # Backend only (for local frontend dev)
 
 ---
 
+## 完了条件 (MANDATORY - 全モード共通)
+
+タスクを「完了」と報告する前に、以下をすべて満たさなければならない。満たさずに完了を報告することは禁止。
+
+1. **Go コード変更時**: `cd backend && make test` が全て pass している
+2. **フロントエンド変更時**: `npm run build` が成功している
+3. **構造的変更時**: 影響を受ける ARCHITECTURE.md が更新されている
+4. **Plan モード時**: 計画の最終ステップにテスト実行・ドキュメント更新が含まれている
+
+---
+
 ## Core Rules
 
 ### 全般

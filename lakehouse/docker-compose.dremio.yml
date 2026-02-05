@@ -16,10 +16,13 @@ services:
     depends_on:
       nessie:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     networks:
-      - lakehouse-net
+      - kensan-network
+
+networks:
+  kensan-network:
+    external: true
+    name: kensan-mockup_kensan-network
 
 volumes:
   dremio_data:

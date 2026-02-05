@@ -8,7 +8,7 @@ interface UseNoteContentsReturn {
   contents: NoteContent[]
   loading: boolean
   error: string | null
-  fetchContents: (noteId: string) => Promise<void>
+  fetchContents: (noteId: string) => Promise<NoteContent[]>
   createContent: (noteId: string, input: CreateNoteContentInput) => Promise<NoteContent>
   updateContent: (noteId: string, contentId: string, input: UpdateNoteContentInput) => Promise<NoteContent>
   deleteContent: (noteId: string, contentId: string) => Promise<void>
@@ -21,14 +21,16 @@ export function useNoteContents(): UseNoteContentsReturn {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchContents = useCallback(async (noteId: string) => {
+  const fetchContents = useCallback(async (noteId: string): Promise<NoteContent[]> => {
     setLoading(true)
     setError(null)
     try {
       const data = await notesApi.listContents(noteId)
       setContents(data)
+      return data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch contents')
+      return []
     } finally {
       setLoading(false)
     }

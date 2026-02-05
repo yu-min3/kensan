@@ -116,6 +116,7 @@ services/<name>/
 ├── cmd/main.go                    # エントリポイント、依存性設定
 ├── internal/
 │   ├── model.go                   # ドメイン型とDTO
+│   ├── model_test.go              # モデルバリデーションテスト
 │   ├── handler/handler.go         # HTTPハンドラ
 │   ├── service/service.go         # ビジネスロジック
 │   ├── service/interface.go       # サービスインターフェース

@@ -96,10 +96,10 @@ export function SortableTaskItem({
         {/* Task name */}
         <span
           className={cn(
-            'flex-1 text-sm cursor-pointer',
+            'flex-1 text-sm cursor-pointer hover:text-primary',
             task.completed && 'line-through text-muted-foreground'
           )}
-          onClick={() => isSelectionMode && onSelect(task.id, !isSelected)}
+          onClick={() => isSelectionMode ? onSelect(task.id, !isSelected) : onEdit(task)}
         >
           {task.name}
         </span>

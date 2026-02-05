@@ -94,3 +94,31 @@ export async function listMilestones() {
   const json = await res.json()
   return json.data as Array<{ id: string; name: string; start_date?: string; target_date?: string; status: string }>
 }
+
+/** List note contents via API */
+export async function listNoteContents(noteId: string) {
+  const res = await apiRequest(`http://localhost:8091/api/v1/notes/${noteId}/contents`)
+  const json = await res.json()
+  return json.data as Array<{ id: string; noteId: string; contentType: string; content?: string; sortOrder: number }>
+}
+
+/** Create note content via API */
+export async function createNoteContent(noteId: string, data: {
+  contentType: string
+  content?: string
+  sortOrder?: number
+}) {
+  const res = await apiRequest(`http://localhost:8091/api/v1/notes/${noteId}/contents`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  const json = await res.json()
+  return json.data as { id: string; noteId: string; contentType: string; content?: string; sortOrder: number }
+}
+
+/** Delete note content via API */
+export async function deleteNoteContent(noteId: string, contentId: string) {
+  await apiRequest(`http://localhost:8091/api/v1/notes/${noteId}/contents/${contentId}`, {
+    method: 'DELETE',
+  })
+}

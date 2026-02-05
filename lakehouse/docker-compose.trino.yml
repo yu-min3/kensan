@@ -9,10 +9,8 @@ services:
     depends_on:
       nessie:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     networks:
-      - lakehouse-net
+      - kensan-network
 
   superset-db:
     image: postgres:16-alpine
@@ -29,7 +27,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - lakehouse-net
+      - kensan-network
 
   redis:
     image: redis:7-alpine
@@ -40,7 +38,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - lakehouse-net
+      - kensan-network
 
   superset:
     image: apache/superset:latest
@@ -77,7 +75,12 @@ services:
       trino:
         condition: service_started
     networks:
-      - lakehouse-net
+      - kensan-network
+
+networks:
+  kensan-network:
+    external: true
+    name: kensan-mockup_kensan-network
 
 volumes:
   superset_db_data:

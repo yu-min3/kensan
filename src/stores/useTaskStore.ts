@@ -23,7 +23,7 @@ interface TaskOnlyState {
     dueDate?: string
     frequency?: TaskFrequency
     daysOfWeek?: number[]
-  }) => Promise<void>
+  }) => Promise<Task | undefined>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   toggleTaskComplete: (id: string) => Promise<void>
@@ -60,8 +60,10 @@ export const useTaskOnlyStore = create<TaskOnlyState>((set, get) => ({
     try {
       const newTask = await tasksApi.create(task)
       set((state) => ({ tasks: [...state.tasks, newTask] }))
+      return newTask
     } catch (error) {
       set({ error: (error as Error).message })
+      return undefined
     }
   },
 

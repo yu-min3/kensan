@@ -56,7 +56,10 @@ export function useEntityMemos({
           content,
           pinned,
         })
-        setMemos((prev) => [newMemo, ...prev])
+        setMemos((prev) => [newMemo, ...prev].sort((a, b) => {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+          return b.createdAt.getTime() - a.createdAt.getTime()
+        }))
       } catch (err) {
         setError((err as Error).message)
         throw err
