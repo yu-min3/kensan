@@ -95,6 +95,12 @@ class HttpClient {
         throw new ApiError(response.status, errorCode, errorMessage)
       }
 
+      // その他のエラー: 赤いトーストを表示
+      toast.error('エラーが発生しました', {
+        description: errorMessage,
+        duration: 5000,
+      })
+
       throw new ApiError(response.status, errorCode, errorMessage)
     }
 

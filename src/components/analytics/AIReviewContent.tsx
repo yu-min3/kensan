@@ -1,6 +1,6 @@
 import { Progress } from '@/components/ui/progress'
 import type { AIReviewReport, TaskEvaluationStatus } from '@/types'
-import { Target, Clock, BookOpen, MessageSquare, CheckCircle2, AlertTriangle, Lightbulb } from 'lucide-react'
+import { Target, Clock, BookOpen, MessageSquare, CheckCircle2, AlertTriangle, Lightbulb, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const statusConfig: Record<TaskEvaluationStatus, { label: string; className: string }> = {
@@ -111,6 +111,21 @@ export function AIReviewContent({ review }: AIReviewContentProps) {
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
             {review.learningSummary}
+          </p>
+        </div>
+      )}
+
+      {/* おまけ: 日記へのひとこと */}
+      {review.diaryFeedback && (
+        <div className="rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200/50 dark:border-purple-800/30 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageCircle className="h-4 w-4 text-purple-500" />
+            <h4 className="font-medium text-sm text-purple-700 dark:text-purple-300">
+              日記を読んで...
+            </h4>
+          </div>
+          <p className="text-sm text-purple-900/80 dark:text-purple-100/80 leading-relaxed italic">
+            {review.diaryFeedback}
           </p>
         </div>
       )}

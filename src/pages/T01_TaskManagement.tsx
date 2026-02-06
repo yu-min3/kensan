@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TagBadge } from '@/components/common/TagBadge'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
@@ -18,13 +18,12 @@ import { useTaskManagement } from '@/hooks/useTaskManagement'
 import {
   FolderKanban, Plus, Search, ChevronRight,
   Target, Flag, Edit, Trash2, CheckCircle2,
-  ListTodo, Tags, X,
+  ListTodo, Tags, X, Eye, EyeOff,
 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { GanttChartWidget } from '@/components/task/GanttChartWidget'
-import { RecurringTaskWidget } from '@/components/task/RecurringTaskWidget'
 import { PageMemo } from '@/components/common/PageMemo'
 import { DndContext, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -101,20 +100,16 @@ export function T01TaskManagement() {
             />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={tm.hideCompleted} onCheckedChange={checked => tm.setHideCompleted(checked === true)} />
-            <span className="text-sm">完了済みを隠す</span>
+            {tm.hideCompleted ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+            <span className="text-sm text-muted-foreground">完了済み</span>
+            <Switch checked={!tm.hideCompleted} onCheckedChange={checked => tm.setHideCompleted(!checked)} />
           </label>
         </div>
       </div>
 
-      {/* ガントチャート + 定期タスク達成率 + メモ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <GanttChartWidget goals={tm.goals} milestones={tm.milestones} tasks={tm.tasks} hideCompleted={tm.hideCompleted} className="lg:col-span-2" />
-        <div className="space-y-4">
-          <RecurringTaskWidget goals={tm.goals} milestones={tm.milestones} tasks={tm.tasks} />
-          <PageMemo pageId="task-management" title="タスク管理メモ" placeholder="タスクの優先度、検討事項、メモなど..." />
-        </div>
-      </div>
+      {/* メモ + ガントチャート */}
+      <PageMemo pageId="task-management" title="タスク管理メモ" placeholder="タスクの優先度、検討事項、メモなど..." />
+      <GanttChartWidget goals={tm.goals} milestones={tm.milestones} tasks={tm.tasks} hideCompleted={tm.hideCompleted} />
 
       {/* 3カラムレイアウト */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-280px)]">

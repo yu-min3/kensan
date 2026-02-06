@@ -1,12 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import {
   CalendarDays,
+  CalendarRange,
   StickyNote,
   FolderKanban,
   BarChart3,
   Activity,
-  Sun,
-  Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +24,8 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     items: [
-      { to: '/', icon: CalendarDays, label: 'デイリー' },
+      { to: '/', icon: CalendarDays, label: 'Daily' },
+      { to: '/weekly', icon: CalendarRange, label: 'Weekly' },
     ],
   },
   {
@@ -39,8 +39,6 @@ const navSections: NavSection[] = [
   {
     label: 'AI',
     items: [
-      { to: '/briefing', icon: Sun, label: 'ブリーフィング' },
-      { to: '/reflection', icon: Moon, label: '振り返り' },
       { to: '/interactions', icon: Activity, label: 'AI Explorer' },
     ],
   },

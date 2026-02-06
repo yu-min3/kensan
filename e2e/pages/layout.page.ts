@@ -28,7 +28,7 @@ export class LayoutPage {
     this.userMenuTrigger = page.locator('header button').filter({ has: page.locator('.rounded-full') })
 
     // Sidebar
-    this.navDaily = page.locator('nav a[href="/"]').filter({ hasText: 'デイリー' })
+    this.navDaily = page.locator('nav a[href="/"]').filter({ hasText: 'Daily' })
     this.navBriefing = page.locator('nav a[href="/briefing"]')
     this.navReflection = page.locator('nav a[href="/reflection"]')
     this.navNotes = page.locator('nav a[href="/notes"]')

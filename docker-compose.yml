@@ -177,6 +177,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
       OTEL_ENABLED: "true"
       OTEL_COLLECTOR_URL: "otel-collector:4318"
+      DEMO_SEED_DIR: /app/demo-seed
+    volumes:
+      - ./scripts/demo-seed:/app/demo-seed:ro
     ports:
       - "8081:8081"
     depends_on:

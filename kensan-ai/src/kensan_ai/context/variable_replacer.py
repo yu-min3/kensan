@@ -1,5 +1,6 @@
 """Variable replacer for dynamic system prompt substitution."""
 
+import json
 import re
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -7,6 +8,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from kensan_ai.db.connection import get_connection
+from kensan_ai.db.queries.patterns import get_user_patterns as db_get_user_patterns
+from kensan_ai.db.queries.user_settings import get_user_timezone
 
 # Default timezone for displaying local times
 _DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
@@ -28,6 +31,7 @@ class VariableReplacer:
         "recent_context",
         "weekly_summary",
         "goal_progress",
+        "user_patterns",
     }
 
     @staticmethod
@@ -73,6 +77,8 @@ class VariableReplacer:
                 replacements[var] = await VariableReplacer._get_weekly_summary(user_id)
             elif var == "goal_progress":
                 replacements[var] = await VariableReplacer._get_goal_progress(user_id)
+            elif var == "user_patterns":
+                replacements[var] = await VariableReplacer._get_user_patterns(user_id)
 
         # Replace variables in the prompt
         result = system_prompt
@@ -322,6 +328,54 @@ class VariableReplacer:
                     goal_items.append("  （マイルストーンなし）")
 
             return "\n".join(goal_items)
+
+    @staticmethod
+    async def _get_user_patterns(user_id: UUID) -> str:
+        """Get user behavior patterns as formatted text."""
+        user_tz = await get_user_timezone(user_id)
+        patterns = await db_get_user_patterns(user_id, lookback_weeks=4, timezone=user_tz)
+
+        lines = []
+
+        # Plan accuracy
+        if patterns.get("planAccuracy") is not None:
+            lines.append(f"計画精度: {patterns['planAccuracy']:.0%}")
+        if patterns.get("overcommitRatio") is not None:
+            ratio = patterns["overcommitRatio"]
+            label = "計画過多" if ratio > 1.1 else "計画不足" if ratio < 0.9 else "適正"
+            lines.append(f"計画/実績比: {ratio:.2f}（{label}）")
+
+        # Average session
+        if patterns.get("avgSessionMinutes"):
+            lines.append(f"平均作業セッション: {patterns['avgSessionMinutes']}分")
+
+        # Productivity by hour
+        prod = patterns.get("productivityByHour", [])
+        if prod:
+            sorted_prod = sorted(prod, key=lambda x: x["totalMinutes"], reverse=True)
+            top3 = sorted_prod[:3]
+            peak_str = ", ".join(f"{p['hour']}時({p['totalMinutes']}分)" for p in top3)
+            lines.append(f"生産性ピーク時間帯: {peak_str}")
+
+        # Goal velocity
+        for gv in patterns.get("goalVelocity", []):
+            trend_labels = {
+                "accelerating": "加速中",
+                "stable": "安定",
+                "declining": "減速中",
+                "stalled": "停滞",
+            }
+            trend = trend_labels.get(gv["trend"], gv["trend"])
+            lines.append(f"目標「{gv['goalName']}」: {trend}（{gv['changePercent']:+.0f}%）")
+
+        # Chronic overdue
+        overdue = patterns.get("chronicOverdueTasks", [])
+        if overdue:
+            lines.append(f"慢性繰り越しタスク（{len(overdue)}件）:")
+            for t in overdue[:5]:
+                lines.append(f"  - {t['taskName']}（{t['daysOverdue']}日超過）")
+
+        return "\n".join(lines) if lines else "（行動パターンデータなし）"
 
     @staticmethod
     async def _get_recent_context(user_id: UUID, limit: int = 3) -> str:

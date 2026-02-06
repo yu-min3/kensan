@@ -6,36 +6,48 @@
 
 ## 目次
 
-1. [概要](#概要)
-2. [エンティティ](#エンティティ)
-3. [API仕様](#api仕様)
-4. [ビジネスロジック](#ビジネスロジック)
-5. [リポジトリ](#リポジトリ)
-6. [エラー定義](#エラー定義)
+1. [アーキテクチャ](#1-アーキテクチャ)
+2. [データモデル](#2-データモデル)
+3. [API](#3-api)
+4. [ビジネスロジック](#4-ビジネスロジック)
+5. [エラー](#5-エラー)
 
 ---
 
-## 概要
+## 1. アーキテクチャ
 
 | 項目 | 値 |
 |------|-----|
 | ポート | 8085 |
 | ベースパス | `/api/v1` |
-| 責務 | RoutineTask（定期タスク）の管理 |
+| 責務 | RoutineTask（定期タスク）の定義と管理 |
 
-### 主な機能
+```mermaid
+graph TB
+    subgraph routine-service
+        H["Handler"]
+        Svc["Service<br/>(曜日フィルタリング)"]
+        Repo["Repository"]
+    end
 
-- **RoutineTask**: 繰り返し実行するタスクの定義（毎日、毎週、毎月、カスタム）
-- 頻度（frequency）に基づくスケジュール管理
-- 曜日指定による実行日フィルタリング
-- 有効/無効のトグル切り替え
-- timeblock-service と連携し、ルーティンからTimeBlockを自動生成
+    Client["Frontend"] --> H
+    H --> Svc
+    Svc --> Repo
+    Repo --> DB[(PostgreSQL<br/>routine_tasks)]
+
+    TB["timeblock-service"] -.->|"ルーティン取得<br/>→ TimeBlock 自動生成"| H
+
+    style TB fill:#dbeafe
+```
+
+**特徴:**
+- シンプルな CRUD + 曜日フィルタリングロジック
+- 曜日フィルタリングは Repository ではなく Service 層で実施（頻度ごとのマッチルールが複雑なため）
+- timeblock-service がデータ取得元として利用
 
 ---
 
-## エンティティ
-
-### ER図
+## 2. データモデル
 
 ```mermaid
 erDiagram
@@ -44,10 +56,10 @@ erDiagram
         uuid user_id FK
         varchar name
         varchar frequency
-        integer[] days_of_week
+        integer_array days_of_week
         integer estimated_minutes
         time default_start_time
-        uuid[] tag_ids
+        uuid_array tag_ids
         boolean enabled
         timestamptz created_at
         timestamptz updated_at
@@ -56,175 +68,52 @@ erDiagram
     routine_tasks }o--|| users : "belongs to"
 ```
 
-### RoutineTask
+### 主要フィールド
 
-```go
-type RoutineTask struct {
-    ID               string           `json:"id"`
-    UserID           string           `json:"userId"`
-    Name             string           `json:"name"`
-    Frequency        RoutineFrequency `json:"frequency"`
-    DaysOfWeek       []int            `json:"daysOfWeek,omitempty"`     // 0=Sunday, 1=Monday, ..., 6=Saturday
-    EstimatedMinutes int              `json:"estimatedMinutes"`
-    DefaultStartTime *string          `json:"defaultStartTime,omitempty"` // HH:mm format
-    Enabled          bool             `json:"enabled"`
-    CreatedAt        time.Time        `json:"createdAt"`
-    UpdatedAt        time.Time        `json:"updatedAt"`
-}
-```
-
-### RoutineFrequency
-
-```go
-type RoutineFrequency string
-
-const (
-    FrequencyDaily   RoutineFrequency = "daily"
-    FrequencyWeekly  RoutineFrequency = "weekly"
-    FrequencyMonthly RoutineFrequency = "monthly"
-    FrequencyCustom  RoutineFrequency = "custom"
-)
-```
-
-### 入力DTO
-
-```go
-type CreateRoutineInput struct {
-    Name             string           `json:"name"`
-    Frequency        RoutineFrequency `json:"frequency"`
-    DaysOfWeek       []int            `json:"daysOfWeek,omitempty"`
-    EstimatedMinutes int              `json:"estimatedMinutes"`
-    DefaultStartTime *string          `json:"defaultStartTime,omitempty"`
-    Enabled          bool             `json:"enabled"`
-}
-
-type UpdateRoutineInput struct {
-    Name             *string           `json:"name,omitempty"`
-    Frequency        *RoutineFrequency `json:"frequency,omitempty"`
-    DaysOfWeek       []int             `json:"daysOfWeek,omitempty"`
-    EstimatedMinutes *int              `json:"estimatedMinutes,omitempty"`
-    DefaultStartTime *string           `json:"defaultStartTime,omitempty"`
-    Enabled          *bool             `json:"enabled,omitempty"`
-}
-```
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| frequency | string | `daily` / `weekly` / `monthly` / `custom` |
+| days_of_week | int[] | 0=日, 1=月, ..., 6=土 |
+| estimated_minutes | int | 予想所要時間 |
+| default_start_time | time | TimeBlock 生成時のデフォルト開始時刻（HH:mm） |
+| enabled | boolean | 有効/無効トグル |
+| tag_ids | UUID[] | 横断分類タグ |
 
 ---
 
-## API仕様
-
-全エンドポイントは認証必須。
-
-### Routine API
+## 3. API
 
 | Method | Endpoint | 説明 |
 |--------|----------|------|
-| GET | /routines | 一覧取得 |
-| POST | /routines | 新規作成 |
+| GET | /routines | 一覧（`?enabled`, `?for_date` フィルタ） |
+| POST | /routines | 作成 |
 | PUT | /routines/{routineId} | 更新 |
 | PATCH | /routines/{routineId}/toggle | 有効/無効トグル |
 | DELETE | /routines/{routineId} | 削除 |
 
-**GET /routines クエリパラメータ:**
-
-| パラメータ | 型 | 説明 |
-|-----------|-----|------|
-| enabled | boolean | 有効/無効でフィルタ |
-| for_date | string | 日付（YYYY-MM-DD）で曜日フィルタ |
-
-**POST /routines リクエスト:**
-```json
-{
-  "name": "技術ニュースチェック",
-  "frequency": "daily",
-  "estimatedMinutes": 30,
-  "defaultStartTime": "09:00",
-  "enabled": true
-}
-```
-
-**POST /routines リクエスト（weekly）:**
-```json
-{
-  "name": "週次振り返り",
-  "frequency": "weekly",
-  "daysOfWeek": [0],
-  "estimatedMinutes": 60,
-  "defaultStartTime": "20:00",
-  "enabled": true
-}
-```
-
-**レスポンス（201 Created / 200 OK）:**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "userId": "uuid",
-    "name": "技術ニュースチェック",
-    "frequency": "daily",
-    "daysOfWeek": [],
-    "estimatedMinutes": 30,
-    "defaultStartTime": "09:00",
-    "enabled": true,
-    "createdAt": "2026-01-23T00:00:00Z",
-    "updatedAt": "2026-01-23T00:00:00Z"
-  }
-}
-```
-
-**PUT /routines/{routineId} リクエスト（部分更新）:**
-```json
-{
-  "name": "技術記事チェック",
-  "estimatedMinutes": 20
-}
-```
-
-**PATCH /routines/{routineId}/toggle レスポンス:**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "name": "技術ニュースチェック",
-    "enabled": false,
-    "..."
-  }
-}
-```
-
-**DELETE /routines/{routineId}:**
-
-204 No Content を返す。
+**`for_date` パラメータ:** 日付（YYYY-MM-DD）を指定すると、その曜日に該当するルーティンのみ返す。
 
 ---
 
-## ビジネスロジック
+## 4. ビジネスロジック
 
 ### 曜日フィルタリング
-
-`for_date` クエリパラメータが指定された場合、サービス層で曜日によるフィルタリングを実施。
-リポジトリは `enabled` フィルタのみ適用し、曜日フィルタリングはアプリケーション側で行う。
 
 ```mermaid
 sequenceDiagram
     participant Frontend
-    participant Handler
     participant Service
     participant Repository
 
-    Frontend->>Handler: GET /routines?for_date=2026-01-23
-    Handler->>Handler: for_dateをtime.Timeにパース
-    Handler->>Service: ListRoutines(filter{ForDate})
-    Service->>Repository: ListRoutines(userID, filter)
+    Frontend->>Service: GET /routines?for_date=2026-01-23
+    Service->>Repository: ListRoutines(userID, enabledFilter)
     Note over Repository: WHERE user_id = $1 (enabledフィルタのみ)
-    Repository-->>Service: []RoutineTask (全件)
-    Service->>Service: MatchesDayOfWeek(dayOfWeek)で<br/>曜日フィルタリング
-    Note over Service: daily → 常にマッチ<br/>weekly/monthly/custom → DaysOfWeekに含まれるか
-    Service-->>Handler: []RoutineTask (フィルタ済み)
-    Handler-->>Frontend: 200 OK
+    Repository-->>Service: 全件
+    Service->>Service: MatchesDayOfWeek() で曜日フィルタ
+    Service-->>Frontend: フィルタ済みリスト
 ```
 
-### 頻度と曜日の関係
+### 頻度と曜日マッチルール
 
 | 頻度 | DaysOfWeek | MatchesDayOfWeek の動作 |
 |------|-----------|----------------------|
@@ -233,103 +122,24 @@ sequenceDiagram
 | monthly | 必須 | 指定曜日のみマッチ |
 | custom | 必須 | 指定曜日のみマッチ |
 
-### 入力バリデーション
+### バリデーション
 
 | フィールド | ルール |
-|----------|--------|
+|-----------|--------|
 | name | 必須（空文字不可） |
-| frequency | `daily`, `weekly`, `monthly`, `custom` のいずれか |
-| daysOfWeek | 各値は 0-6 の範囲。weekly/monthly/custom の場合は1つ以上必須 |
+| frequency | `daily` / `weekly` / `monthly` / `custom` のいずれか |
+| daysOfWeek | 各値 0-6。weekly/monthly/custom の場合は 1 つ以上必須 |
 
-### TimeBlockとの連携
+### TimeBlock 連携
 
-timeblock-service の `POST /timeblocks/generate-from-routines` が指定日のルーティンを取得し、TimeBlock を自動生成する。
-routine-service はデータ提供元として機能。
-
----
-
-## リポジトリ
-
-### インターフェース
-
-```go
-type Repository interface {
-    // ListRoutines returns all routine tasks for a user with optional filters
-    ListRoutines(ctx context.Context, userID string, filter routine.RoutineFilter) ([]routine.RoutineTask, error)
-
-    // GetRoutineByID returns a routine task by ID for a specific user
-    GetRoutineByID(ctx context.Context, userID, routineID string) (*routine.RoutineTask, error)
-
-    // CreateRoutine creates a new routine task
-    CreateRoutine(ctx context.Context, userID string, input routine.CreateRoutineInput) (*routine.RoutineTask, error)
-
-    // UpdateRoutine updates an existing routine task
-    UpdateRoutine(ctx context.Context, userID, routineID string, input routine.UpdateRoutineInput) (*routine.RoutineTask, error)
-
-    // ToggleRoutineEnabled toggles the enabled status of a routine task
-    ToggleRoutineEnabled(ctx context.Context, userID, routineID string) (*routine.RoutineTask, error)
-
-    // DeleteRoutine deletes a routine task
-    DeleteRoutine(ctx context.Context, userID, routineID string) error
-}
-```
-
-### 主要クエリ
-
-**ListRoutines（フィルタ付き）:**
-```sql
-SELECT id, user_id, name, frequency, days_of_week, estimated_minutes,
-       default_start_time, enabled, created_at, updated_at
-FROM routine_tasks
-WHERE user_id = $1
-  AND enabled = $2  -- enabledフィルタ指定時のみ
-ORDER BY created_at DESC
-```
-
-**GetRoutineByID:**
-```sql
-SELECT id, user_id, name, frequency, days_of_week, estimated_minutes,
-       default_start_time, enabled, created_at, updated_at
-FROM routine_tasks
-WHERE id = $1 AND user_id = $2
-```
-
-**CreateRoutine:**
-```sql
-INSERT INTO routine_tasks (
-    id, user_id, name, frequency, days_of_week, estimated_minutes,
-    default_start_time, enabled, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, user_id, name, frequency, days_of_week, estimated_minutes,
-          default_start_time, enabled, created_at, updated_at
-```
-
-**ToggleRoutineEnabled:**
-```sql
-UPDATE routine_tasks
-SET enabled = NOT enabled, updated_at = $3
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, frequency, days_of_week, estimated_minutes,
-          default_start_time, enabled, created_at, updated_at
-```
-
-**UpdateRoutine（動的SET句）:**
-
-更新対象フィールドのみSET句を動的に構築。未指定フィールドは変更しない。
-
-**DeleteRoutine:**
-```sql
-DELETE FROM routine_tasks WHERE id = $1 AND user_id = $2
-```
+timeblock-service の `POST /timeblocks/generate-from-routines` が指定日のルーティンを取得し、`defaultStartTime` + `estimatedMinutes` で TimeBlock を自動生成する。routine-service はデータ提供元として機能。
 
 ---
 
-## エラー定義
+## 5. エラー
 
-```go
-var (
-    ErrRoutineNotFound  = errors.NotFound("routine task")       // サービス固有のエラー
-    ErrInvalidFrequency = fmt.Errorf("...: %w", errors.ErrInvalidInput) // サービス固有のエラー
-    ErrInvalidInput     = errors.ErrInvalidInput                // 共通エラーの再エクスポート
-)
-```
+| エラー | HTTP | コード | 条件 |
+|--------|------|--------|------|
+| ErrRoutineNotFound | 404 | NOT_FOUND | ルーティンが存在しない |
+| ErrInvalidFrequency | 400 | INVALID_INPUT | frequency が不正 |
+| ErrInvalidInput | 400 | INVALID_INPUT | 入力値が不正 |

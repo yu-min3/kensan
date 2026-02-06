@@ -252,12 +252,12 @@ class TestSelectToolsSearch:
 
     def test_explore_keyword_includes_search(self):
         """「探して」→ search グループ含む"""
-        result = select_tools("CKAについて探して", BASE)
+        result = select_tools("資格について探して", BASE)
         assert "semantic_search" in result
 
     def test_investigate_keyword_includes_search(self):
         """「調べて」→ search グループ含む"""
-        result = select_tools("Istioについて調べて", BASE)
+        result = select_tools("サービスメッシュについて調べて", BASE)
         assert "semantic_search" in result
 
 

@@ -180,28 +180,23 @@ export const timeblocksApi = extendApiService(baseTimeBlocksApi, (base) => ({
    * Create a time block from local date/time.
    * Converts local date/time to UTC ISO datetimes before sending.
    *
-   * @param localDate - Date in YYYY-MM-DD format (user's local timezone)
+   * @param localStartDate - Start date in YYYY-MM-DD format (user's local timezone)
    * @param localStartTime - Start time in HH:mm format (local)
+   * @param localEndDate - End date in YYYY-MM-DD format (user's local timezone)
    * @param localEndTime - End time in HH:mm format (local)
    * @param data - Other time block fields
    * @param timezone - User's timezone (e.g., 'Asia/Tokyo')
    */
   async createFromLocal(
-    localDate: string,
+    localStartDate: string,
     localStartTime: string,
+    localEndDate: string,
     localEndTime: string,
     data: Omit<CreateTimeBlockInput, 'startDatetime' | 'endDatetime'>,
     timezone: string
   ): Promise<TimeBlock> {
-    let startDatetime = localToUtcDatetime(localDate, localStartTime, timezone)
-    let endDatetime = localToUtcDatetime(localDate, localEndTime, timezone)
-
-    // Handle overnight blocks (e.g., 23:30 - 00:30)
-    if (endDatetime <= startDatetime) {
-      // Add 1 day to end
-      const endMs = new Date(endDatetime).getTime() + 24 * 60 * 60 * 1000
-      endDatetime = new Date(endMs).toISOString()
-    }
+    const startDatetime = localToUtcDatetime(localStartDate, localStartTime, timezone)
+    const endDatetime = localToUtcDatetime(localEndDate, localEndTime, timezone)
 
     return base.create({
       ...data,
@@ -214,33 +209,29 @@ export const timeblocksApi = extendApiService(baseTimeBlocksApi, (base) => ({
    * Update a time block from local date/time.
    *
    * @param id - Time block ID
-   * @param localDate - Date in YYYY-MM-DD (local), needed when updating times
+   * @param localStartDate - Start date in YYYY-MM-DD (local), optional
    * @param localStartTime - New start time in HH:mm (local), optional
+   * @param localEndDate - End date in YYYY-MM-DD (local), optional
    * @param localEndTime - New end time in HH:mm (local), optional
    * @param data - Other fields to update
    * @param timezone - User's timezone
    */
   async updateFromLocal(
     id: string,
-    localDate: string | undefined,
+    localStartDate: string | undefined,
     localStartTime: string | undefined,
+    localEndDate: string | undefined,
     localEndTime: string | undefined,
     data: Omit<UpdateTimeBlockInput, 'startDatetime' | 'endDatetime'>,
     timezone: string
   ): Promise<TimeBlock> {
     const input: UpdateTimeBlockInput = { ...data }
 
-    if (localDate && localStartTime) {
-      input.startDatetime = localToUtcDatetime(localDate, localStartTime, timezone)
+    if (localStartDate && localStartTime) {
+      input.startDatetime = localToUtcDatetime(localStartDate, localStartTime, timezone)
     }
-    if (localDate && localEndTime) {
-      input.endDatetime = localToUtcDatetime(localDate, localEndTime, timezone)
-    }
-
-    // Handle overnight
-    if (input.startDatetime && input.endDatetime && input.endDatetime <= input.startDatetime) {
-      const endMs = new Date(input.endDatetime).getTime() + 24 * 60 * 60 * 1000
-      input.endDatetime = new Date(endMs).toISOString()
+    if (localEndDate && localEndTime) {
+      input.endDatetime = localToUtcDatetime(localEndDate, localEndTime, timezone)
     }
 
     return base.update(id, input)
@@ -276,20 +267,15 @@ export const timeentriesApi = extendApiService(baseTimeEntriesApi, (base) => ({
    * Create a time entry from local date/time.
    */
   async createFromLocal(
-    localDate: string,
+    localStartDate: string,
     localStartTime: string,
+    localEndDate: string,
     localEndTime: string,
     data: Omit<CreateTimeEntryInput, 'startDatetime' | 'endDatetime'>,
     timezone: string
   ): Promise<TimeEntry> {
-    let startDatetime = localToUtcDatetime(localDate, localStartTime, timezone)
-    let endDatetime = localToUtcDatetime(localDate, localEndTime, timezone)
-
-    // Handle overnight entries
-    if (endDatetime <= startDatetime) {
-      const endMs = new Date(endDatetime).getTime() + 24 * 60 * 60 * 1000
-      endDatetime = new Date(endMs).toISOString()
-    }
+    const startDatetime = localToUtcDatetime(localStartDate, localStartTime, timezone)
+    const endDatetime = localToUtcDatetime(localEndDate, localEndTime, timezone)
 
     return base.create({
       ...data,
@@ -303,25 +289,20 @@ export const timeentriesApi = extendApiService(baseTimeEntriesApi, (base) => ({
    */
   async updateFromLocal(
     id: string,
-    localDate: string | undefined,
+    localStartDate: string | undefined,
     localStartTime: string | undefined,
+    localEndDate: string | undefined,
     localEndTime: string | undefined,
     data: Omit<UpdateTimeEntryInput, 'startDatetime' | 'endDatetime'>,
     timezone: string
   ): Promise<TimeEntry> {
     const input: UpdateTimeEntryInput = { ...data }
 
-    if (localDate && localStartTime) {
-      input.startDatetime = localToUtcDatetime(localDate, localStartTime, timezone)
+    if (localStartDate && localStartTime) {
+      input.startDatetime = localToUtcDatetime(localStartDate, localStartTime, timezone)
     }
-    if (localDate && localEndTime) {
-      input.endDatetime = localToUtcDatetime(localDate, localEndTime, timezone)
-    }
-
-    // Handle overnight
-    if (input.startDatetime && input.endDatetime && input.endDatetime <= input.startDatetime) {
-      const endMs = new Date(input.endDatetime).getTime() + 24 * 60 * 60 * 1000
-      input.endDatetime = new Date(endMs).toISOString()
+    if (localEndDate && localEndTime) {
+      input.endDatetime = localToUtcDatetime(localEndDate, localEndTime, timezone)
     }
 
     return base.update(id, input)

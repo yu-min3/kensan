@@ -72,6 +72,10 @@ from kensan_ai.tools.web_tools import (
     web_fetch,
     ALL_WEB_TOOLS,
 )
+from kensan_ai.tools.pattern_tools import (
+    get_user_patterns,
+    ALL_PATTERN_TOOLS,
+)
 
 # Aggregate all tools
 ALL_TOOLS = [
@@ -80,6 +84,7 @@ ALL_TOOLS = [
     *ALL_SEARCH_TOOLS,
     *ALL_REVIEW_TOOLS,
     *ALL_ANALYTICS_TOOLS,
+    *ALL_PATTERN_TOOLS,
     *ALL_WEB_TOOLS,
 ]
 
@@ -141,6 +146,9 @@ __all__ = [
     "web_search",
     "web_fetch",
     "ALL_WEB_TOOLS",
+    # Pattern Tools
+    "get_user_patterns",
+    "ALL_PATTERN_TOOLS",
     # All
     "ALL_TOOLS",
 ]

@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { toast } from 'sonner'
 import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useTaskDetailPanel } from '@/hooks/useTaskDetailPanel'
 import { DEFAULT_COLORS } from '@/types'
@@ -72,7 +74,7 @@ export function useTaskManagement() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const { hideCompleted, setHideCompleted } = useSettingsStore()
 
   // Task expansion
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
@@ -189,14 +191,26 @@ export function useTaskManagement() {
   // Bulk operations
   const handleBulkDelete = async () => {
     if (selectedTaskIds.size === 0) return
-    await bulkDeleteTasks(Array.from(selectedTaskIds))
-    setSelectedTaskIds(new Set())
+    const count = selectedTaskIds.size
+    try {
+      await bulkDeleteTasks(Array.from(selectedTaskIds))
+      setSelectedTaskIds(new Set())
+      toast.success(`${count}件のタスクを削除しました`)
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   const handleBulkComplete = async (completed: boolean) => {
     if (selectedTaskIds.size === 0) return
-    await bulkCompleteTasks(Array.from(selectedTaskIds), completed)
-    setSelectedTaskIds(new Set())
+    const count = selectedTaskIds.size
+    try {
+      await bulkCompleteTasks(Array.from(selectedTaskIds), completed)
+      setSelectedTaskIds(new Set())
+      toast.success(`${count}件のタスクを${completed ? '完了' : '未完了に変更'}しました`)
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   // DnD handlers
@@ -293,32 +307,48 @@ export function useTaskManagement() {
   }
 
   const handleSaveGoal = async (data: GoalFormData, editingId: string | null) => {
-    if (editingId) {
-      await updateGoal(editingId, {
-        name: data.name,
-        description: data.description || undefined,
-        color: data.color,
-        status: data.status,
-      })
-    } else {
-      await addGoal({
-        name: data.name,
-        description: data.description || undefined,
-        color: data.color,
-      })
+    try {
+      if (editingId) {
+        await updateGoal(editingId, {
+          name: data.name,
+          description: data.description || undefined,
+          color: data.color,
+          status: data.status,
+        })
+        toast.success('目標を更新しました')
+      } else {
+        await addGoal({
+          name: data.name,
+          description: data.description || undefined,
+          color: data.color,
+        })
+        toast.success('目標を追加しました')
+      }
+    } catch {
+      // エラートーストはhttpClientで表示される
     }
   }
 
   const handleDeleteGoal = async (id: string) => {
-    await deleteGoal(id)
-    if (selectedGoalId === id) {
-      setSelectedGoalId(null)
-      setSelectedMilestoneId(null)
+    try {
+      await deleteGoal(id)
+      if (selectedGoalId === id) {
+        setSelectedGoalId(null)
+        setSelectedMilestoneId(null)
+      }
+      toast.success('目標を削除しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
     }
   }
 
   const handleCompleteGoal = async (goalId: string) => {
-    await updateGoal(goalId, { status: 'completed' })
+    try {
+      await updateGoal(goalId, { status: 'completed' })
+      toast.success('目標を完了しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   // Milestone CRUD handlers
@@ -340,32 +370,48 @@ export function useTaskManagement() {
   }
 
   const handleSaveMilestone = async (data: MilestoneFormData, editingId: string | null) => {
-    if (editingId) {
-      await updateMilestone(editingId, {
-        name: data.name,
-        description: data.description || undefined,
-        startDate: data.startDate || undefined,
-        targetDate: data.targetDate || undefined,
-        status: data.status,
-      })
-    } else {
-      await addMilestone({
-        name: data.name,
-        description: data.description || undefined,
-        goalId: data.goalId,
-        startDate: data.startDate || undefined,
-        targetDate: data.targetDate || undefined,
-      })
+    try {
+      if (editingId) {
+        await updateMilestone(editingId, {
+          name: data.name,
+          description: data.description || undefined,
+          startDate: data.startDate || undefined,
+          targetDate: data.targetDate || undefined,
+          status: data.status,
+        })
+        toast.success('マイルストーンを更新しました')
+      } else {
+        await addMilestone({
+          name: data.name,
+          description: data.description || undefined,
+          goalId: data.goalId,
+          startDate: data.startDate || undefined,
+          targetDate: data.targetDate || undefined,
+        })
+        toast.success('マイルストーンを追加しました')
+      }
+    } catch {
+      // エラートーストはhttpClientで表示される
     }
   }
 
   const handleDeleteMilestone = async (id: string) => {
-    await deleteMilestone(id)
-    if (selectedMilestoneId === id) setSelectedMilestoneId(null)
+    try {
+      await deleteMilestone(id)
+      if (selectedMilestoneId === id) setSelectedMilestoneId(null)
+      toast.success('マイルストーンを削除しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   const handleCompleteMilestone = async (milestoneId: string) => {
-    await updateMilestone(milestoneId, { status: 'completed' })
+    try {
+      await updateMilestone(milestoneId, { status: 'completed' })
+      toast.success('マイルストーンを完了しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   const getMilestoneCompleteMessage = (milestoneId: string) => {
@@ -389,7 +435,12 @@ export function useTaskManagement() {
   }
 
   const handleDeleteTask = async (id: string) => {
-    await deleteTask(id)
+    try {
+      await deleteTask(id)
+      toast.success('タスクを削除しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   // Tag CRUD handlers
@@ -398,15 +449,26 @@ export function useTaskManagement() {
   }
 
   const handleSaveTag = async (data: TagFormData, editingId: string | null) => {
-    if (editingId) {
-      await updateTag(editingId, { name: data.name, color: data.color })
-    } else {
-      await addTag({ name: data.name, color: data.color })
+    try {
+      if (editingId) {
+        await updateTag(editingId, { name: data.name, color: data.color })
+        toast.success('タグを更新しました')
+      } else {
+        await addTag({ name: data.name, color: data.color })
+        toast.success('タグを追加しました')
+      }
+    } catch {
+      // エラートーストはhttpClientで表示される
     }
   }
 
   const handleDeleteTag = async (id: string) => {
-    await deleteTag(id)
+    try {
+      await deleteTag(id)
+      toast.success('タグを削除しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   // Derived state

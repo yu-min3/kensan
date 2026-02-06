@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -84,13 +85,18 @@ export function TaskDetailPanel({ taskId, createContext, onCreated, onClose }: T
   const handleSaveName = useCallback(async () => {
     if (isCreateMode) {
       if (!editingName.trim()) return
-      const newTask = await addTask({
-        name: editingName.trim(),
-        milestoneId: createContext?.milestoneId || undefined,
-        parentTaskId: createContext?.parentTaskId,
-      })
-      if (newTask) {
-        onCreated?.(newTask.id)
+      try {
+        const newTask = await addTask({
+          name: editingName.trim(),
+          milestoneId: createContext?.milestoneId || undefined,
+          parentTaskId: createContext?.parentTaskId,
+        })
+        if (newTask) {
+          toast.success('タスクを追加しました')
+          onCreated?.(newTask.id)
+        }
+      } catch {
+        // エラートーストはhttpClientで表示される
       }
       return
     }
@@ -105,11 +111,16 @@ export function TaskDetailPanel({ taskId, createContext, onCreated, onClose }: T
 
   const handleDelete = useCallback(async () => {
     if (!displayTask) return
-    await deleteTask(displayTask.id)
-    if (navigatedTaskId) {
-      setNavigatedTaskId(null)
-    } else {
-      onClose()
+    try {
+      await deleteTask(displayTask.id)
+      toast.success('タスクを削除しました')
+      if (navigatedTaskId) {
+        setNavigatedTaskId(null)
+      } else {
+        onClose()
+      }
+    } catch {
+      // エラートーストはhttpClientで表示される
     }
   }, [displayTask, deleteTask, navigatedTaskId, onClose])
 

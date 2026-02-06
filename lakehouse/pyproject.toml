@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["catalog", "dagster_project"]
+packages = ["catalog", "pipelines", "queries", "dagster_project"]
 
 [dependency-groups]
 dev = [

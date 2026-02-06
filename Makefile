@@ -10,7 +10,7 @@
 
 ## Start all services (frontend + backend + database + storage)
 up:
-	docker compose up -d
+	docker compose up -d --remove-orphans
 	@echo ""
 	@echo "🚀 Kensan is starting..."
 	@echo ""

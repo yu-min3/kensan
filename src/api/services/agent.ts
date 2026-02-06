@@ -11,7 +11,7 @@ export interface AgentStreamEvent {
 export interface AgentStreamRequest {
   message: string
   conversation_id?: string | null
-  situation?: 'auto' | 'morning' | 'evening' | 'weekly' | 'chat' | 'briefing'
+  situation?: 'auto' | 'weekly' | 'chat' | 'planning'
   context?: Record<string, string> | null
 }
 

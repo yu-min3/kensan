@@ -7,26 +7,41 @@ Bronze Ingestion: PostgreSQL → Iceberg Bronze層
 - .ingestion_state.json に最終取り込み時刻を記録
 """
 
+from __future__ import annotations
+
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pyarrow as pa
 
-# catalog/config.py を参照できるようにパスを追加
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "catalog"))
-from config import get_catalog, get_pg_dsn
+from catalog.config import get_catalog, get_pg_dsn, setup_logging
+
+if TYPE_CHECKING:
+    from pyiceberg.catalog import Catalog
+
+logger = setup_logging("bronze.ingest")
 
 STATE_FILE = Path(__file__).parent.parent.parent / ".ingestion_state.json"
 
-# UUID型のカラム名（string変換が必要）
-UUID_COLUMNS = {
-    "id", "user_id", "task_id", "milestone_id", "goal_id", "parent_task_id",
-    "context_id", "session_id", "conversation_id", "source_interaction_id",
-    "experiment_id",
-}
+
+class IngestionError(Exception):
+    """Ingestion処理中のエラー"""
+
+    pass
+
+
+def _is_uuid_like(value: object) -> bool:
+    """値がUUID型かどうかを判定（psycopgのUUID型または文字列形式）"""
+    if value is None:
+        return False
+    # psycopgはUUIDをuuid.UUIDとして返す
+    type_name = type(value).__name__
+    return type_name == "UUID" or (
+        isinstance(value, str) and len(value) == 36 and value.count("-") == 4
+    )
 
 # 取り込み対象テーブルの定義
 TABLES = {
@@ -225,19 +240,24 @@ TABLES = {
 EPOCH = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
-def load_state() -> dict:
+def load_state() -> dict[str, str]:
     """ステートファイルから前回取り込み時刻を読み込み"""
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except json.JSONDecodeError as e:
+            logger.warning(f"State file corrupted, starting fresh: {e}")
+            return {}
     return {}
 
 
-def save_state(state: dict):
+def save_state(state: dict[str, str]) -> None:
     """ステートファイルに取り込み時刻を保存"""
     STATE_FILE.write_text(json.dumps(state, indent=2, default=str))
+    logger.debug(f"State saved to {STATE_FILE}")
 
 
-def get_last_ingested(state: dict, table_name: str) -> datetime:
+def get_last_ingested(state: dict[str, str], table_name: str) -> datetime:
     """テーブルの前回取り込み時刻を取得"""
     ts = state.get(table_name)
     if ts:
@@ -245,43 +265,78 @@ def get_last_ingested(state: dict, table_name: str) -> datetime:
     return EPOCH
 
 
-def fetch_rows(dsn: str, query: str, since: datetime) -> list[dict]:
-    """PostgreSQLからデータを取得"""
-    with psycopg.connect(dsn) as conn:
-        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-            cur.execute(query, {"since": since})
-            return cur.fetchall()
+def fetch_rows(dsn: str, query: str, since: datetime) -> list[dict[str, Any]]:
+    """PostgreSQLからデータを取得
+
+    Raises:
+        IngestionError: PostgreSQL接続またはクエリ実行に失敗した場合
+    """
+    try:
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                cur.execute(query, {"since": since})
+                return cur.fetchall()
+    except psycopg.Error as e:
+        raise IngestionError(f"PostgreSQL error: {e}") from e
 
 
-def rows_to_arrow(rows: list[dict], arrow_schema: pa.Schema) -> pa.Table:
-    """dict行リストをArrow Tableに変換"""
+def rows_to_arrow(rows: list[dict[str, Any]], arrow_schema: pa.Schema) -> pa.Table:
+    """dict行リストをArrow Tableに変換
+
+    UUID型のカラムは自動検出し、string型に変換する。
+
+    Raises:
+        IngestionError: Arrow Table変換に失敗した場合
+    """
     now = datetime.now(timezone.utc)
 
-    columns = {}
-    for field in arrow_schema:
-        if field.name == "_ingested_at":
-            columns[field.name] = [now] * len(rows)
-        else:
-            columns[field.name] = [
-                str(row[field.name]) if field.name in UUID_COLUMNS
-                                        and row.get(field.name) is not None
-                else row.get(field.name)
-                for row in rows
-            ]
+    columns: dict[str, list[Any]] = {}
+    try:
+        for field in arrow_schema:
+            if field.name == "_ingested_at":
+                columns[field.name] = [now] * len(rows)
+            else:
+                # UUID型は動的に検出して文字列変換
+                # 最初の非NULL値でUUID型かどうかを判定
+                sample_value = next(
+                    (row.get(field.name) for row in rows if row.get(field.name) is not None),
+                    None
+                )
+                is_uuid_column = _is_uuid_like(sample_value)
 
-    return pa.table(columns, schema=arrow_schema)
+                columns[field.name] = [
+                    str(row[field.name]) if is_uuid_column and row.get(field.name) is not None
+                    else row.get(field.name)
+                    for row in rows
+                ]
+
+        return pa.table(columns, schema=arrow_schema)
+    except (pa.ArrowInvalid, pa.ArrowTypeError) as e:
+        raise IngestionError(f"Arrow conversion failed: {e}") from e
 
 
-def get_max_timestamp(rows: list[dict], column: str) -> datetime:
+def get_max_timestamp(rows: list[dict[str, Any]], column: str) -> datetime:
     """行リストからタイムスタンプカラムの最大値を取得"""
     return max(row[column] for row in rows)
 
 
 def ingest_table(
-    catalog, dsn: str, iceberg_table_name: str, config: dict, state: dict
-) -> dict:
-    """1テーブル分のingestion。更新後のstateを返す。"""
-    table = catalog.load_table(iceberg_table_name)
+    catalog: Catalog,
+    dsn: str,
+    iceberg_table_name: str,
+    config: dict[str, Any],
+    state: dict[str, str],
+) -> dict[str, str]:
+    """1テーブル分のingestion。更新後のstateを返す。
+
+    Raises:
+        IngestionError: Ingestion処理に失敗した場合
+    """
+    try:
+        table = catalog.load_table(iceberg_table_name)
+    except Exception as e:
+        raise IngestionError(f"Failed to load table {iceberg_table_name}: {e}") from e
+
     since_column = config.get("since_column", "updated_at")
     is_append_only = since_column == "created_at"
     since = get_last_ingested(state, iceberg_table_name)
@@ -292,42 +347,61 @@ def ingest_table(
         # mutable テーブル: 変更があるかチェックしてから全件取得
         check_rows = fetch_rows(dsn, config["query"], since)
         if not check_rows:
-            print(f"  No changes for {iceberg_table_name} (since {since.isoformat()})")
+            logger.info(f"No changes for {iceberg_table_name} (since {since.isoformat()})")
             return state
         # 変更があったので全件再取得
         since = EPOCH
 
-    print(f"  Fetching: {iceberg_table_name} ({mode}, since {since.isoformat()})...")
+    logger.info(f"Fetching: {iceberg_table_name} ({mode}, since {since.isoformat()})...")
     rows = fetch_rows(dsn, config["query"], since)
 
     if not rows:
-        print(f"  No new rows for {iceberg_table_name}")
+        logger.info(f"No new rows for {iceberg_table_name}")
         return state
 
     arrow_table = rows_to_arrow(rows, config["arrow_schema"])
 
-    if mode == "append":
-        table.append(arrow_table)
-    else:
-        table.overwrite(arrow_table)
+    try:
+        if mode == "append":
+            table.append(arrow_table)
+        else:
+            table.overwrite(arrow_table)
+    except Exception as e:
+        raise IngestionError(f"Failed to write to {iceberg_table_name}: {e}") from e
 
     max_ts = get_max_timestamp(rows, since_column)
     state[iceberg_table_name] = max_ts.isoformat()
-    print(f"  Ingested {len(rows)} rows into {iceberg_table_name} ({mode})")
+    logger.info(f"Ingested {len(rows)} rows into {iceberg_table_name} ({mode})")
     return state
 
 
-def main():
-    catalog = get_catalog()
-    dsn = get_pg_dsn()
-    state = load_state()
+def main() -> None:
+    """メインエントリーポイント"""
+    logger.info("Bronze ingestion started.")
 
-    print("Bronze ingestion started.")
+    try:
+        catalog = get_catalog()
+        dsn = get_pg_dsn()
+    except Exception as e:
+        logger.error(f"Failed to initialize: {e}")
+        raise SystemExit(1) from e
+
+    state = load_state()
+    errors: list[str] = []
+
     for table_name, config in TABLES.items():
-        state = ingest_table(catalog, dsn, table_name, config, state)
+        try:
+            state = ingest_table(catalog, dsn, table_name, config, state)
+        except IngestionError as e:
+            logger.error(f"Failed to ingest {table_name}: {e}")
+            errors.append(table_name)
+            continue
 
     save_state(state)
-    print(f"Bronze ingestion complete. State saved to {STATE_FILE.name}")
+    if errors:
+        logger.warning(f"Bronze ingestion completed with errors: {errors}")
+    else:
+        logger.info(f"Bronze ingestion complete. State saved to {STATE_FILE.name}")
 
 
 if __name__ == "__main__":

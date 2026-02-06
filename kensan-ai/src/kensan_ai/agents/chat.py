@@ -1,4 +1,15 @@
-"""Chat Agent - General conversation with access to user data."""
+"""Chat Agent - General conversation with access to user data.
+
+NOTE: This file serves as the source-of-truth template for the DB ai_contexts row.
+The actual system prompt and allowed_tools are stored in ai_contexts table
+(situation='chat') and loaded at runtime by ContextResolver.
+The dynamic tool selection logic (TOOL_GROUPS, SITUATION_TOOL_GROUPS, etc.)
+is used at runtime to filter allowed_tools based on message intent.
+
+To update the prompt:
+1. Edit this file
+2. Create a new migration to UPDATE the ai_contexts row
+"""
 
 SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 ユーザーのタスク管理・時間計画・目標管理・学習記録・振り返りを支援します。
@@ -36,7 +47,7 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 以下のような表現は新規作成ではなく、既存データの操作・参照を意味する：
 - 「期限が厳しいタスク」→ 期限が近い既存タスクを検索
 - 「来週の予定」→ 来週のタイムブロックを取得
-- 「CKAの進捗」→ CKA関連の目標・タスクの完了状況を確認
+- 「資格の進捗」→ 関連する目標・タスクの完了状況を確認
 - 「終わったタスク」→ completed=true のタスクを取得
 
 新規作成を示す表現：
@@ -160,14 +171,16 @@ TOOL_GROUPS: dict[str, list[str]] = {
         "web_search",
         "web_fetch",
     ],
+    "patterns": [  # 行動パターン分析
+        "get_user_patterns",
+    ],
 }
 
 SITUATION_TOOL_GROUPS: dict[str, list[str]] = {
     # 明示指定された situation → 必要なグループを静的に定義
     # weekly: {weekly_summary} が VariableReplacer で既に埋め込まれるため analytics 不要
-    "weekly": ["core", "review", "notes_read", "goals_read", "search"],
-    "evening": ["core", "analytics", "notes_read", "notes_write", "memory"],
-    "briefing": ["core", "planning", "task", "goals_read", "analytics"],
+    "weekly": ["core", "review", "notes_read", "goals_read", "search", "patterns"],
+    "planning": ["core", "planning", "task", "goals_read", "analytics", "patterns"],
 }
 
 # フロントから渡された context キー → 除外するツール
@@ -187,6 +200,7 @@ VARIABLE_EXCLUDES_TOOLS: dict[str, list[str]] = {
     "goal_progress": ["get_goals_and_milestones"],
     "today_schedule": ["get_time_blocks"],
     "today_entries": ["get_time_entries"],
+    "user_patterns": ["get_user_patterns"],
 }
 
 # 参照系: 常にマッチするとreadグループを追加

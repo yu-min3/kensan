@@ -6,15 +6,15 @@
 
 ## 目次
 
-1. [概要](#概要)
-2. [エンティティ](#エンティティ)
-3. [API仕様](#api仕様)
-4. [ビジネスロジック](#ビジネスロジック)
-5. [リポジトリ](#リポジトリ)
+1. [アーキテクチャ](#1-アーキテクチャ)
+2. [データモデル](#2-データモデル)
+3. [API](#3-api)
+4. [ビジネスロジック](#4-ビジネスロジック)
+5. [エラー](#5-エラー)
 
 ---
 
-## 概要
+## 1. アーキテクチャ
 
 | 項目 | 値 |
 |------|-----|
@@ -22,19 +22,39 @@
 | ベースパス | `/api/v1` |
 | 責務 | TimeBlock（予定）、TimeEntry（実績）、RunningTimer（タイマー）の管理 |
 
-### 主な機能
+```mermaid
+graph TB
+    subgraph timeblock-service
+        H["Handler"]
+        Svc["Service"]
+        subgraph Repos["Repository (ISP)"]
+            TBR["TimeBlockRepo"]
+            TER["TimeEntryRepo"]
+            RTR["RunningTimerRepo"]
+        end
+    end
 
-- **TimeBlock**: 日次の時間予定（朝の計画で作成）
-- **TimeEntry**: 実際の作業記録（タイマーまたは手入力）
-- **Timer**: リアルタイムの作業計測
-- タイムゾーン対応のクエリ
-- ルーティンからの予定自動生成
+    Client["Frontend"] --> H
+    H --> Svc
+    Svc --> Repos
+    Repos --> DB[(PostgreSQL<br/>time_blocks<br/>time_entries<br/>running_timers)]
+
+    RS["routine-service"] -.->|"ルーティン情報取得<br/>(generate-from-routines)"| Svc
+    AN["analytics-service"] -.->|"TimeEntry/TimeBlock<br/>集計参照"| DB
+
+    style RS fill:#fef3c7
+```
+
+**特徴:**
+- 3 つのエンティティ（予定 / 実績 / タイマー）で時間管理の全サイクルをカバー
+- DB は `TIMESTAMPTZ`（UTC）で保存、タイムゾーン変換はフロントエンド側
+- routine-service と連携し、ルーティンから TimeBlock を自動生成
+- analytics-service が TimeEntry/TimeBlock を集計に使用
+- Goal/Milestone 情報は非正規化（同期トリガーで維持）
 
 ---
 
-## エンティティ
-
-### ER図
+## 2. データモデル
 
 ```mermaid
 erDiagram
@@ -50,11 +70,9 @@ erDiagram
         uuid goal_id
         string goal_name
         string goal_color
-        uuid[] tag_ids
+        uuid_array tag_ids
         boolean is_routine
         uuid routine_task_id
-        timestamp created_at
-        timestamp updated_at
     }
 
     time_entries {
@@ -69,15 +87,13 @@ erDiagram
         uuid goal_id
         string goal_name
         string goal_color
-        uuid[] tag_ids
+        uuid_array tag_ids
         text description
-        timestamp created_at
-        timestamp updated_at
     }
 
     running_timers {
         uuid id PK
-        uuid user_id FK,UK
+        uuid user_id FK_UK
         uuid task_id FK
         string task_name
         uuid milestone_id
@@ -85,9 +101,8 @@ erDiagram
         uuid goal_id
         string goal_name
         string goal_color
-        uuid[] tag_ids
-        timestamp started_at
-        timestamp created_at
+        uuid_array tag_ids
+        timestamptz started_at
     }
 
     time_blocks }o--|| tasks : "links to"
@@ -95,244 +110,65 @@ erDiagram
     running_timers }o--|| tasks : "links to"
 ```
 
+### エンティティの関係
+
+| エンティティ | 役割 | ライフサイクル |
+|-------------|------|---------------|
+| TimeBlock | 予定（朝の計画で作成） | 作成 → 更新/削除 |
+| TimeEntry | 実績（タイマー停止 or 手入力） | 作成 → 更新/削除 |
+| RunningTimer | 稼働中のタイマー | 作成 → 停止（TimeEntry に変換） |
+
+### 非正規化フィールド
+
+TimeBlock / TimeEntry / RunningTimer はすべて `goal_name`, `goal_color`, `milestone_name` を持つ。JOIN 回避のための非正規化で、DB トリガーで同期維持される。
+
+---
+
+## 3. API
+
 ### TimeBlock（予定）
 
-```go
-type TimeBlock struct {
-    ID            string    `json:"id"`
-    UserID        string    `json:"userId"`
-    StartDatetime time.Time `json:"startDatetime"` // UTC
-    EndDatetime   time.Time `json:"endDatetime"`   // UTC
-    TaskID        *string   `json:"taskId,omitempty"`
-    TaskName      string    `json:"taskName"`
-    MilestoneID   *string   `json:"milestoneId,omitempty"`
-    MilestoneName *string   `json:"milestoneName,omitempty"`
-    GoalID        *string   `json:"goalId,omitempty"`
-    GoalName      *string   `json:"goalName,omitempty"`
-    GoalColor     *string   `json:"goalColor,omitempty"`
-    TagIDs        []string  `json:"tagIds,omitempty"`
-    IsRoutine     bool      `json:"isRoutine"`
-    RoutineTaskID *string   `json:"routineTaskId,omitempty"`
-    CreatedAt     time.Time `json:"createdAt"`
-    UpdatedAt     time.Time `json:"updatedAt"`
-}
-```
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | /timeblocks | 一覧（`?start_datetime`, `?end_datetime`, `?goal_id`, `?milestone_id`） |
+| POST | /timeblocks | 作成 |
+| PUT | /timeblocks/{timeBlockId} | 更新 |
+| DELETE | /timeblocks/{timeBlockId} | 削除 |
+| POST | /timeblocks/generate-from-routines | ルーティンから自動生成（`date` 指定） |
 
 ### TimeEntry（実績）
 
-```go
-type TimeEntry struct {
-    ID            string    `json:"id"`
-    UserID        string    `json:"userId"`
-    StartDatetime time.Time `json:"startDatetime"` // UTC
-    EndDatetime   time.Time `json:"endDatetime"`   // UTC
-    TaskID        *string   `json:"taskId,omitempty"`
-    TaskName      string    `json:"taskName"`
-    MilestoneID   *string   `json:"milestoneId,omitempty"`
-    MilestoneName *string   `json:"milestoneName,omitempty"`
-    GoalID        *string   `json:"goalId,omitempty"`
-    GoalName      *string   `json:"goalName,omitempty"`
-    GoalColor     *string   `json:"goalColor,omitempty"`
-    TagIDs        []string  `json:"tagIds,omitempty"`
-    Description   *string   `json:"description,omitempty"`
-    CreatedAt     time.Time `json:"createdAt"`
-    UpdatedAt     time.Time `json:"updatedAt"`
-}
-```
-
-### RunningTimer
-
-```go
-type RunningTimer struct {
-    ID            string    `json:"id"`
-    UserID        string    `json:"userId"`
-    TaskID        *string   `json:"taskId,omitempty"`
-    TaskName      string    `json:"taskName"`
-    MilestoneID   *string   `json:"milestoneId,omitempty"`
-    MilestoneName *string   `json:"milestoneName,omitempty"`
-    GoalID        *string   `json:"goalId,omitempty"`
-    GoalName      *string   `json:"goalName,omitempty"`
-    GoalColor     *string   `json:"goalColor,omitempty"`
-    TagIDs        []string  `json:"tagIds,omitempty"`
-    StartedAt     time.Time `json:"startedAt"`
-    CreatedAt     time.Time `json:"createdAt"`
-}
-```
-
----
-
-## API仕様
-
-全エンドポイントは認証必須。
-
-### TimeBlock API
-
 | Method | Endpoint | 説明 |
 |--------|----------|------|
-| GET | /timeblocks | 一覧取得 |
-| POST | /timeblocks | 新規作成 |
-| PUT | /timeblocks/{timeBlockId} | 更新 |
-| DELETE | /timeblocks/{timeBlockId} | 削除 |
-| POST | /timeblocks/generate-from-routines | ルーティンから生成 |
-
-**GET /timeblocks クエリパラメータ:**
-
-| パラメータ | 型 | 説明 |
-|-----------|-----|------|
-| start_datetime | string | UTC範囲開始（ISO8601） |
-| end_datetime | string | UTC範囲終了（ISO8601） |
-| goal_id | string | Goal IDでフィルタ |
-| milestone_id | string | Milestone IDでフィルタ |
-
-**POST /timeblocks リクエスト:**
-```json
-{
-  "startDatetime": "2026-01-23T00:00:00Z",
-  "endDatetime": "2026-01-23T02:00:00Z",
-  "taskId": "uuid",
-  "taskName": "Kubernetes学習",
-  "milestoneId": "uuid",
-  "milestoneName": "CKA合格",
-  "goalId": "uuid",
-  "goalName": "Golden Kubestronaut",
-  "goalColor": "#3B82F6",
-  "tagIds": ["uuid1", "uuid2"],
-  "isRoutine": false
-}
-```
-
-**POST /timeblocks/generate-from-routines:**
-
-指定日のルーティンタスクからTimeBlockを自動生成。
-
-```json
-{
-  "date": "2026-01-23"
-}
-```
-
-**レスポンス:**
-```json
-{
-  "data": {
-    "generated": 3,
-    "blocks": [...]
-  }
-}
-```
-
-### TimeEntry API
-
-| Method | Endpoint | 説明 |
-|--------|----------|------|
-| GET | /time-entries | 一覧取得 |
-| POST | /time-entries | 新規作成 |
+| GET | /time-entries | 一覧（`?start_datetime`, `?end_datetime`） |
+| POST | /time-entries | 手動作成 |
 | PUT | /time-entries/{entryId} | 更新 |
 | DELETE | /time-entries/{entryId} | 削除 |
 
-クエリパラメータはTimeBlockと同様（`start_datetime`/`end_datetime`で範囲指定）。
-
-**POST /time-entries リクエスト:**
-```json
-{
-  "startDatetime": "2026-01-23T00:15:00Z",
-  "endDatetime": "2026-01-23T01:45:00Z",
-  "taskId": "uuid",
-  "taskName": "Kubernetes学習",
-  "goalId": "uuid",
-  "goalName": "Golden Kubestronaut",
-  "goalColor": "#3B82F6",
-  "description": "Pod Securityの章を完了"
-}
-```
-
-### Timer API
+### Timer
 
 | Method | Endpoint | 説明 |
 |--------|----------|------|
-| GET | /timer/current | 現在のタイマー取得 |
+| GET | /timer/current | 現在のタイマー取得（null の場合あり） |
 | POST | /timer/start | タイマー開始 |
-| POST | /timer/stop | タイマー停止 |
-
-**GET /timer/current レスポンス:**
-
-タイマー稼働中:
-```json
-{
-  "data": {
-    "id": "uuid",
-    "taskName": "Kubernetes学習",
-    "goalName": "Golden Kubestronaut",
-    "startedAt": "2026-01-23T09:00:00Z"
-  }
-}
-```
-
-タイマー停止中:
-```json
-{
-  "data": null
-}
-```
-
-**POST /timer/start リクエスト:**
-```json
-{
-  "taskId": "uuid",
-  "taskName": "Kubernetes学習",
-  "milestoneId": "uuid",
-  "milestoneName": "CKA合格",
-  "goalId": "uuid",
-  "goalName": "Golden Kubestronaut",
-  "goalColor": "#3B82F6",
-  "tagIds": ["uuid"]
-}
-```
-
-**POST /timer/stop レスポンス:**
-```json
-{
-  "data": {
-    "timeEntry": {
-      "id": "uuid",
-      "startDatetime": "2026-01-23T00:00:00Z",
-      "endDatetime": "2026-01-23T01:30:00Z",
-      "taskName": "Kubernetes学習"
-    },
-    "duration": 5400
-  }
-}
-```
+| POST | /timer/stop | タイマー停止 → TimeEntry 自動作成 |
 
 ---
 
-## ビジネスロジック
+## 4. ビジネスロジック
 
 ### タイムゾーン変換
 
-DBは `TIMESTAMPTZ`（UTC）で保存。APIはUTC ISO 8601文字列をそのまま返す。
-タイムゾーン変換はフロントエンド側で実施。
-
-```
-ローカル日付: 2026-01-23 (Asia/Tokyo)
-UTC範囲: 2026-01-22T15:00:00Z ~ 2026-01-23T15:00:00Z
-```
+DB は UTC、フロントエンドがローカル日付を UTC 範囲に変換してクエリする。
 
 ```mermaid
-sequenceDiagram
-    participant Frontend
-    participant Handler
-    participant Service
-    participant Repository
+flowchart LR
+    FE["Frontend<br/>ローカル日付: 2026-01-23"]
+    Conv["localDateToUtcRange()<br/>Asia/Tokyo"]
+    API["GET /timeblocks<br/>start=2026-01-22T15:00:00Z<br/>end=2026-01-23T15:00:00Z"]
+    DB["WHERE start_datetime >= $1<br/>AND start_datetime < $2"]
 
-    Frontend->>Handler: GET /timeblocks?start_datetime=2026-01-22T15:00:00Z&end_datetime=2026-01-23T15:00:00Z
-    Handler->>Service: ListTimeBlocks(filter)
-    Service->>Repository: List(userID, filter)
-    Note over Repository: WHERE start_datetime >= $1 AND start_datetime < $2
-    Repository-->>Service: []TimeBlock (UTC)
-    Service-->>Handler: []TimeBlock (UTC)
-    Handler-->>Frontend: 200 OK (UTC ISO 8601)
-    Note over Frontend: getLocalTime()でローカル表示に変換
+    FE --> Conv --> API --> DB
 ```
 
 ### タイマーフロー
@@ -340,139 +176,55 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Handler
     participant Service
     participant Repository
 
-    User->>Handler: POST /timer/start
-    Handler->>Service: StartTimer(input)
+    User->>Service: POST /timer/start
     Service->>Repository: GetRunningTimer(userID)
     alt タイマー稼働中
-        Service-->>Handler: ErrTimerAlreadyRunning
-        Handler-->>User: 409 Conflict
+        Service-->>User: 409 Conflict
     else タイマーなし
-        Service->>Repository: CreateRunningTimer(timer)
-        Repository-->>Service: timer
-        Service-->>Handler: timer
-        Handler-->>User: 201 Created
+        Service->>Repository: CreateRunningTimer()
+        Service-->>User: 201 Created
     end
 
-    User->>Handler: POST /timer/stop
-    Handler->>Service: StopTimer()
+    User->>Service: POST /timer/stop
     Service->>Repository: GetRunningTimer(userID)
     alt タイマー稼働中
         Service->>Service: 経過時間計算
         Service->>Repository: CreateTimeEntry(entry)
-        Service->>Repository: DeleteRunningTimer(timerID)
-        Repository-->>Service: timeEntry
-        Service-->>Handler: {timeEntry, duration}
-        Handler-->>User: 200 OK
+        Service->>Repository: DeleteRunningTimer()
+        Service-->>User: 200 OK {timeEntry, duration}
     else タイマーなし
-        Service-->>Handler: ErrRunningTimerNotFound
-        Handler-->>User: 404 Not Found
+        Service-->>User: 404 Not Found
     end
 ```
 
+### ルーティン連携
+
+`POST /timeblocks/generate-from-routines` は指定日のルーティンタスクを routine-service から取得し、`defaultStartTime` + `estimatedMinutes` で TimeBlock を自動生成する。
+
 ### 日跨ぎ処理
 
-`TIMESTAMPTZ`方式では日跨ぎは自然に処理される:
-- `start_datetime` と `end_datetime` が異なる日付でも問題なし
-- タイマー停止時は `started_at` と `now()` をそのまま使用
+`TIMESTAMPTZ` 方式では日跨ぎは自然に処理される。`start_datetime` と `end_datetime` が異なる日付でも問題なし。
 
-### 入力バリデーション
+### バリデーション
 
 | フィールド | ルール |
-|----------|--------|
+|-----------|--------|
 | startDatetime | ISO 8601 (RFC3339) 形式 |
-| endDatetime | ISO 8601 (RFC3339) 形式、startDatetime より後 |
+| endDatetime | ISO 8601 形式、startDatetime より後 |
 | taskName | 必須 |
 
 ---
 
-## リポジトリ
+## 5. エラー
 
-### インターフェース（ISP準拠）
-
-```go
-// TimeBlockRepository はTimeBlockの永続化を処理
-type TimeBlockRepository interface {
-    GetByID(ctx context.Context, id string) (*TimeBlock, error)
-    GetByIDAndUserID(ctx context.Context, id, userID string) (*TimeBlock, error)
-    List(ctx context.Context, userID string, filter TimeBlockFilter) ([]*TimeBlock, error)
-    Create(ctx context.Context, block *TimeBlock) error
-    Update(ctx context.Context, block *TimeBlock) error
-    Delete(ctx context.Context, id string) error
-}
-
-// TimeEntryRepository はTimeEntryの永続化を処理
-type TimeEntryRepository interface {
-    GetByID(ctx context.Context, id string) (*TimeEntry, error)
-    GetByIDAndUserID(ctx context.Context, id, userID string) (*TimeEntry, error)
-    List(ctx context.Context, userID string, filter TimeEntryFilter) ([]*TimeEntry, error)
-    Create(ctx context.Context, entry *TimeEntry) error
-    Update(ctx context.Context, entry *TimeEntry) error
-    Delete(ctx context.Context, id string) error
-}
-
-// RunningTimerRepository はRunningTimerの永続化を処理
-type RunningTimerRepository interface {
-    GetByUserID(ctx context.Context, userID string) (*RunningTimer, error)
-    Create(ctx context.Context, timer *RunningTimer) error
-    Delete(ctx context.Context, id string) error
-}
-
-// Repository は全リポジトリを統合
-type Repository interface {
-    TimeBlockRepository
-    TimeEntryRepository
-    RunningTimerRepository
-}
-```
-
-### 主要クエリ
-
-**ListTimeBlocks (datetime範囲フィルタ):**
-```sql
-SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
-       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-       tag_ids, is_routine, routine_task_id, created_at, updated_at
-FROM time_blocks
-WHERE user_id = $1
-  AND start_datetime >= $2  -- start_datetime
-  AND start_datetime < $3   -- end_datetime
-ORDER BY start_datetime ASC
-```
-
-**GetRunningTimer:**
-```sql
-SELECT id, user_id, task_id, task_name, milestone_id, milestone_name,
-       goal_id, goal_name, goal_color, tag_ids, started_at, created_at
-FROM running_timers
-WHERE user_id = $1
-```
-
-**CreateTimeEntry (タイマー停止時):**
-```sql
-INSERT INTO time_entries (
-    id, user_id, start_datetime, end_datetime, task_id, task_name,
-    milestone_id, milestone_name, goal_id, goal_name, goal_color,
-    tag_ids, description, created_at, updated_at
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()
-)
-```
-
----
-
-## エラー定義
-
-```go
-var (
-    ErrTimeBlockNotFound    = errors.New("time block not found")
-    ErrTimeEntryNotFound    = errors.New("time entry not found")
-    ErrRunningTimerNotFound = errors.New("no running timer")
-    ErrTimerAlreadyRunning  = errors.New("timer already running")
-    ErrInvalidDatetime      = errors.New("invalid datetime format")
-    ErrInvalidInput         = errors.New("invalid input")
-)
-```
+| エラー | HTTP | コード | 条件 |
+|--------|------|--------|------|
+| ErrTimeBlockNotFound | 404 | NOT_FOUND | TimeBlock が存在しない |
+| ErrTimeEntryNotFound | 404 | NOT_FOUND | TimeEntry が存在しない |
+| ErrRunningTimerNotFound | 404 | NOT_FOUND | 稼働中タイマーなし |
+| ErrTimerAlreadyRunning | 409 | ALREADY_EXISTS | タイマーが既に稼働中 |
+| ErrInvalidDatetime | 400 | INVALID_INPUT | datetime 形式不正 |
+| ErrInvalidInput | 400 | INVALID_INPUT | 入力値が不正 |

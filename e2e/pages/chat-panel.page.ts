@@ -17,7 +17,7 @@ export class ChatPanelPage {
     this.closeButton = page.locator('.border-l button').filter({ has: page.locator('svg') }).last()
     this.historyButton = page.locator('button[title="履歴"]')
     this.newConversationButton = page.locator('button[title="新しい会話"]')
-    this.emptyState = page.getByText('何かお手伝いしましょうか？')
+    this.emptyState = page.getByText('/briefing からどうぞ')
     this.messageInput = page.getByPlaceholder(/メッセージ/)
   }
 

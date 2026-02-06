@@ -19,6 +19,7 @@ interface AuthState {
 
   // Actions
   login: (email: string, password: string) => Promise<void>
+  demoLogin: (persona: string) => Promise<void>
   register: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
   restoreSession: () => void
@@ -53,6 +54,31 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           set({
             error: (error as Error).message || 'ログインに失敗しました',
+            isLoading: false,
+          })
+          throw error
+        }
+      },
+
+      demoLogin: async (persona: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const response = await httpClient.post<{ token: string; user: User }>(
+            API_CONFIG.baseUrls.user,
+            '/auth/demo-login',
+            { persona }
+          )
+
+          httpClient.setAuthToken(response.token)
+          set({
+            token: response.token,
+            user: response.user,
+            isAuthenticated: true,
+            isLoading: false,
+          })
+        } catch (error) {
+          set({
+            error: (error as Error).message || 'デモログインに失敗しました',
             isLoading: false,
           })
           throw error

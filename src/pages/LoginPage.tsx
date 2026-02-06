@@ -9,14 +9,54 @@ import { Loader2, AlertCircle } from 'lucide-react'
 
 type Mode = 'login' | 'register'
 
+interface PersonaInfo {
+  id: string
+  name: string
+  role: string
+  description: string
+  color: string
+}
+
+const PERSONAS: PersonaInfo[] = [
+  {
+    id: 'tanaka',
+    name: '田中翔太',
+    role: 'バックエンドエンジニア',
+    description: '32歳・テックリードを目指す中堅エンジニア',
+    color: 'bg-blue-500',
+  },
+  {
+    id: 'misaki',
+    name: '鈴木美咲',
+    role: 'フロントエンドエンジニア',
+    description: '25歳・個人開発と技術ブログに注力',
+    color: 'bg-pink-500',
+  },
+  {
+    id: 'takuya',
+    name: '山田拓也',
+    role: 'SIer ジュニア',
+    description: '23歳・2年目、基本情報技術者を目指す',
+    color: 'bg-green-500',
+  },
+  {
+    id: 'aya',
+    name: '高橋彩',
+    role: 'エンジニアリングマネージャー',
+    description: '35歳・IC からマネジメントへ転身中',
+    color: 'bg-purple-500',
+  },
+]
+
 export function LoginPage() {
   const navigate = useNavigate()
-  const { login, register, isLoading, error, clearError } = useAuthStore()
+  const { login, demoLogin, register, isLoading, error, clearError } = useAuthStore()
 
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [loadingPersona, setLoadingPersona] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,6 +74,17 @@ export function LoginPage() {
     }
   }
 
+  const handleDemoLogin = async (personaId: string) => {
+    clearError()
+    setLoadingPersona(personaId)
+    try {
+      await demoLogin(personaId)
+      navigate('/')
+    } catch {
+      setLoadingPersona(null)
+    }
+  }
+
   const toggleMode = () => {
     setMode(mode === 'login' ? 'register' : 'login')
     clearError()
@@ -41,12 +92,67 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold">Kensan</h1>
           <p className="text-muted-foreground mt-1">自己研鑽プラットフォーム</p>
         </div>
 
+        {/* Demo Persona Cards */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">デモアカウントで体験</CardTitle>
+            <CardDescription>ペルソナを選択すると、サンプルデータ付きでログインできます</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {PERSONAS.map((persona) => {
+                const isThisLoading = loadingPersona === persona.id
+                const isDisabled = isLoading || loadingPersona !== null
+                return (
+                  <button
+                    key={persona.id}
+                    onClick={() => handleDemoLogin(persona.id)}
+                    disabled={isDisabled}
+                    className="flex items-start gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className={`${persona.color} w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 mt-0.5`}>
+                      {isThisLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        persona.name.charAt(0)
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">{persona.name}</div>
+                      <div className="text-xs text-muted-foreground">{persona.role}</div>
+                      <div className="text-xs text-muted-foreground/70 mt-0.5">{persona.description}</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {error && loadingPersona !== null && (
+              <div className="flex items-center gap-2 text-red-600 text-sm p-3 bg-red-50 dark:bg-red-950/20 rounded-lg mt-3">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-muted/30 px-2 text-muted-foreground">または</span>
+          </div>
+        </div>
+
+        {/* Login / Register Form */}
         <Card>
           <CardHeader>
             <CardTitle>{mode === 'login' ? 'ログイン' : 'アカウント登録'}</CardTitle>
@@ -102,7 +208,7 @@ export function LoginPage() {
                 )}
               </div>
 
-              {error && (
+              {error && loadingPersona === null && (
                 <div className="flex items-center gap-2 text-red-600 text-sm p-3 bg-red-50 dark:bg-red-950/20 rounded-lg">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
@@ -127,14 +233,6 @@ export function LoginPage() {
                 {mode === 'login' ? '新規登録' : 'ログイン'}
               </button>
             </div>
-
-            {/* デモ用: MSWモード時のヒント */}
-            {import.meta.env.DEV && (
-              <div className="mt-6 p-3 bg-muted rounded-lg text-xs text-muted-foreground">
-                <p className="font-medium mb-1">開発モード</p>
-                <p>任意のメールアドレスとパスワードでログインできます</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

@@ -19,7 +19,7 @@ from pyiceberg.types import (
 from pyiceberg.partitioning import PartitionSpec, PartitionField
 from pyiceberg.transforms import MonthTransform
 
-from config import get_catalog
+from catalog.config import get_catalog
 
 
 def create_namespaces(catalog):
@@ -289,6 +289,36 @@ def create_silver_ai_tables(catalog):
         NestedField(8, "avg_latency_ms", IntegerType()),
     )
     _create_table(catalog, "silver.ai_token_usage", schema)
+
+    # silver.ai_facts - Bronze ai_facts_raw から変換
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "date", DateType()),  # created_at から抽出
+        NestedField(4, "fact_type", StringType()),
+        NestedField(5, "content_length", IntegerType()),  # 本文長
+        NestedField(6, "source", StringType()),
+        NestedField(7, "confidence", FloatType()),
+        NestedField(8, "created_at", TimestamptzType()),
+    )
+    _create_table(catalog, "silver.ai_facts", schema)
+
+    # silver.ai_reviews - Bronze ai_reviews_raw から変換
+    schema = Schema(
+        NestedField(1, "id", StringType()),
+        NestedField(2, "user_id", StringType()),
+        NestedField(3, "week_start", DateType()),
+        NestedField(4, "week_end", DateType()),
+        NestedField(5, "summary_length", IntegerType()),  # サマリー長
+        NestedField(6, "good_points_count", IntegerType()),  # 良い点の数
+        NestedField(7, "improvement_points_count", IntegerType()),  # 改善点の数
+        NestedField(8, "advice_count", IntegerType()),  # アドバイスの数
+        NestedField(9, "tokens_input", IntegerType()),
+        NestedField(10, "tokens_output", IntegerType()),
+        NestedField(11, "tokens_total", IntegerType()),  # 算出値
+        NestedField(12, "created_at", TimestamptzType()),
+    )
+    _create_table(catalog, "silver.ai_reviews", schema)
 
 
 def create_gold_tables(catalog):

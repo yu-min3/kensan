@@ -9,14 +9,14 @@ Kensanは、エンジニアの自己改善を支援するパーソナル生産�
 1. [システム全体像](#システム全体像)
 2. [技術スタック一覧](#技術スタック一覧)
 3. [サービス構成](#サービス構成)
-4. [データフロー](#データフロー)
-5. [認証・セキュリティ](#認証セキュリティ)
-6. [データベース設計](#データベース設計)
-7. [フロントエンドアーキテクチャ](#フロントエンドアーキテクチャ)
-8. [バックエンドアーキテクチャ](#バックエンドアーキテクチャ)
-9. [AIサービスアーキテクチャ](#aiサービスアーキテクチャ)
-10. [Observability](#observability)
-11. [開発環境](#開発環境)
+4. [画面構成とユーザーフロー](#画面構成とユーザーフロー)
+5. [データフロー](#データフロー)
+6. [認証・セキュリティ](#認証セキュリティ)
+7. [データベース設計](#データベース設計)
+8. [フロントエンドアーキテクチャ](#フロントエンドアーキテクチャ)
+9. [バックエンドアーキテクチャ](#バックエンドアーキテクチャ)
+10. [AIサービスアーキテクチャ](#aiサービスアーキテクチャ)
+11. [Observability](#observability)
 12. [詳細ドキュメント](#詳細ドキュメント)
 
 ---
@@ -111,8 +111,8 @@ graph TB
 | **AIサービス** | Python | 3.12+ | AIサービス実装 |
 | | FastAPI | 0.115+ | Webフレームワーク |
 | | asyncpg | 0.30+ | 非同期DBドライバ |
-| | Anthropic SDK | 0.40+ | Claude API（`AI_PROVIDER=anthropic`時） |
-| | Google GenAI SDK | 1.0+ | Gemini API（`AI_PROVIDER=google`時） |
+| | Anthropic SDK | 0.40+ | Claude API |
+| | Google GenAI SDK | 1.0+ | Gemini API |
 | | OpenAI SDK | 1.50+ | 埋め込みAPI |
 | **インフラ** | PostgreSQL | 16 | メインDB + pgvector |
 | | MinIO | - | オブジェクトストレージ (ノートコンテンツ) |
@@ -191,9 +191,78 @@ erDiagram
 
 ---
 
+## 画面構成とユーザーフロー
+
+### 画面一覧
+
+```mermaid
+graph TB
+    subgraph "公開画面"
+        Login["/login<br/>ログイン"]
+        Setup["/settings<br/>初期設定"]
+    end
+
+    subgraph "日次ワークフロー"
+        Daily["/ (DailyPage)<br/>今日の予定・実績タイムライン"]
+        Briefing["/briefing<br/>朝のブリーフィング"]
+        Reflection["/reflection<br/>夕方の振り返り"]
+    end
+
+    subgraph "計画・管理"
+        Weekly["/weekly<br/>週間カレンダー"]
+        Tasks["/tasks<br/>目標・タスク管理"]
+        Routines["/routines<br/>ルーティン管理"]
+    end
+
+    subgraph "記録"
+        Notes["/notes<br/>ノート一覧"]
+        NoteEdit["/notes/:id<br/>ノート編集"]
+    end
+
+    subgraph "分析・AI"
+        Analytics["/analytics<br/>分析レポート"]
+        AIReview["/ai-review<br/>AI週次レビュー"]
+        Interactions["/interactions<br/>AI Interaction Explorer"]
+    end
+
+    Login -->|認証成功| Daily
+    Login -->|未設定| Setup
+    Setup -->|設定完了| Daily
+```
+
+### 1日のユーザーフロー
+
+```mermaid
+flowchart LR
+    subgraph "朝"
+        B[ブリーフィング]
+        P[予定の確認・調整]
+    end
+
+    subgraph "日中"
+        T[タイマーで作業]
+        TB[タイムブロック記録]
+        M[メモ・ノート]
+    end
+
+    subgraph "夕方"
+        R[振り返り]
+        A[分析確認]
+    end
+
+    subgraph "週末"
+        WR[週次レビュー]
+    end
+
+    B --> P --> T --> TB --> M --> R --> A
+    A -.->|週次| WR
+```
+
+---
+
 ## データフロー
 
-### 典型的なユーザー操作のデータフロー
+### 典型的なユーザー操作
 
 ```mermaid
 sequenceDiagram
@@ -227,13 +296,13 @@ sequenceDiagram
     participant AI as kensan-ai
     participant Ctx as コンテキスト解決
     participant Agent as AgentRunner
-    participant Claude as Claude API
+    participant LLM as Claude/Gemini API
     participant Tools as ツールレジストリ
     participant DB as PostgreSQL
 
     U->>AI: POST /agent/stream {message}
     AI->>AI: JWT → user_id抽出
-    AI->>Ctx: 状況検出 (時刻ベース)
+    AI->>Ctx: 状況検出 + コンテキスト読込
     Ctx->>DB: ai_contexts取得
     Ctx->>Ctx: {変数}をユーザーデータで置換
     Ctx-->>AI: システムプロンプト + ツール設定
@@ -241,8 +310,8 @@ sequenceDiagram
     AI->>Agent: run(message, user_id)
 
     loop エージェントループ (最大10ターン)
-        Agent->>Claude: messages + tools
-        Claude-->>Agent: レスポンス
+        Agent->>LLM: messages + tools
+        LLM-->>Agent: レスポンス
 
         alt ツール呼び出しあり
             Agent->>Agent: user_idを自動注入
@@ -256,27 +325,38 @@ sequenceDiagram
     end
 
     AI->>DB: ai_interactionsに記録
-    AI--)AI: 非同期: ファクト抽出
-    AI-->>U: ChatResponse
+    AI--)AI: 非同期: ファクト抽出 → プロフィール要約
+    AI-->>U: SSE ストリーミング
 ```
 
 ### タイムゾーン変換フロー
 
-DBはUTC保存、フロントエンドでローカル変換する設計です。
+```mermaid
+flowchart TB
+    subgraph "ユーザー操作"
+        Input["ローカル時刻入力<br/>例: 2026-01-27 09:00 JST"]
+    end
 
+    subgraph "フロントエンド API層"
+        Convert["localToUtcDatetime()<br/>→ 2026-01-27T00:00:00.000Z"]
+    end
+
+    subgraph "バックエンド"
+        Store["TIMESTAMPTZ として UTC 保存"]
+    end
+
+    subgraph "フロントエンド 表示層"
+        Display["getLocalTime()<br/>→ 09:00"]
+    end
+
+    subgraph "ユーザー表示"
+        Output["ローカル時刻で表示<br/>09:00"]
+    end
+
+    Input --> Convert --> Store --> Display --> Output
 ```
-ユーザー操作 (ローカル時刻)
-    ↓ 例: "2026-01-27 09:00" (Asia/Tokyo)
-フロントエンド API層
-    ↓ localToUtcDatetime() → "2026-01-27T00:00:00.000Z"
-バックエンド
-    ↓ TIMESTAMPTZ としてUTC保存
-PostgreSQL
-    ↓ UTC ISO 8601 で返却
-フロントエンド 表示層
-    ↓ getLocalTime() → "09:00"
-ユーザーに表示 (ローカル時刻)
-```
+
+DBはUTC保存、フロントエンドでローカル変換する設計。変換ユーティリティは `src/lib/timezone.ts` に集約。
 
 ---
 
@@ -314,6 +394,7 @@ sequenceDiagram
 | データ分離 | 全テーブル `user_id` によるマルチテナント |
 | JWT自動注入 | HttpClient がリクエストに自動付与 |
 | AI tool user_id注入 | AgentRunner が自動注入 (LLMに依存しない) |
+| トレース伝搬 | HttpClient が W3C `traceparent` ヘッダーを自動生成 |
 
 ---
 
@@ -356,7 +437,7 @@ graph TB
         ai_review_reports["ai_review_reports"]
         user_memory["user_memory"]
         user_facts["user_facts"]
-        documents["documents<br/>(ベクトル検索)"]
+        note_content_chunks["note_content_chunks<br/>(ベクトル検索)"]
     end
 
     users --> user_settings
@@ -427,43 +508,7 @@ graph TB
     style Client fill:#fef3c7
 ```
 
-### 状態管理 (Zustand)
-
-15のZustandストアが各ドメインの状態を管理:
-
-| ストア | 状態 | 永続化 |
-|-------|------|--------|
-| useAuthStore | token, user, isAuthenticated | localStorage |
-| useSettingsStore | timezone, theme | localStorage |
-| useGoalStore | goals | - |
-| useMilestoneStore | milestones | - |
-| useTagStore | tags | - |
-| useTaskStore | tasks | - |
-| useTimeBlockStore | timeBlocks, timeEntries | - |
-| useTimerStore | currentTimer, isRunning | - |
-| useNoteTypeStore | types (データ駆動) | - |
-| useNoteStore | items, noteCache | - |
-| useMemoStore | memos | - |
-| useRoutineStore | routines | - |
-
-### ルーティング構成
-
-```
-/login                   → ログイン画面 (公開)
-/settings                → 初期設定
-
-/ (認証済み + Layout)
-├── /                    → ダッシュボード
-├── /daily               → デイリー (予定・実績タイムライン)
-├── /tasks               → タスク管理 (目標・マイルストーン・タスク)
-├── /routines            → ルーティン管理
-├── /notes               → ノート一覧
-│   ├── /notes/new       → ノート新規作成
-│   └── /notes/:id       → ノート編集
-├── /analytics           → 分析レポート
-├── /ai-review           → AI週次レビュー
-└── /interactions         → AI Interaction Explorer
-```
+15のZustandストアが各ドメインの状態を管理。`createCrudStore` ファクトリで標準CRUDパターンを統一化。認証(useAuthStore)・設定(useSettingsStore)のみlocalStorage永続化。
 
 > 詳細: [src/ARCHITECTURE.md](src/ARCHITECTURE.md)
 
@@ -510,41 +555,7 @@ graph TB
     Service --> Errors
 ```
 
-### 各サービスのディレクトリ構成
-
-```
-services/<name>/
-├── cmd/main.go                    # エントリポイント (bootstrap.New → RegisterRoutes → Run)
-├── internal/
-│   ├── model.go                   # ドメイン型・DTO
-│   ├── handler/handler.go         # HTTPハンドラ
-│   ├── service/
-│   │   ├── interface.go           # サービスインターフェース (Reader/Writer分離)
-│   │   ├── service.go             # ビジネスロジック実装
-│   │   └── service_test.go        # ユニットテスト
-│   └── repository/
-│       ├── interface.go           # リポジトリインターフェース (ISP準拠)
-│       └── repository.go          # PostgreSQL実装
-├── Dockerfile
-└── Makefile
-```
-
-### APIレスポンス形式 (全サービス共通)
-
-```json
-// 成功時
-{
-  "data": { /* エンティティ or 配列 */ },
-  "meta": { "requestId": "uuid", "timestamp": "ISO8601" },
-  "pagination": { "page": 1, "perPage": 20, "total": 100 }
-}
-
-// エラー時
-{
-  "error": { "code": "NOT_FOUND", "message": "リソースが見つかりません" },
-  "meta": { "requestId": "uuid", "timestamp": "ISO8601" }
-}
-```
+全サービスが `Handler → Service → Repository` の3層を厳守。共通基盤 `shared/` パッケージで初期化・認証・ミドルウェア・テレメトリを一元管理。
 
 > 詳細: [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md)
 
@@ -554,17 +565,18 @@ services/<name>/
 
 ### コア概念
 
-kensan-aiは**エージェントベース**のアーキテクチャで、Claude APIのDirect Tools (Function Calling) を使用してユーザーデータに直接アクセスします。
+kensan-aiは**エージェントベース**のアーキテクチャで、LLM APIのDirect Tools (Function Calling) を使用してユーザーデータに直接アクセスします。
 
 ```mermaid
 graph TB
     subgraph "エージェント"
         Chat["チャットエージェント<br/>汎用会話 + タスク管理"]
         Review["週次レビューエージェント<br/>構造化振り返り"]
+        Planning["計画提案エージェント<br/>JSON構造化出力"]
     end
 
     subgraph "コンテキスト管理"
-        Detect["状況検出<br/>(朝/夕/通常)"]
+        Detect["状況検出<br/>(briefing/evening/weekly/chat)"]
         Resolve["コンテキスト解決<br/>(DBからプロンプト読込)"]
         Replace["変数置換<br/>({user_memory}, {today_schedule}, ...)"]
         AB["A/Bテスト<br/>(トラフィック分割)"]
@@ -574,13 +586,13 @@ graph TB
         DBTools["DB操作<br/>get_tasks, create_time_block, ..."]
         MemTools["メモリ<br/>get_user_memory, get_user_facts, ..."]
         SearchTools["検索<br/>semantic_search, keyword_search, ..."]
-        IndexTools["インデックス<br/>reindex_notes"]
+        WebTools["外部<br/>web_search, web_fetch (Tavily)"]
     end
 
     subgraph "メモリシステム"
         Logger["InteractionLogger<br/>会話記録"]
         Extractor["FactExtractor<br/>ファクト自動抽出"]
-        Summarizer["ProfileSummarizer<br/>バッチプロフィール要約"]
+        Summarizer["ProfileSummarizer<br/>プロフィール要約"]
     end
 
     Chat --> Detect
@@ -590,6 +602,7 @@ graph TB
     Chat --> DBTools
     Chat --> MemTools
     Chat --> SearchTools
+    Chat --> WebTools
     Review --> DBTools
 
     Logger --> Extractor
@@ -600,20 +613,21 @@ graph TB
 
 全ツールを毎回送信するとトークンコストが増大するため、メッセージの意図に基づき必要なツールのみを選択:
 
-```
-ユーザーメッセージ
-    ↓
-意図分析 (Read/Write判定 + キーワードマッチ)
-    ↓
-┌─────────────────────────────────────────┐
-│ 例: "明日の予定を作って"                    │
-│   → core (常に) + planning (Write)        │
-│   → 7ツール送信 (全27ツール中)              │
-│                                           │
-│ 例: "目標達成できそう？"                     │
-│   → core + goals_read + analytics (Read)  │
-│   → 9ツール送信 (Writeなし)                 │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Msg["ユーザーメッセージ"] --> Analyze["意図分析<br/>Read/Write判定<br/>+ キーワードマッチ"]
+
+    Analyze --> Core["core<br/>(常に含む)"]
+    Analyze -->|書込キーワードあり| Write["Writeグループ<br/>planning, task, notes_write..."]
+    Analyze -->|目標・分析の話題| Read["Readグループ<br/>goals_read, analytics..."]
+    Analyze -->|検索の話題| Search["search グループ"]
+    Analyze -->|Web検索の話題| Web["web グループ"]
+
+    Core --> Select["選択されたツールのみ送信<br/>例: 7/39ツール"]
+    Write --> Select
+    Read --> Select
+    Search --> Select
+    Web --> Select
 ```
 
 ### メモリ構築パイプライン
@@ -632,17 +646,13 @@ flowchart LR
         Memory[("user_memory")]
     end
 
-    subgraph "バッチ (夜間)"
-        Summarize["プロフィール要約<br/>(Claude)"]
-    end
-
     subgraph "次回チャット"
         Prompt["{user_memory}<br/>変数としてプロンプトに注入"]
     end
 
     Chat --> Log --> Interactions
-    Log -.-> Extract --> Facts
-    Facts --> Summarize --> Memory
+    Log -.->|async| Extract --> Facts
+    Facts -.->|新factあれば| Summarize["プロフィール要約"] --> Memory
     Memory --> Prompt --> Chat
 ```
 
@@ -659,15 +669,13 @@ Go/Python両方のサービスがOpenTelemetryに対応 (`OTEL_ENABLED=true`で�
 ```mermaid
 graph LR
     subgraph "Goサービス群"
-        GoTrace["HTTPスパン<br/>(otelhttp)"]
-        GoMetrics["リクエストメトリクス<br/>(http.server.request.duration)"]
-        GoDBTrace["DBスパン<br/>(otelpgx)"]
+        GoTrace["HTTPスパン + DBスパン"]
+        GoMetrics["REDメトリクス"]
     end
 
     subgraph "kensan-ai"
-        PyTrace["FastAPIスパン"]
+        PyTrace["FastAPIスパン + DBスパン"]
         PyMetrics["GenAIメトリクス<br/>(token.usage, operation.duration)"]
-        PyDBTrace["asyncpgスパン"]
     end
 
     subgraph "フロントエンド"
@@ -675,70 +683,30 @@ graph LR
     end
 
     Collector["OTel Collector<br/>:4318 (OTLP HTTP)"]
+    Tempo["Tempo<br/>(トレース)"]
+    Prom["Prometheus<br/>(メトリクス)"]
+    Loki["Loki<br/>(ログ)"]
+    Grafana["Grafana<br/>(可視化)"]
 
     GoTrace --> Collector
     GoMetrics --> Collector
-    GoDBTrace --> Collector
     PyTrace --> Collector
     PyMetrics --> Collector
-    PyDBTrace --> Collector
     FETrace --> GoTrace
     FETrace --> PyTrace
+
+    Collector --> Tempo
+    Collector --> Prom
+    Collector --> Loki
+
+    Tempo --> Grafana
+    Prom --> Grafana
+    Loki --> Grafana
 ```
 
-### AI Interaction Explorer
+Traces↔Logs が双方向リンクされ、トレースIDをキーにドリルダウン可能。
 
-kensan-aiの構造化ログをLoki経由で可視化するフロントエンド機能:
-
-| ログイベント | 内容 |
-|------------|------|
-| `agent.prompt` | モデル、ツール数、コンテキスト情報 |
-| `agent.system_prompt` | システムプロンプト全文 |
-| `agent.turn` | ターンごとのトークン使用量、キャッシュヒット |
-| `agent.tool_call` | ツール名、入出力、成否 |
-| `agent.complete` | 総ターン数、総トークン数、outcome |
-
----
-
-## 開発環境
-
-### コマンド一覧
-
-```bash
-# === フロントエンド ===
-npm run dev              # 開発サーバー (localhost:5173)
-npm run dev:mock         # MSWモッキング有効
-npm run build            # TypeScriptチェック + プロダクションビルド
-npm run lint             # ESLint
-
-# === バックエンド ===
-cd backend
-make build               # 全サービスビルド
-make run SERVICE=task-service  # 特定サービス実行
-make test                # テスト実行
-make lint                # golangci-lint
-
-# === AIサービス ===
-cd kensan-ai
-pip install -e .
-uvicorn kensan_ai.main:app --reload --port 8089
-pytest                   # テスト実行
-
-# === Docker (フルスタック) ===
-make up                  # 全サービス起動
-make down                # 停止
-make logs                # ログ表示
-make health              # ヘルスチェック
-make dev-backend         # バックエンドのみ起動
-```
-
-### テストユーザー
-
-| フィールド | 値 |
-|----------|-----|
-| Email | `test@kensan.dev` |
-| Password | `password123` |
-| Name | `Yu` |
+> 詳細: [observability/ARCHITECTURE.md](observability/ARCHITECTURE.md)
 
 ---
 
@@ -751,6 +719,7 @@ make dev-backend         # バックエンドのみ起動
 | [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md) | Goマイクロサービス: 共通パッケージ、レイヤー設計、DBスキーマ、API仕様 |
 | [src/ARCHITECTURE.md](src/ARCHITECTURE.md) | フロントエンド: コンポーネント階層、Zustandストア、APIクライアント、タイムゾーン変換 |
 | [kensan-ai/ARCHITECTURE.md](kensan-ai/ARCHITECTURE.md) | AIサービス: Direct Tools、エージェント、コンテキスト管理、メモリシステム |
+| [observability/ARCHITECTURE.md](observability/ARCHITECTURE.md) | Observability: OTel, Grafana, Tempo, Loki, Prometheus |
 
 各サービスの個別ドキュメント:
 

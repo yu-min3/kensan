@@ -14,8 +14,8 @@ from dagster_project.assets.bronze import bronze_assets
 # ---------------------------------------------------------------------------
 
 def test_total_asset_count():
-    """Bronze 7 + Silver 5 + Gold 4 = 16 アセットが登録されている"""
-    assert len(all_assets) == 16
+    """Bronze 7 + Silver 7 + Gold 4 = 18 アセットが登録されている"""
+    assert len(all_assets) == 18
 
 
 def test_bronze_asset_count():
@@ -48,6 +48,8 @@ def test_silver_asset_names():
         "silver_notes",
         "silver_ai_interactions",
         "silver_ai_token_usage",
+        "silver_ai_facts",
+        "silver_ai_reviews",
     }
     assert names == expected
 
@@ -97,13 +99,15 @@ def test_gold_weekly_summary_depends_on_silver():
     assert "silver_notes" in deps
 
 
-def test_gold_ai_quality_depends_on_mixed_layers():
-    """gold_ai_quality_weekly は Silver と Bronze 両方に依存"""
+def test_gold_ai_quality_depends_on_silver_only():
+    """gold_ai_quality_weekly は Silver のみに依存 (Medallionパターン準拠)"""
     asset = _find_asset("gold_ai_quality_weekly")
     deps = _get_asset_dep_keys(asset)
     assert "silver_ai_interactions" in deps
-    assert "bronze_ai_facts_raw" in deps
-    assert "bronze_ai_reviews_raw" in deps
+    assert "silver_ai_facts" in deps
+    assert "silver_ai_reviews" in deps
+    # Bronze直接依存がないことを確認
+    assert not any(d.startswith("bronze_") for d in deps)
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +133,7 @@ def test_definitions_resolve():
     """Definitions が矛盾なく解決される"""
     repo = defs.get_repository_def()
     asset_keys = repo.asset_graph.get_all_asset_keys()
-    assert len(asset_keys) == 16
+    assert len(asset_keys) == 18
 
 
 def test_definitions_resources():

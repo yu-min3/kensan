@@ -1,8 +1,8 @@
 // Timeline components and utilities
 export { TimeBlockTimelineGrid } from './TimeBlockTimelineGrid'
-export { TimeBlockItem } from './TimeBlockItem'
 export { TimelineItemContent } from './TimelineItemContent'
-export { useTimeBlockDragResize } from './useTimeBlockDragResize'
+export { TimelineCore } from './TimelineCore'
+export type { TimelineBlock, TimelineColumn, TimelineCoreProps, OverlayRenderContext, BlockRenderContext } from './TimelineCore'
 export {
   formatTime,
   getMinutesFromTime,
@@ -12,7 +12,11 @@ export {
   calculateTopPosition,
   calculateHeight,
   calculateTimeFromY,
+  calculateTimeFromYWithDuration,
   calculateOverlapLayout,
+  yToMinutes,
+  calculateTopPx,
+  calculateHeightPx,
 } from './utils'
 export type {
   RunningTimerData,
@@ -21,8 +25,8 @@ export type {
   DragState,
   PreviewTime,
   DisplayTimes,
-  TimeBlockItemProps,
   TimeEntryItemProps,
   RunningTimerItemProps,
   TimeBlockTimelineGridProps,
+  GenericDragResizeState,
 } from './types'

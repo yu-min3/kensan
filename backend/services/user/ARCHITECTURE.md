@@ -6,34 +6,53 @@
 
 ## 目次
 
-1. [概要](#概要)
-2. [エンティティ](#エンティティ)
-3. [API仕様](#api仕様)
-4. [ビジネスロジック](#ビジネスロジック)
-5. [リポジトリ](#リポジトリ)
+1. [アーキテクチャ](#1-アーキテクチャ)
+2. [データモデル](#2-データモデル)
+3. [API](#3-api)
+4. [ビジネスロジック](#4-ビジネスロジック)
+5. [エラー](#5-エラー)
 
 ---
 
-## 概要
+## 1. アーキテクチャ
 
 | 項目 | 値 |
 |------|-----|
 | ポート | 8081 |
 | ベースパス | `/api/v1` |
-| 責務 | ユーザー登録、ログイン、JWT認証、プロファイル管理、設定管理、AI同意管理 |
+| 責務 | ユーザー登録、ログイン、JWT 認証、プロファイル管理、設定管理、AI 同意管理 |
 
-### 主な機能
+```mermaid
+graph TB
+    subgraph user-service
+        PubH["Public Handler<br/>/auth/register, /auth/login"]
+        AuthH["Auth Handler<br/>/users/me, /users/me/settings"]
+        Svc["Service"]
+        Repo["Repository"]
+        JWT["JWTManager"]
+    end
 
-- ユーザー登録・ログイン（JWT発行）
-- プロファイル取得・更新
-- ユーザー設定（タイムゾーン、テーマ、AI機能）
-- AI同意管理
+    Client["Frontend / 他サービス"] -->|"POST /auth/*"| PubH
+    Client -->|"GET/PUT /users/me/*"| AuthH
+    PubH --> Svc
+    AuthH --> Svc
+    Svc --> Repo
+    Svc --> JWT
+    Repo --> DB[(PostgreSQL<br/>users, user_settings)]
+    JWT -->|"HS256 署名"| Token["JWT Token"]
+
+    style PubH fill:#fef3c7
+    style AuthH fill:#dbeafe
+```
+
+**特徴:**
+- 認証エンドポイント（register/login）は Public Routes（JWT 不要）
+- プロファイル/設定エンドポイントは認証必須
+- 他サービスからの依存なし（JWT 検証は shared middleware で行う）
 
 ---
 
-## エンティティ
-
-### ER図
+## 2. データモデル
 
 ```mermaid
 erDiagram
@@ -42,12 +61,12 @@ erDiagram
         string email UK
         string name
         string password_hash
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     user_settings {
-        uuid user_id PK,FK
+        uuid user_id PK_FK
         string timezone
         string theme
         boolean is_configured
@@ -58,194 +77,64 @@ erDiagram
     users ||--o| user_settings : "has"
 ```
 
-### User
+### users
 
-```go
-type User struct {
-    ID        string    `json:"id"`
-    Email     string    `json:"email"`
-    Name      string    `json:"name"`
-    Password  string    `json:"-"`  // JSON出力から除外
-    CreatedAt time.Time `json:"createdAt"`
-    UpdatedAt time.Time `json:"updatedAt"`
-}
-```
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| id | UUID | PK |
+| email | string | UK、ログイン識別子 |
+| name | string | 表示名 |
+| password_hash | string | bcrypt ハッシュ（JSON 出力から除外） |
+| created_at / updated_at | timestamptz | タイムスタンプ |
 
-### UserSettings
+### user_settings
 
-```go
-type UserSettings struct {
-    UserID         string `json:"userId"`
-    Timezone       string `json:"timezone"`       // 例: "Asia/Tokyo"
-    Theme          string `json:"theme"`          // "light", "dark", "system"
-    IsConfigured   bool   `json:"isConfigured"`
-    AIEnabled      bool   `json:"aiEnabled"`
-    AIConsentGiven bool   `json:"aiConsentGiven"`
-}
-```
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| user_id | UUID | - | PK / FK |
+| timezone | string | `"UTC"` | IANA タイムゾーン名 |
+| theme | string | `"system"` | `light` / `dark` / `system` |
+| is_configured | boolean | `false` | 初期設定完了フラグ |
+| ai_enabled | boolean | `false` | AI 機能有効化 |
+| ai_consent_given | boolean | `false` | AI 利用同意 |
 
 ---
 
-## API仕様
+## 3. API
 
-### 認証エンドポイント（公開）
+### 認証（Public Routes）
 
-#### POST /api/v1/auth/register
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| POST | /auth/register | ユーザー登録 → JWT + User を返却 |
+| POST | /auth/login | ログイン → JWT + User を返却 |
 
-ユーザー登録。
+**register/login 共通パラメータ:**
 
-**リクエスト:**
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "name": "山田太郎"
-}
-```
+| フィールド | 型 | バリデーション |
+|-----------|-----|---------------|
+| email | string | 必須、有効なメール形式 |
+| password | string | 必須、8文字以上 |
+| name | string | 必須（register のみ） |
 
-**レスポンス:** `201 Created`
-```json
-{
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "name": "山田太郎",
-      "createdAt": "2026-01-23T..."
-    }
-  }
-}
-```
+### プロファイル（認証必須）
 
-**エラー:**
-- `400 VALIDATION_ERROR` - メール/パスワード/名前が不正
-- `409 USER_EXISTS` - メールアドレスが既に登録済み
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | /users/me | 現在のユーザー取得 |
+| PUT | /users/me | プロファイル更新（name, email） |
 
-#### POST /api/v1/auth/login
+### 設定（認証必須）
 
-ログイン。
-
-**リクエスト:**
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-**レスポンス:** `200 OK`
-```json
-{
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "name": "山田太郎"
-    }
-  }
-}
-```
-
-**エラー:**
-- `401 INVALID_CREDENTIALS` - メールまたはパスワードが不正
-
-### プロファイルエンドポイント（認証必須）
-
-#### GET /api/v1/users/me
-
-現在のユーザープロファイルを取得。
-
-**レスポンス:** `200 OK`
-```json
-{
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "山田太郎",
-    "createdAt": "2026-01-23T..."
-  }
-}
-```
-
-#### PUT /api/v1/users/me
-
-プロファイルを更新。
-
-**リクエスト:**
-```json
-{
-  "name": "山田次郎",
-  "email": "newemail@example.com"
-}
-```
-
-**レスポンス:** `200 OK`
-
-### 設定エンドポイント（認証必須）
-
-#### GET /api/v1/users/me/settings
-
-ユーザー設定を取得。
-
-**レスポンス:** `200 OK`
-```json
-{
-  "data": {
-    "userId": "uuid",
-    "timezone": "Asia/Tokyo",
-    "theme": "system",
-    "isConfigured": true,
-    "aiEnabled": true,
-    "aiConsentGiven": true
-  }
-}
-```
-
-#### PUT /api/v1/users/me/settings
-
-設定を更新。
-
-**リクエスト:**
-```json
-{
-  "timezone": "America/New_York",
-  "theme": "dark",
-  "aiEnabled": false
-}
-```
-
-**レスポンス:** `200 OK`
-
-**エラー:**
-- `400 INVALID_THEME` - テーマ値が不正（light/dark/system以外）
-
-#### POST /api/v1/users/me/ai-consent
-
-AI機能の利用同意を記録。
-
-**リクエスト:**
-```json
-{
-  "consent": true
-}
-```
-
-**レスポンス:** `200 OK`
-```json
-{
-  "data": {
-    "userId": "uuid",
-    "aiConsentGiven": true,
-    "aiEnabled": true
-  }
-}
-```
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | /users/me/settings | 設定取得 |
+| PUT | /users/me/settings | 設定更新（timezone, theme, aiEnabled） |
+| POST | /users/me/ai-consent | AI 利用同意を記録 |
 
 ---
 
-## ビジネスロジック
+## 4. ビジネスロジック
 
 ### 認証フロー
 
@@ -255,7 +144,7 @@ sequenceDiagram
     participant Handler
     participant Service
     participant Repository
-    participant JWTManager
+    participant JWT as JWTManager
 
     Client->>Handler: POST /auth/login
     Handler->>Service: Login(email, password)
@@ -263,8 +152,8 @@ sequenceDiagram
     Repository-->>Service: User
     Service->>Service: bcrypt.Compare(hash, password)
     alt パスワード一致
-        Service->>JWTManager: GenerateToken(userID, email)
-        JWTManager-->>Service: token
+        Service->>JWT: GenerateToken(userID, email)
+        JWT-->>Service: token
         Service-->>Handler: AuthResponse
         Handler-->>Client: 200 OK + token
     else パスワード不一致
@@ -273,99 +162,27 @@ sequenceDiagram
     end
 ```
 
-### バリデーションルール
-
-| フィールド | ルール |
-|----------|--------|
-| email | 必須、有効なメール形式 |
-| password | 必須、8文字以上 |
-| name | 必須 |
-| theme | "light", "dark", "system" のいずれか |
-
-### パスワードハッシュ化
-
-- アルゴリズム: bcrypt
-- コスト: 10（デフォルト）
-
-```go
-hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-```
-
 ### 設定初期化
 
-新規ユーザー登録時、デフォルト設定を作成:
+新規ユーザー登録時、デフォルト設定（UTC / system / AI 無効）が自動作成される。
 
-```go
-defaultSettings := &UserSettings{
-    UserID:         userID,
-    Timezone:       "UTC",
-    Theme:          "system",
-    IsConfigured:   false,
-    AIEnabled:      false,
-    AIConsentGiven: false,
-}
-```
+### パスワード
+
+- アルゴリズム: bcrypt（コスト: DefaultCost = 10）
+- JSON シリアライズから除外（`json:"-"` タグ）
 
 ---
 
-## リポジトリ
+## 5. エラー
 
-### インターフェース
-
-```go
-type Repository interface {
-    // User operations
-    CreateUser(ctx context.Context, user *User) error
-    GetUserByID(ctx context.Context, id string) (*User, error)
-    GetUserByEmail(ctx context.Context, email string) (*User, error)
-    UpdateUser(ctx context.Context, user *User) error
-    UserExistsByEmail(ctx context.Context, email string) (bool, error)
-
-    // Settings operations
-    CreateSettings(ctx context.Context, settings *UserSettings) error
-    GetSettings(ctx context.Context, userID string) (*UserSettings, error)
-    UpdateSettings(ctx context.Context, settings *UserSettings) error
-}
-```
-
-### 主要クエリ
-
-**GetUserByEmail:**
-```sql
-SELECT id, email, name, password_hash, created_at, updated_at
-FROM users
-WHERE email = $1
-```
-
-**GetSettings:**
-```sql
-SELECT user_id, timezone, theme, is_configured, ai_enabled, ai_consent_given
-FROM user_settings
-WHERE user_id = $1
-```
-
-**UpdateSettings:**
-```sql
-UPDATE user_settings
-SET timezone = $2, theme = $3, is_configured = $4, ai_enabled = $5, ai_consent_given = $6
-WHERE user_id = $1
-```
-
----
-
-## エラー定義
-
-```go
-var (
-    ErrUserNotFound      = errors.New("user not found")
-    ErrUserExists        = errors.New("user already exists")
-    ErrInvalidCredentials = errors.New("invalid credentials")
-    ErrEmailRequired     = errors.New("email is required")
-    ErrPasswordRequired  = errors.New("password is required")
-    ErrNameRequired      = errors.New("name is required")
-    ErrInvalidEmail      = errors.New("invalid email format")
-    ErrPasswordTooShort  = errors.New("password must be at least 8 characters")
-    ErrInvalidTheme      = errors.New("theme must be light, dark, or system")
-)
-```
+| エラー | HTTP | コード | 条件 |
+|--------|------|--------|------|
+| ErrUserNotFound | 404 | NOT_FOUND | ユーザーが存在しない |
+| ErrUserExists | 409 | ALREADY_EXISTS | メールが登録済み |
+| ErrInvalidCredentials | 401 | UNAUTHORIZED | メールまたはパスワード不正 |
+| ErrEmailRequired | 400 | VALIDATION_ERROR | email が空 |
+| ErrPasswordRequired | 400 | VALIDATION_ERROR | password が空 |
+| ErrNameRequired | 400 | VALIDATION_ERROR | name が空 |
+| ErrInvalidEmail | 400 | VALIDATION_ERROR | メール形式不正 |
+| ErrPasswordTooShort | 400 | VALIDATION_ERROR | 8文字未満 |
+| ErrInvalidTheme | 400 | INVALID_THEME | light/dark/system 以外 |

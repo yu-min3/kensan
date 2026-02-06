@@ -17,7 +17,7 @@ interface TimeBlockState {
   fetchTimeEntriesRange: (startDate: string, endDate: string) => Promise<void>
 
   // タイムブロック操作 (local date/time → UTC conversion)
-  addTimeBlock: (localDate: string, localStartTime: string, localEndTime: string, data: {
+  addTimeBlock: (localStartDate: string, localStartTime: string, localEndDate: string, localEndTime: string, data: {
     taskId?: string
     taskName: string
     milestoneId?: string
@@ -28,7 +28,7 @@ interface TimeBlockState {
     tagIds?: string[]
     isRoutine?: boolean
   }) => Promise<void>
-  updateTimeBlock: (id: string, localDate: string, localStartTime?: string, localEndTime?: string, data?: {
+  updateTimeBlock: (id: string, localStartDate: string, localStartTime?: string, localEndDate?: string, localEndTime?: string, data?: {
     taskId?: string
     taskName?: string
     milestoneId?: string
@@ -40,7 +40,7 @@ interface TimeBlockState {
   deleteTimeBlock: (id: string) => Promise<void>
 
   // 時間記録操作（local date/time → UTC conversion）
-  addTimeEntry: (localDate: string, localStartTime: string, localEndTime: string, data: {
+  addTimeEntry: (localStartDate: string, localStartTime: string, localEndDate: string, localEndTime: string, data: {
     taskId?: string
     taskName: string
     milestoneId?: string
@@ -51,7 +51,7 @@ interface TimeBlockState {
     tagIds?: string[]
     description?: string
   }) => Promise<void>
-  updateTimeEntry: (id: string, localDate: string, localStartTime?: string, localEndTime?: string, data?: {
+  updateTimeEntry: (id: string, localStartDate: string, localStartTime?: string, localEndDate?: string, localEndTime?: string, data?: {
     taskId?: string
     taskName?: string
     milestoneId?: string
@@ -116,11 +116,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  addTimeBlock: async (localDate, localStartTime, localEndTime, data) => {
+  addTimeBlock: async (localStartDate, localStartTime, localEndDate, localEndTime, data) => {
     try {
       const timezone = getTimezone()
       const newBlock = await timeblocksApi.createFromLocal(
-        localDate, localStartTime, localEndTime, data, timezone
+        localStartDate, localStartTime, localEndDate, localEndTime, data, timezone
       )
       set((state) => ({
         timeBlocks: [...state.timeBlocks, newBlock],
@@ -130,11 +130,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  updateTimeBlock: async (id, localDate, localStartTime, localEndTime, data) => {
+  updateTimeBlock: async (id, localStartDate, localStartTime, localEndDate, localEndTime, data) => {
     try {
       const timezone = getTimezone()
       const updatedBlock = await timeblocksApi.updateFromLocal(
-        id, localDate, localStartTime, localEndTime, data || {}, timezone
+        id, localStartDate, localStartTime, localEndDate, localEndTime, data || {}, timezone
       )
       set((state) => ({
         timeBlocks: state.timeBlocks.map((b) =>
@@ -169,11 +169,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
   },
 
   // TimeEntry CRUD operations (timezone-aware)
-  addTimeEntry: async (localDate, localStartTime, localEndTime, data) => {
+  addTimeEntry: async (localStartDate, localStartTime, localEndDate, localEndTime, data) => {
     try {
       const timezone = getTimezone()
       const newEntry = await timeentriesApi.createFromLocal(
-        localDate, localStartTime, localEndTime, data, timezone
+        localStartDate, localStartTime, localEndDate, localEndTime, data, timezone
       )
       set((state) => ({
         timeEntries: [...state.timeEntries, newEntry],
@@ -183,11 +183,11 @@ export const useTimeBlockStore = create<TimeBlockState>((set, get) => ({
     }
   },
 
-  updateTimeEntry: async (id, localDate, localStartTime, localEndTime, data) => {
+  updateTimeEntry: async (id, localStartDate, localStartTime, localEndDate, localEndTime, data) => {
     try {
       const timezone = getTimezone()
       const updatedEntry = await timeentriesApi.updateFromLocal(
-        id, localDate, localStartTime, localEndTime, data || {}, timezone
+        id, localStartDate, localStartTime, localEndDate, localEndTime, data || {}, timezone
       )
       set((state) => ({
         timeEntries: state.timeEntries.map((e) =>

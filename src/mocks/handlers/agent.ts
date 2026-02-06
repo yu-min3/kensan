@@ -1,6 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { tasks, timeEntries, timeBlocks } from '../data'
-import { generateId, getToday, getYesterday, getTomorrow } from '../data'
+import { tasks, goals, milestones, timeEntries, weeklySummary, generateId } from '../data'
 
 const BASE_URL = 'http://localhost:8089/api/v1'
 
@@ -37,13 +36,13 @@ const mockConversations = [
 const mockConversationMessages: Record<string, Array<{ id: string; role: string; content: string; situation: string; toolCalls: unknown[]; createdAt: string }>> = {
   'conv-001': [
     { id: 'msg-1-user', role: 'user', content: '今日の予定立てて', situation: 'chat', toolCalls: [], createdAt: '2026-01-31T09:00:00.000Z' },
-    { id: 'msg-1-assistant', role: 'assistant', content: 'タスクを確認して、今日のスケジュールを提案しますね。\n\n以下のスケジュールを提案します：\n- 09:00-11:00 CKA模擬試験\n- 11:00-12:00 Ciliumハンズオン\n- 14:00-16:00 ブログ記事執筆', situation: 'chat', toolCalls: [], createdAt: '2026-01-31T09:00:05.000Z' },
+    { id: 'msg-1-assistant', role: 'assistant', content: 'タスクを確認して、今日のスケジュールを提案しますね。\n\n以下のスケジュールを提案します：\n- 09:00-11:00 ICA試験勉強 - Traffic Management\n- 11:30-13:30 Kensan開発 - コンポーネント実装\n- 14:00-15:00 Istio記事執筆', situation: 'chat', toolCalls: [], createdAt: '2026-01-31T09:00:05.000Z' },
     { id: 'msg-2-user', role: 'user', content: 'ありがとう、実行して', situation: 'chat', toolCalls: [], createdAt: '2026-01-31T09:01:00.000Z' },
     { id: 'msg-2-assistant', role: 'assistant', content: '3件のタイムブロックを作成しました。', situation: 'chat', toolCalls: [], createdAt: '2026-01-31T09:01:05.000Z' },
   ],
   'conv-002': [
     { id: 'msg-3-user', role: 'user', content: 'タスクの進捗を確認して', situation: 'chat', toolCalls: [], createdAt: '2026-01-30T14:30:00.000Z' },
-    { id: 'msg-3-assistant', role: 'assistant', content: '未完了タスクが5件あります：\n\n- CKA模擬試験\n- Ciliumハンズオン Lab 4\n- ブログ記事下書き\n- Prometheus設定\n- 英語学習', situation: 'chat', toolCalls: [], createdAt: '2026-01-30T14:30:05.000Z' },
+    { id: 'msg-3-assistant', role: 'assistant', content: '未完了タスクが5件あります：\n\n- ICA試験勉強 - Traffic Management\n- ICA試験勉強 - Security\n- Kensan開発 - コンポーネント実装\n- Istio記事執筆\n- 技術書読書', situation: 'chat', toolCalls: [], createdAt: '2026-01-30T14:30:05.000Z' },
   ],
   'conv-003': [
     { id: 'msg-4-user', role: 'user', content: '週次振り返りレビューを生成して', situation: 'weekly', toolCalls: [], createdAt: '2026-01-27T18:00:00.000Z' },
@@ -66,270 +65,87 @@ export const agentHandlers = [
     const stream = new ReadableStream({
       async start(controller) {
         // ==========================================
-        // Briefing mode (morning)
+        // Situation-specific handlers
         // ==========================================
-        if (body.situation === 'briefing') {
-          const today = getToday()
-          const yesterday = getYesterday()
+        if (body.situation === 'planning') {
+          // AI Planning - generate structured plan from mock data
+          controller.enqueue(encoder.encode(sseEvent('text', { content: 'タスクと行動パターンを分析しています...\n\n' })))
+          await delay(500)
 
-          // Step 1: get_time_entries (yesterday)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_te', name: 'get_time_entries', input: { date: yesterday },
-          })))
-          await delay(400)
+          // Get actionable (leaf-level) incomplete tasks
+          const leafTasks = tasks.filter(t =>
+            !t.completed && !tasks.some(child => child.parentTaskId === t.id)
+          )
 
-          const yesterdayEntries = timeEntries
-            .filter((te) => te.startDatetime.startsWith(yesterday) || te.startDatetime < `${today}T00:00:00`)
-            .map((te) => {
-              const start = new Date(te.startDatetime).getTime()
-              const end = new Date(te.endDatetime).getTime()
-              return {
-                id: te.id,
-                taskName: te.taskName,
-                goalName: te.goalName,
-                goalColor: te.goalColor,
-                minutes: Math.round((end - start) / 60000),
-              }
-            })
+          // Build proposed blocks from top tasks
+          const blockSlots = [
+            { start: '09:00', end: '11:00' },
+            { start: '11:30', end: '13:30' },
+            { start: '14:00', end: '15:00' },
+            { start: '15:30', end: '16:30' },
+          ]
+          const proposedBlocks = leafTasks.slice(0, blockSlots.length).map((task, i) => {
+            const ms = task.milestoneId ? milestones.find(m => m.id === task.milestoneId) : undefined
+            const goal = ms ? goals.find(g => g.id === ms.goalId) : undefined
+            return {
+              taskId: task.id,
+              taskName: task.name,
+              goalId: goal?.id || null,
+              goalName: goal?.name || '',
+              goalColor: goal?.color || '',
+              startTime: blockSlots[i].start,
+              endTime: blockSlots[i].end,
+              reason: ms ? `${ms.name}（期限: ${ms.targetDate || '未設定'}）` : '日常タスク',
+            }
+          })
 
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_te', name: 'get_time_entries', result: yesterdayEntries,
-            card_type: 'yesterday_summary',
-          })))
-          await delay(300)
+          // Build task priorities
+          const taskPriorities = leafTasks.slice(0, 5).map((task, i) => {
+            const ms = task.milestoneId ? milestones.find(m => m.id === task.milestoneId) : undefined
+            let reason = '優先度中'
+            if (ms?.targetDate) {
+              const daysLeft = Math.ceil((new Date(ms.targetDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+              reason = `${ms.name}の期限まで残り${daysLeft}日`
+            }
+            return {
+              taskId: task.id,
+              taskName: task.name,
+              suggestedAction: (i < 3 ? 'today' : 'defer') as 'today' | 'defer' | 'split',
+              reason,
+            }
+          })
 
-          // Step 2: get_tasks (incomplete, for today focus + carryover)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_tasks', name: 'get_tasks', input: { completed: false },
-          })))
-          await delay(400)
-
-          const incompleteTasks = tasks.filter((t) => !t.completed && !t.parentTaskId).slice(0, 5)
-          const focusTasks = incompleteTasks.slice(0, 3).map((t) => ({
-            id: t.id, name: t.name,
-            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
-            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
-            estimatedMinutes: t.estimatedMinutes,
-          }))
-          const carryoverTasks = incompleteTasks
-            .filter((t) => t.dueDate && t.dueDate < today)
-            .map((t) => ({
-              id: t.id, name: t.name,
-              goalColor: '#94a3b8',
-              dueDate: t.dueDate,
-              daysOverdue: Math.floor((Date.now() - new Date(t.dueDate!).getTime()) / 86400000),
-            }))
-
-          // Send focus tasks
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tasks', name: 'get_tasks', result: focusTasks,
-            card_type: 'today_focus',
-          })))
-          await delay(200)
-
-          // Send carryover tasks (as a separate tool_result for the same tool)
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tasks_co', name: 'get_tasks', result: carryoverTasks.length > 0 ? carryoverTasks : [
-              { id: 't6', name: 'Istio記事執筆', goalColor: '#F59E0B', dueDate: yesterday, daysOverdue: 1 },
+          const planningJson = {
+            insights: [
+              {
+                category: 'productivity',
+                title: '午前の生産性が高い傾向',
+                description: '過去の記録から、9:00-12:00の集中度が最も高い傾向にあります。重要タスクを午前に配置しました。',
+              },
+              {
+                category: 'goal',
+                title: 'ICA試験が近づいています',
+                description: 'Traffic Managementの進捗は順調。Securityセクションへの着手を推奨します。',
+              },
             ],
-            card_type: 'carryover_tasks',
-          })))
-          await delay(300)
+            proposedBlocks,
+            taskPriorities,
+            alerts: [
+              {
+                type: 'goal_stalled',
+                message: 'アウトプット目標: 今月のブログ投稿がまだ0件です。Istio記事の着手を推奨します。',
+              },
+            ],
+          }
 
-          // Step 3: get_time_blocks (today)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_tb', name: 'get_time_blocks', input: { date: today },
-          })))
-          await delay(400)
-
-          const todayBlocks = timeBlocks.filter((tb) =>
-            tb.startDatetime >= `${today}T00:00:00Z` && tb.startDatetime < `${today}T23:59:59Z`
+          controller.enqueue(
+            encoder.encode(
+              sseEvent('text', {
+                content: '```json\n' + JSON.stringify(planningJson, null, 2) + '\n```',
+              })
+            )
           )
-
-          // Propose timeblocks
-          const tbActions = incompleteTasks.slice(0, 3).map((t, i) => ({
-            id: `tb_a${i + 1}`,
-            type: 'create_time_block',
-            description: `${9 + i * 2}:00-${10 + i * 2}:00 ${t.name}`,
-            input: {
-              date: today,
-              startTime: `${String(9 + i * 2).padStart(2, '0')}:00`,
-              endTime: `${String(10 + i * 2).padStart(2, '0')}:00`,
-              taskId: t.id,
-              title: t.name,
-            },
-          }))
-
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tb', name: 'get_time_blocks', result: todayBlocks,
-          })))
-          await delay(200)
-
-          controller.enqueue(encoder.encode(sseEvent('action_proposal', {
-            actions: tbActions,
-            card_type: 'timeblock_proposal',
-          })))
-          await delay(300)
-
-          // Step 4: get_analytics_summary
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_analytics', name: 'get_analytics_summary', input: {},
-          })))
-          await delay(400)
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_analytics', name: 'get_analytics_summary',
-            result: { totalMinutes: 1680, completedTasks: 12, plannedVsActual: { planned: 1800, actual: 1680 } },
-          })))
-          await delay(300)
-
-          // Step 5: AI insight
-          controller.enqueue(encoder.encode(sseEvent('text', {
-            content: '昨日は6時間の稼働で、ICA勉強とKensan開発に集中できました。\n\n良い傾向:\n- 午前中の集中時間を確保できている\n- Golden Kubestronaut関連の学習が順調\n\n注意点:\n- Istio記事が1日超過しています。今日30分でも着手しましょう\n- 週の目標進捗は93%（1680/1800分）で順調です',
-            card_type: 'ai_insight',
-          })))
-          await delay(200)
-
-          controller.enqueue(encoder.encode(sseEvent('done', {
-            conversation_id: conversationId,
-            tokens: { input: 1200, output: 600 },
-          })))
-          controller.close()
-          return
-        }
-
-        // ==========================================
-        // Evening mode (reflection)
-        // ==========================================
-        if (body.situation === 'evening') {
-          const today = getToday()
-          const tomorrow = getTomorrow()
-
-          // Step 1: get_time_blocks (today's plan)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_tb', name: 'get_time_blocks', input: { date: today },
-          })))
-          await delay(400)
-
-          const todayBlocks = timeBlocks.filter((tb) =>
-            tb.startDatetime >= `${today}T00:00:00Z` && tb.startDatetime < `${today}T23:59:59Z`
-          )
-          const plannedMinutes = todayBlocks.reduce((sum, tb) => {
-            return sum + Math.round((new Date(tb.endDatetime).getTime() - new Date(tb.startDatetime).getTime()) / 60000)
-          }, 0)
-
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tb', name: 'get_time_blocks', result: todayBlocks,
-          })))
-          await delay(300)
-
-          // Step 2: get_time_entries (today's actual)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_te', name: 'get_time_entries', input: { date: today },
-          })))
-          await delay(400)
-
-          const todayEntries = timeEntries
-            .filter((te) => te.startDatetime >= `${today}T00:00:00Z` && te.startDatetime < `${today}T23:59:59Z`)
-            .map((te) => {
-              const start = new Date(te.startDatetime).getTime()
-              const end = new Date(te.endDatetime).getTime()
-              return {
-                id: te.id,
-                taskName: te.taskName,
-                goalName: te.goalName,
-                goalColor: te.goalColor,
-                minutes: Math.round((end - start) / 60000),
-              }
-            })
-          const actualMinutes = todayEntries.reduce((sum, te) => sum + te.minutes, 0)
-
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_te', name: 'get_time_entries',
-            result: { planned: plannedMinutes, actual: actualMinutes, entries: todayEntries, blocks: todayBlocks },
-            card_type: 'actual_vs_planned',
-          })))
-          await delay(300)
-
-          // Step 3: get_tasks (completed today)
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_tasks', name: 'get_tasks', input: { completed: true },
-          })))
-          await delay(400)
-
-          const completedTasks = tasks.filter((t) => t.completed).map((t) => ({
-            id: t.id, name: t.name,
-            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
-            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
-          }))
-
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tasks', name: 'get_tasks', result: completedTasks,
-            card_type: 'completed_tasks',
-          })))
-          await delay(300)
-
-          // Step 4: get_analytics_summary
-          controller.enqueue(encoder.encode(sseEvent('tool_call', {
-            id: 'tc_analytics', name: 'get_analytics_summary', input: {},
-          })))
-          await delay(400)
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_analytics', name: 'get_analytics_summary',
-            result: { totalMinutes: 1680, completedTasks: 12 },
-          })))
-          await delay(300)
-
-          // Tomorrow focus tasks
-          const tomorrowTasks = tasks.filter((t) => !t.completed && !t.parentTaskId).slice(0, 4).map((t) => ({
-            id: t.id, name: t.name,
-            goalName: t.milestoneId ? 'Golden Kubestronaut' : undefined,
-            goalColor: t.milestoneId ? '#0EA5E9' : undefined,
-          }))
-
-          controller.enqueue(encoder.encode(sseEvent('tool_result', {
-            id: 'tc_tasks_tm', name: 'get_tasks', result: tomorrowTasks,
-            card_type: 'tomorrow_focus',
-          })))
-          await delay(200)
-
-          // Tomorrow TB proposal
-          const tmActions = tomorrowTasks.slice(0, 3).map((t, i) => ({
-            id: `tm_a${i + 1}`,
-            type: 'create_time_block',
-            description: `${9 + i * 2}:00-${10 + i * 2}:00 ${t.name}`,
-            input: {
-              date: tomorrow,
-              startTime: `${String(9 + i * 2).padStart(2, '0')}:00`,
-              endTime: `${String(10 + i * 2).padStart(2, '0')}:00`,
-              title: t.name,
-            },
-          }))
-
-          controller.enqueue(encoder.encode(sseEvent('action_proposal', {
-            actions: tmActions,
-            card_type: 'timeblock_proposal',
-          })))
-          await delay(300)
-
-          // Step 5: AI insight + learning diary
-          controller.enqueue(encoder.encode(sseEvent('text', {
-            content: '今日は計画の' + Math.round((actualMinutes / Math.max(plannedMinutes, 1)) * 100) + '%を達成しました。\n\n良かった点:\n- ICA Traffic Managementの学習を予定通り完了\n- Kensan開発が3時間進んだ\n\n改善点:\n- ブログ記事に着手できなかった\n---\n## 今日の学習メモ\n\n### Istio Traffic Management\n- VirtualServiceのretry設定を学習\n- DestinationRuleのトラフィック分割を実践\n- Circuit Breakerパターンの設定方法を確認\n\n### Kensan開発\n- BriefingLayout コンポーネントの設計\n- SSEストリーミングの実装パターン',
-            card_type: 'ai_insight',
-          })))
-          await delay(200)
-
-          controller.enqueue(encoder.encode(sseEvent('done', {
-            conversation_id: conversationId,
-            tokens: { input: 1500, output: 800 },
-          })))
-          controller.close()
-          return
-        }
-
-        // ==========================================
-        // Regular chat flows
-        // ==========================================
-        if (
+        } else if (
           message.includes('タスク') &&
           (message.includes('見せて') || message.includes('確認') || message.includes('一覧'))
         ) {
@@ -429,42 +245,83 @@ export const agentHandlers = [
           message.includes('レビュー') &&
           (message.includes('生成') || message.includes('振り返り'))
         ) {
-          // Weekly review generation
+          // Weekly review generation - built from actual mock data
           controller.enqueue(
             encoder.encode(sseEvent('text', { content: '振り返りレビューを生成します。データを分析中...\n\n' }))
           )
           await delay(500)
 
+          // Build task evaluations from actually worked tasks (via timeEntries)
+          const workedTaskMap = new Map<string, string>()
+          for (const te of timeEntries) {
+            if (!te.taskId) continue
+            const task = tasks.find(t => t.id === te.taskId)
+            if (!task) continue
+            const parentId = task.parentTaskId || task.id
+            const parent = task.parentTaskId ? tasks.find(t => t.id === task.parentTaskId) : task
+            if (parent && !workedTaskMap.has(parentId)) {
+              workedTaskMap.set(parentId, parent.name)
+            }
+          }
+
+          const taskEvaluations = [...workedTaskMap.entries()].map(([id, name]) => {
+            const subtasks = tasks.filter(t => t.parentTaskId === id)
+            const completed = subtasks.filter(t => t.completed).length
+            const total = subtasks.length
+            if (total > 0) {
+              const ratio = completed / total
+              return {
+                taskName: name,
+                status: ratio >= 0.5 ? 'good' : 'partial',
+                comment: `サブタスク${completed}/${total}完了。${ratio >= 0.5 ? '順調に進行中。' : '進捗の加速が必要。'}`,
+              }
+            }
+            return { taskName: name, status: 'partial', comment: '今週取り組んだ。引き続き進行中。' }
+          })
+
+          // Time evaluations from weeklySummary (actual learning time data)
+          const timeEvaluations = weeklySummary.byGoal.map(g => {
+            const targetMinutes = Math.round(g.minutes * 1.15)
+            return {
+              goalName: g.name,
+              goalColor: g.color,
+              actualMinutes: g.minutes,
+              targetMinutes,
+              comment: g.minutes >= targetMinutes * 0.9
+                ? '目標を概ね達成。良いペース。'
+                : `目標の${Math.round((g.minutes / targetMinutes) * 100)}%。改善の余地あり。`,
+            }
+          })
+
+          const totalWeekHours = Math.floor(weeklySummary.totalMinutes / 60)
+          const achieveRate = Math.round(
+            (weeklySummary.plannedVsActual.actual / weeklySummary.plannedVsActual.planned) * 100
+          )
+          const workedNames = [...workedTaskMap.values()]
+
           const reviewJson = {
-            weekStart: '2026-01-27',
-            weekEnd: '2026-01-31',
-            taskEvaluations: [
-              { taskName: 'CKA模擬試験', status: 'good', comment: '計画通り3回完了。正答率78%→85%に改善。' },
-              { taskName: 'Ciliumハンズオン', status: 'partial', comment: 'Lab 3まで完了。Lab 4-5は未着手。' },
-              { taskName: 'ブログ記事執筆', status: 'missed', comment: '着手できず。来週に持ち越し。' },
-            ],
-            timeEvaluations: [
-              { goalName: 'Golden Kubestronaut', goalColor: '#0EA5E9', actualMinutes: 720, targetMinutes: 900, comment: '月〜水に集中できた。木金が手薄。' },
-              { goalName: 'OSS活動', goalColor: '#10B981', actualMinutes: 300, targetMinutes: 300, comment: '目標通り。PR 2件マージ。' },
-              { goalName: 'アウトプット', goalColor: '#F59E0B', actualMinutes: 60, targetMinutes: 180, comment: 'ブログ未着手のため大幅に不足。' },
-            ],
-            learningSummary: '今週はKubernetesのネットワーキング層を中心に学習。CiliumのeBPFベースのデータプレーンの仕組みと、従来のiptablesベースとの違いを理解した。CKA試験ではNetworkPolicy問題の正答率が特に改善。',
+            weekStart: weeklySummary.weekStart,
+            weekEnd: weeklySummary.weekEnd,
+            taskEvaluations,
+            timeEvaluations,
+            learningSummary: `今週は合計${totalWeekHours}時間の学習を実施。${workedNames.join('、')}に取り組んだ。${weeklySummary.byGoal[0]?.name}を中心に学習を進め、着実に理解を深めている。`,
             goodPoints: [
-              'CKA模擬試験のスコアが着実に向上（78%→85%）',
-              'OSS活動でPR 2件マージ達成',
-              '月〜水の午前中に集中学習の習慣が定着',
-            ],
+              `総学習時間${totalWeekHours}時間を達成`,
+              `${weeklySummary.completedTasks}件のタスクを完了`,
+              weeklySummary.byGoal[0] ? `${weeklySummary.byGoal[0].name}に${Math.floor(weeklySummary.byGoal[0].minutes / 60)}時間を確保` : '',
+            ].filter(Boolean),
             improvementPoints: [
-              '木金の集中時間が確保できていない',
-              'Ciliumハンズオンが中断したまま',
-              'ブログ執筆に全く着手できなかった',
-            ],
+              weeklySummary.plannedVsActual.actual < weeklySummary.plannedVsActual.planned
+                ? `計画${Math.floor(weeklySummary.plannedVsActual.planned / 60)}hに対し実績${Math.floor(weeklySummary.plannedVsActual.actual / 60)}h（達成率${achieveRate}%）`
+                : null,
+              'アウトプット目標の時間確保が課題',
+            ].filter(Boolean) as string[],
             advice: [
-              '木金の午前にタイムブロックを固定して集中時間を確保する',
-              'Ciliumは1日30分の短い単位に分割して毎日少しずつ進める',
-              'ブログは下書きだけでも火曜に着手し、木曜に仕上げるサイクルを試す',
+              '午前中に最も集中力の高いタスクを配置すると効果的',
+              '短い時間でもブログの下書きに着手するとモメンタムが生まれる',
+              '週後半の学習時間確保のため、木曜に軽めのタスクを配置する',
             ],
-            summary: '全体として計画の72%を達成。前半は順調だったが後半に失速。',
+            summary: `全体として計画の${achieveRate}%を達成。${weeklySummary.byGoal[0]?.name}の学習が順調に進む一方、アウトプット時間の確保が課題。`,
           }
 
           controller.enqueue(

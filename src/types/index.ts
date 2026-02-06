@@ -360,6 +360,8 @@ export interface AIReviewReport {
   goodPoints: string[]
   improvementPoints: string[]
   advice: string[]
+  // おまけ: 日記へのひとこと
+  diaryFeedback?: string
   // 後方互換
   summary: string
   createdAt: Date
@@ -379,6 +381,45 @@ export interface EntityMemo {
   pinned: boolean
   createdAt: Date
   updatedAt: Date
+}
+
+// ============================================
+// AI Planning (AI計画提案)
+// ============================================
+export interface PlanningInsight {
+  category: 'productivity' | 'goal' | 'planning' | 'alert'
+  title: string
+  description: string
+}
+
+export interface ProposedBlock {
+  taskId: string | null
+  taskName: string
+  goalId: string | null
+  goalName: string
+  goalColor: string
+  startTime: string // HH:mm
+  endTime: string // HH:mm
+  reason: string
+}
+
+export interface TaskPrioritySuggestion {
+  taskId: string
+  taskName: string
+  suggestedAction: 'today' | 'defer' | 'split'
+  reason: string
+}
+
+export interface PlanningAlert {
+  type: 'goal_stalled' | 'overdue' | 'overcommit'
+  message: string
+}
+
+export interface AIPlanningResult {
+  insights: PlanningInsight[]
+  proposedBlocks: ProposedBlock[]
+  taskPriorities: TaskPrioritySuggestion[]
+  alerts: PlanningAlert[]
 }
 
 // ============================================

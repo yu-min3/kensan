@@ -1,6 +1,6 @@
 """
 Kensan Lakehouse - Dagster Definitions
-全16アセット (Bronze 7 + Silver 5 + Gold 4) をオーケストレーション
+全18アセット (Bronze 7 + Silver 7 + Gold 4) をオーケストレーション
 """
 
 from dagster import DefaultScheduleStatus, Definitions, ScheduleDefinition, define_asset_job
@@ -13,7 +13,9 @@ from dagster_project.assets.gold import (
     gold_weekly_summary,
 )
 from dagster_project.assets.silver import (
+    silver_ai_facts,
     silver_ai_interactions,
+    silver_ai_reviews,
     silver_ai_token_usage,
     silver_notes,
     silver_tasks,
@@ -28,6 +30,8 @@ all_assets = [
     silver_notes,
     silver_ai_interactions,
     silver_ai_token_usage,
+    silver_ai_facts,
+    silver_ai_reviews,
     gold_weekly_summary,
     gold_goal_progress,
     gold_ai_usage_weekly,

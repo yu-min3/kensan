@@ -3,16 +3,10 @@ Gold Assets: Silver → Gold 週次集計
 既存の aggregate.py をラップ
 """
 
-import sys
-from pathlib import Path
-
 from dagster import AssetExecutionContext, asset
 
 from dagster_project.resources import IcebergCatalogResource
-
-# 既存パイプラインをインポート可能にする
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "pipelines" / "gold"))
-from aggregate import (
+from pipelines.gold.aggregate import (
     aggregate_ai_quality_weekly,
     aggregate_ai_usage_weekly,
     aggregate_goal_progress,
@@ -59,8 +53,8 @@ def gold_ai_usage_weekly(
 @asset(
     deps=[
         "silver_ai_interactions",
-        "bronze_ai_facts_raw",
-        "bronze_ai_reviews_raw",
+        "silver_ai_facts",
+        "silver_ai_reviews",
     ],
     group_name="gold",
     compute_kind="aggregation",

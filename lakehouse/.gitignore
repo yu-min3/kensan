@@ -16,3 +16,4 @@ uv.lock
 # Dagster
 dagster_storage/
 .dagster/
+.tmp_dagster_home*/

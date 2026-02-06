@@ -21,7 +21,8 @@ export class NoteEditPage {
     this.closeButton = page.getByRole('button', { name: '閉じる' })
     this.editor = page.locator('[contenteditable="true"]')
     this.titleInput = page.getByPlaceholder('タイトルを入力')
-    this.drawioToggle = page.getByRole('switch')
+    // Specifically target the draw.io switch (there are two switches: drawio and mindmap)
+    this.drawioToggle = page.locator('div').filter({ hasText: /^draw\.io 図を含む$/ }).getByRole('switch')
   }
 
   async goto(id?: string) {

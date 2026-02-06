@@ -9,9 +9,8 @@ class Situation(str, Enum):
     """Possible situations for AI context."""
 
     CHAT = "chat"
-    EVENING = "evening"
     WEEKLY = "weekly"
-    BRIEFING = "briefing"
+    PLANNING = "planning"
 
 
 def detect_situation(

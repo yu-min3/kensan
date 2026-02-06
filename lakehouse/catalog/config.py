@@ -1,18 +1,35 @@
 """
-共通設定: Nessie Catalog接続、S3設定
+共通設定: Nessie Catalog接続、S3設定、ロギング
 """
 
+import logging
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pyiceberg.catalog import load_catalog
+from pyiceberg.catalog import Catalog, load_catalog
 
 # .envファイルを読み込み
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
-def get_catalog():
+def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
+    """構造化ロガーをセットアップ"""
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(level)
+    return logger
+
+
+def get_catalog() -> Catalog:
     """Nessie Iceberg REST Catalog への接続を返す"""
     return load_catalog(
         "nessie",

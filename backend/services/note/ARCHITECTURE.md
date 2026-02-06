@@ -6,38 +6,64 @@
 
 ## 目次
 
-1. [概要](#概要)
-2. [エンティティ](#エンティティ)
-3. [API仕様](#api仕様)
-4. [ビジネスロジック](#ビジネスロジック)
-5. [リポジトリ](#リポジトリ)
+1. [アーキテクチャ](#1-アーキテクチャ)
+2. [データモデル](#2-データモデル)
+3. [API](#3-api)
+4. [ビジネスロジック](#4-ビジネスロジック)
+5. [エラー](#5-エラー)
 
 ---
 
-## 概要
+## 1. アーキテクチャ
 
 | 項目 | 値 |
 |------|-----|
 | ポート | 8091 |
 | ベースパス | `/api/v1` |
-| 責務 | ノートのCRUD、マルチフォーマット対応、コンテンツ管理、検索 |
+| 責務 | ノートの CRUD、マルチフォーマット対応、コンテンツ管理、全文検索 |
 
-### 主な機能
+```mermaid
+graph TB
+    subgraph note-service
+        H["Handler"]
+        Svc["Service"]
+        subgraph Repos["Repository (ISP)"]
+            NR["NoteRepo"]
+            NCR["NoteContentRepo"]
+            NMR["NoteMetadataRepo"]
+        end
+        Stor["StorageClient"]
+    end
 
-- **統合ノート**: 日記と学習記録を同一構造で管理
-- **マルチフォーマット**: Markdown、Drawio、画像、PDF
-- **複数コンテンツ**: 1ノートに複数のコンテンツを添付
-- **全文検索**: タイトル・本文での検索
-- **ストレージ連携**: 外部ストレージへのファイルアップロード
+    Client["Frontend"] --> H
+    H --> Svc
+    Svc --> Repos
+    Svc --> Stor
+    Repos --> DB[(PostgreSQL<br/>notes, note_contents<br/>note_metadata<br/>note_content_chunks)]
+    Stor -->|"Presigned URL"| S3["MinIO / R2 / S3"]
+
+    AI["kensan-ai"] -.->|"ノート検索<br/>(full-text search)"| DB
+
+    style S3 fill:#fef3c7
+```
+
+**特徴:**
+- 1 ノートに複数コンテンツ（Markdown, Drawio, 画像, PDF）を添付可能
+- 外部ストレージ（MinIO/R2/S3）との Presigned URL 連携
+- PostgreSQL 全文検索（`to_tsvector` / `plainto_tsquery`）
+- kensan-ai がノート検索で利用
+- Repository は ISP で Note / NoteContent / NoteMetadata に分離
 
 ---
 
-## エンティティ
-
-### ER図
+## 2. データモデル
 
 ```mermaid
 erDiagram
+    notes ||--o{ note_contents : "has"
+    notes ||--o{ note_metadata : "has"
+    note_contents ||--o{ note_content_chunks : "has"
+
     notes {
         uuid id PK
         uuid user_id FK
@@ -52,11 +78,9 @@ erDiagram
         uuid goal_id
         string goal_name
         string goal_color
-        uuid[] tag_ids
+        uuid_array tag_ids
         string file_url
         boolean archived
-        timestamp created_at
-        timestamp updated_at
     }
 
     note_contents {
@@ -73,8 +97,6 @@ erDiagram
         text thumbnail_base64
         integer sort_order
         jsonb metadata
-        timestamp created_at
-        timestamp updated_at
     }
 
     note_metadata {
@@ -82,8 +104,6 @@ erDiagram
         uuid note_id FK
         string key
         text value
-        timestamp created_at
-        timestamp updated_at
     }
 
     note_content_chunks {
@@ -94,272 +114,8 @@ erDiagram
         text chunk_text
         integer token_count
         string embedding_model
-        timestamp processed_at
-        timestamp created_at
     }
-
-    notes ||--o{ note_contents : "has"
-    notes ||--o{ note_metadata : "has"
-    note_contents ||--o{ note_content_chunks : "has"
 ```
-
-### Note
-
-```go
-type NoteType string
-
-const (
-    NoteTypeDiary    NoteType = "diary"    // 日記
-    NoteTypeLearning NoteType = "learning" // 学習記録
-)
-
-type NoteFormat string
-
-const (
-    NoteFormatMarkdown NoteFormat = "markdown"
-    NoteFormatDrawio   NoteFormat = "drawio"
-)
-
-type Note struct {
-    ID                  string             `json:"id"`
-    UserID              string             `json:"userId"`
-    Type                NoteType           `json:"type"`
-    Title               *string            `json:"title,omitempty"`
-    Content             string             `json:"content"`
-    Format              NoteFormat         `json:"format"`
-    Date                types.DateOnly     `json:"date,omitempty"`
-    TaskID              *string            `json:"taskId,omitempty"`
-    MilestoneID         *string            `json:"milestoneId,omitempty"`
-    MilestoneName       *string            `json:"milestoneName,omitempty"`
-    GoalID              *string            `json:"goalId,omitempty"`
-    GoalName            *string            `json:"goalName,omitempty"`
-    GoalColor           *string            `json:"goalColor,omitempty"`
-    TagIDs              []string           `json:"tagIds,omitempty"`
-    Metadata            []NoteMetadataItem `json:"metadata,omitempty"`
-    RelatedTimeEntryIDs []string           `json:"relatedTimeEntryIds,omitempty"`
-    FileURL             *string            `json:"fileUrl,omitempty"`
-    Archived            bool               `json:"archived"`
-    CreatedAt           time.Time          `json:"createdAt"`
-    UpdatedAt           time.Time          `json:"updatedAt"`
-}
-```
-
-### NoteListItem（一覧用、content除外）
-
-```go
-type NoteListItem struct {
-    ID                  string         `json:"id"`
-    UserID              string         `json:"userId"`
-    Type                NoteType       `json:"type"`
-    Title               *string        `json:"title,omitempty"`
-    Format              NoteFormat     `json:"format"`
-    Date                types.DateOnly `json:"date,omitempty"`
-    TaskID              *string        `json:"taskId,omitempty"`
-    MilestoneID         *string        `json:"milestoneId,omitempty"`
-    MilestoneName       *string        `json:"milestoneName,omitempty"`
-    GoalID              *string        `json:"goalId,omitempty"`
-    GoalName            *string        `json:"goalName,omitempty"`
-    GoalColor           *string        `json:"goalColor,omitempty"`
-    TagIDs              []string       `json:"tagIds,omitempty"`
-    RelatedTimeEntryIDs []string       `json:"relatedTimeEntryIds,omitempty"`
-    FileURL             *string        `json:"fileUrl,omitempty"`
-    Archived            bool           `json:"archived"`
-    CreatedAt           time.Time      `json:"createdAt"`
-    UpdatedAt           time.Time      `json:"updatedAt"`
-}
-```
-
-### NoteContent
-
-```go
-type ContentType string
-
-const (
-    ContentTypeMarkdown ContentType = "markdown"
-    ContentTypeDrawio   ContentType = "drawio"
-    ContentTypeImage    ContentType = "image"
-    ContentTypePDF      ContentType = "pdf"
-    ContentTypeCode     ContentType = "code"
-)
-
-type StorageProvider string
-
-const (
-    StorageProviderMinIO StorageProvider = "minio"
-    StorageProviderR2    StorageProvider = "r2"
-    StorageProviderS3    StorageProvider = "s3"
-    StorageProviderLocal StorageProvider = "local"
-)
-
-type NoteContent struct {
-    ID              string           `json:"id"`
-    NoteID          string           `json:"noteId"`
-    ContentType     ContentType      `json:"contentType"`
-    Content         *string          `json:"content,omitempty"`         // インラインコンテンツ
-    StorageProvider *StorageProvider `json:"storageProvider,omitempty"` // ストレージ種別
-    StorageKey      *string          `json:"storageKey,omitempty"`      // ストレージ内のキー
-    FileName        *string          `json:"fileName,omitempty"`
-    MimeType        *string          `json:"mimeType,omitempty"`
-    FileSizeBytes   *int64           `json:"fileSizeBytes,omitempty"`
-    Checksum        *string          `json:"checksum,omitempty"`
-    ThumbnailBase64 *string          `json:"thumbnailBase64,omitempty"`
-    SortOrder       int              `json:"sortOrder"`
-    Metadata        map[string]any   `json:"metadata,omitempty"`
-    CreatedAt       time.Time        `json:"createdAt"`
-    UpdatedAt       time.Time        `json:"updatedAt"`
-}
-```
-
-### NoteMetadataItem
-
-```go
-type NoteMetadataItem struct {
-    ID        string    `json:"id"`
-    NoteID    string    `json:"noteId"`
-    Key       string    `json:"key"`
-    Value     *string   `json:"value,omitempty"`
-    CreatedAt time.Time `json:"createdAt"`
-    UpdatedAt time.Time `json:"updatedAt"`
-}
-```
-
----
-
-## API仕様
-
-全エンドポイントは認証必須。
-
-### Note API
-
-| Method | Endpoint | 説明 |
-|--------|----------|------|
-| GET | /notes | 一覧取得（NoteListItem） |
-| POST | /notes | 新規作成 |
-| GET | /notes/search | 全文検索 |
-| GET | /notes/{noteId} | 取得（content含む） |
-| PUT | /notes/{noteId} | 更新 |
-| DELETE | /notes/{noteId} | 削除 |
-| POST | /notes/{noteId}/archive | アーカイブ切替 |
-
-**GET /notes クエリパラメータ:**
-| パラメータ | 型 | 説明 |
-|-----------|-----|------|
-| types | string | カンマ区切り（diary,learning） |
-| goal_id | string | Goal IDでフィルタ |
-| milestone_id | string | Milestone IDでフィルタ |
-| task_id | string | Task IDでフィルタ |
-| tag_ids | string | カンマ区切りのタグID（AND条件） |
-| format | string | markdown または drawio |
-| date_from | string | 日付範囲開始（YYYY-MM-DD） |
-| date_to | string | 日付範囲終了（YYYY-MM-DD） |
-| archived | bool | アーカイブ状態 |
-| q | string | タイトル・内容で検索 |
-
-**POST /notes リクエスト:**
-```json
-{
-  "type": "learning",
-  "title": "Kubernetes Pod Security入門",
-  "content": "# Pod Security Standards\n\n...",
-  "format": "markdown",
-  "date": "2026-01-23",
-  "milestoneId": "uuid",
-  "milestoneName": "CKA合格",
-  "goalId": "uuid",
-  "goalName": "Golden Kubestronaut",
-  "goalColor": "#3B82F6",
-  "tagIds": ["uuid1", "uuid2"],
-  "metadata": [
-    {"key": "difficulty", "value": "intermediate"},
-    {"key": "source", "value": "kubernetes.io"}
-  ]
-}
-```
-
-**GET /notes/search クエリパラメータ:**
-| パラメータ | 型 | 説明 |
-|-----------|-----|------|
-| q | string | 検索クエリ（必須） |
-| types | string | タイプでフィルタ |
-| archived | bool | アーカイブ状態 |
-| limit | int | 最大件数（デフォルト: 20） |
-
-**POST /notes/{noteId}/archive リクエスト:**
-```json
-{
-  "archived": true
-}
-```
-
-### NoteContent API
-
-| Method | Endpoint | 説明 |
-|--------|----------|------|
-| GET | /notes/{noteId}/contents | コンテンツ一覧 |
-| POST | /notes/{noteId}/contents | コンテンツ追加 |
-| GET | /notes/{noteId}/contents/{contentId} | コンテンツ取得 |
-| PUT | /notes/{noteId}/contents/{contentId} | コンテンツ更新 |
-| DELETE | /notes/{noteId}/contents/{contentId} | コンテンツ削除 |
-| PATCH | /notes/{noteId}/contents/reorder | 並び替え |
-
-**POST /notes/{noteId}/contents リクエスト（インライン）:**
-```json
-{
-  "contentType": "markdown",
-  "content": "## 追加のメモ\n\n...",
-  "sortOrder": 1
-}
-```
-
-**POST /notes/{noteId}/contents リクエスト（ファイル参照）:**
-```json
-{
-  "contentType": "image",
-  "storageProvider": "r2",
-  "storageKey": "notes/uuid/image.png",
-  "fileName": "diagram.png",
-  "mimeType": "image/png",
-  "fileSizeBytes": 102400
-}
-```
-
-**PATCH /notes/{noteId}/contents/reorder リクエスト:**
-```json
-{
-  "contentIds": ["uuid1", "uuid2", "uuid3"]
-}
-```
-
-### Storage API
-
-| Method | Endpoint | 説明 |
-|--------|----------|------|
-| POST | /notes/{noteId}/contents/upload-url | アップロードURL取得 |
-| GET | /notes/{noteId}/contents/{contentId}/download-url | ダウンロードURL取得 |
-
-**POST /notes/{noteId}/contents/upload-url リクエスト:**
-```json
-{
-  "fileName": "architecture.drawio",
-  "mimeType": "application/xml",
-  "fileSize": 51200
-}
-```
-
-**レスポンス:**
-```json
-{
-  "data": {
-    "uploadUrl": "https://r2.example.com/presigned-url...",
-    "contentId": "uuid",
-    "storageKey": "notes/noteId/uuid/architecture.drawio"
-  }
-}
-```
-
----
-
-## ビジネスロジック
 
 ### ノートタイプ
 
@@ -368,189 +124,117 @@ type NoteMetadataItem struct {
 | diary | 日記、振り返り | date |
 | learning | 学習記録、技術メモ | title, date |
 
-### コンテンツ管理フロー
+### コンテンツタイプ
+
+| ContentType | 格納方式 | MIMEタイプ例 |
+|-------------|---------|-------------|
+| markdown | インライン（content フィールド） | text/markdown |
+| drawio | インラインまたはストレージ | application/xml |
+| image | ストレージ（Presigned URL） | image/png, image/jpeg |
+| pdf | ストレージ | application/pdf |
+| code | インライン | text/plain, application/json |
+
+### ストレージプロバイダー
+
+| Provider | 用途 |
+|----------|------|
+| minio | ローカル開発 |
+| r2 | Cloudflare R2（本番） |
+| s3 | AWS S3 |
+| local | ローカルファイルシステム |
+
+**ストレージキー構造:** `notes/{userID}/{noteID}/{contentID}/{filename}`
+
+---
+
+## 3. API
+
+### Note
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | /notes | 一覧（`?types`, `?goal_id`, `?milestone_id`, `?task_id`, `?tag_ids`, `?format`, `?date_from`, `?date_to`, `?archived`, `?q`） |
+| POST | /notes | 作成 |
+| GET | /notes/search | 全文検索（`?q` 必須、`?types`, `?archived`, `?limit`） |
+| GET | /notes/{noteId} | 取得（content 含む） |
+| PUT | /notes/{noteId} | 更新 |
+| DELETE | /notes/{noteId} | 削除 |
+| POST | /notes/{noteId}/archive | アーカイブ切替 |
+
+### NoteContent
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | /notes/{noteId}/contents | コンテンツ一覧 |
+| POST | /notes/{noteId}/contents | コンテンツ追加（インラインまたはストレージ参照） |
+| GET | /notes/{noteId}/contents/{contentId} | コンテンツ取得 |
+| PUT | /notes/{noteId}/contents/{contentId} | コンテンツ更新 |
+| DELETE | /notes/{noteId}/contents/{contentId} | コンテンツ削除 |
+| PATCH | /notes/{noteId}/contents/reorder | 並び替え（contentIds 配列） |
+
+### Storage
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| POST | /notes/{noteId}/contents/upload-url | アップロード用 Presigned URL 取得 |
+| GET | /notes/{noteId}/contents/{contentId}/download-url | ダウンロード用 Presigned URL 取得 |
+
+---
+
+## 4. ビジネスロジック
+
+### コンテンツアップロードフロー
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Handler
     participant Service
     participant Storage
     participant Repository
 
-    Note over Client: 画像アップロード
-
-    Client->>Handler: POST /notes/{noteId}/contents/upload-url
-    Handler->>Service: GetUploadURL(noteId, fileName, mimeType, fileSize)
+    Client->>Service: POST /upload-url {fileName, mimeType, fileSize}
     Service->>Service: GenerateStorageKey()
     Service->>Storage: GeneratePresignedURL(key)
     Storage-->>Service: presignedURL
-    Service->>Repository: CreateContent(content with storageKey)
+    Service->>Repository: CreateContent(storageKey)
     Repository-->>Service: contentId
-    Service-->>Handler: {uploadUrl, contentId, storageKey}
-    Handler-->>Client: 200 OK
+    Service-->>Client: {uploadUrl, contentId, storageKey}
 
     Client->>Storage: PUT presignedURL (binary)
     Storage-->>Client: 200 OK
-
-    Note over Client: アップロード完了
 ```
 
-### 検索ロジック
+### 全文検索
 
-PostgreSQLの全文検索を使用:
-
-```sql
-SELECT n.*,
-       ts_rank(to_tsvector('simple', COALESCE(n.title, '') || ' ' || n.content),
-               plainto_tsquery('simple', $2)) as score
-FROM notes n
-WHERE n.user_id = $1
-  AND to_tsvector('simple', COALESCE(n.title, '') || ' ' || n.content)
-      @@ plainto_tsquery('simple', $2)
-ORDER BY score DESC
-LIMIT $3
-```
+PostgreSQL の `to_tsvector('simple', ...)` / `plainto_tsquery` を使用。タイトルとコンテンツを結合してインデックス化し、`ts_rank` でスコア順にソートする。
 
 ### バリデーション
 
 | フィールド | ルール |
-|----------|--------|
-| type | 必須、diary または learning |
-| title | learningタイプでは必須 |
+|-----------|--------|
+| type | 必須、`diary` / `learning` |
+| title | learning タイプでは必須 |
 | content | 必須 |
-| format | 必須、markdown または drawio |
-| date | diary/learningでは必須 |
+| format | 必須、`markdown` / `drawio` |
+| date | diary / learning では必須 |
 
 ---
 
-## リポジトリ
+## 5. エラー
 
-### インターフェース（ISP準拠）
-
-```go
-// NoteRepository はノートの永続化を処理
-type NoteRepository interface {
-    GetByID(ctx context.Context, id string) (*Note, error)
-    GetByIDAndUserID(ctx context.Context, id, userID string) (*Note, error)
-    List(ctx context.Context, userID string, filter *NoteFilter) ([]*NoteListItem, error)
-    Create(ctx context.Context, note *Note) error
-    Update(ctx context.Context, note *Note) error
-    Delete(ctx context.Context, id string) error
-    Search(ctx context.Context, userID, query string, filter *NoteFilter, limit int) ([]*SearchResult, error)
-}
-
-// NoteContentRepository はコンテンツの永続化を処理
-type NoteContentRepository interface {
-    GetByID(ctx context.Context, id string) (*NoteContent, error)
-    ListByNoteID(ctx context.Context, noteID string) ([]*NoteContent, error)
-    Create(ctx context.Context, content *NoteContent) error
-    Update(ctx context.Context, content *NoteContent) error
-    Delete(ctx context.Context, id string) error
-    UpdateSortOrders(ctx context.Context, noteID string, contentIDs []string) error
-}
-
-// NoteMetadataRepository はメタデータの永続化を処理
-type NoteMetadataRepository interface {
-    GetByNoteID(ctx context.Context, noteID string) ([]*NoteMetadataItem, error)
-    SetMetadata(ctx context.Context, noteID string, items []SetNoteMetadataInput) error
-    DeleteByNoteID(ctx context.Context, noteID string) error
-}
-
-// Repository は全リポジトリを統合
-type Repository interface {
-    NoteRepository
-    NoteContentRepository
-    NoteMetadataRepository
-}
-```
-
-### 主要クエリ
-
-**List:**
-```sql
-SELECT id, user_id, type, title, format, date, task_id,
-       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-       tag_ids, related_time_entry_ids, file_url, archived, created_at, updated_at
-FROM notes
-WHERE user_id = $1
-  AND ($2::text[] IS NULL OR type = ANY($2))
-  AND ($3::uuid IS NULL OR goal_id = $3)
-  AND ($4::uuid IS NULL OR milestone_id = $4)
-  AND ($5::date IS NULL OR date >= $5)
-  AND ($6::date IS NULL OR date <= $6)
-  AND ($7::boolean IS NULL OR archived = $7)
-ORDER BY date DESC, created_at DESC
-```
-
-**Search:**
-```sql
-SELECT n.id, n.user_id, n.type, n.title, n.format, n.date,
-       ts_rank(to_tsvector('simple', COALESCE(n.title, '') || ' ' || n.content),
-               plainto_tsquery('simple', $2)) as score
-FROM notes n
-WHERE n.user_id = $1
-  AND n.archived = false
-  AND to_tsvector('simple', COALESCE(n.title, '') || ' ' || n.content)
-      @@ plainto_tsquery('simple', $2)
-ORDER BY score DESC
-LIMIT $3
-```
-
-**ListContents:**
-```sql
-SELECT id, note_id, content_type, content, storage_provider, storage_key,
-       file_name, mime_type, file_size_bytes, checksum, thumbnail_base64,
-       sort_order, metadata, created_at, updated_at
-FROM note_contents
-WHERE note_id = $1
-ORDER BY sort_order, created_at
-```
-
----
-
-## エラー定義
-
-```go
-var (
-    ErrNoteNotFound       = errors.New("note not found")
-    ErrUnauthorized       = errors.New("not authorized")
-    ErrTypeRequired       = errors.New("type is required")
-    ErrInvalidType        = errors.New("invalid note type")
-    ErrTitleRequired      = errors.New("title is required")
-    ErrContentRequired    = errors.New("content is required")
-    ErrFormatRequired     = errors.New("format is required")
-    ErrInvalidFormat      = errors.New("invalid format")
-    ErrDateRequired       = errors.New("date is required")
-    ErrQueryRequired      = errors.New("search query is required")
-    ErrContentNotFound    = errors.New("content not found")
-    ErrContentTypeRequired = errors.New("content type is required")
-    ErrInvalidContentType = errors.New("invalid content type")
-    ErrStorageUnavailable = errors.New("storage service unavailable")
-)
-```
-
----
-
-## ストレージ設計
-
-### ストレージキー構造
-
-```
-notes/{userID}/{noteID}/{contentID}/{filename}
-```
-
-例:
-```
-notes/abc123/def456/ghi789/architecture.drawio
-```
-
-### サポートファイルタイプ
-
-| ContentType | MIMEタイプ例 |
-|-------------|-------------|
-| markdown | text/markdown |
-| drawio | application/xml |
-| image | image/png, image/jpeg, image/gif |
-| pdf | application/pdf |
-| code | text/plain, application/json |
+| エラー | HTTP | コード | 条件 |
+|--------|------|--------|------|
+| ErrNoteNotFound | 404 | NOT_FOUND | ノートが存在しない |
+| ErrContentNotFound | 404 | NOT_FOUND | コンテンツが存在しない |
+| ErrUnauthorized | 401 | UNAUTHORIZED | 他ユーザーのノートへのアクセス |
+| ErrTypeRequired | 400 | VALIDATION_ERROR | type が未指定 |
+| ErrInvalidType | 400 | VALIDATION_ERROR | type が diary/learning 以外 |
+| ErrTitleRequired | 400 | VALIDATION_ERROR | learning で title が未指定 |
+| ErrContentRequired | 400 | VALIDATION_ERROR | content が未指定 |
+| ErrFormatRequired | 400 | VALIDATION_ERROR | format が未指定 |
+| ErrInvalidFormat | 400 | VALIDATION_ERROR | format が不正 |
+| ErrDateRequired | 400 | VALIDATION_ERROR | date が未指定 |
+| ErrQueryRequired | 400 | VALIDATION_ERROR | 検索クエリが未指定 |
+| ErrContentTypeRequired | 400 | VALIDATION_ERROR | content_type が未指定 |
+| ErrInvalidContentType | 400 | VALIDATION_ERROR | content_type が不正 |
+| ErrStorageUnavailable | 503 | SERVICE_UNAVAILABLE | ストレージ接続エラー |

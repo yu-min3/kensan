@@ -3,16 +3,10 @@ Bronze Assets: PostgreSQL → Iceberg Bronze層
 既存の ingest_postgres.py をラップ
 """
 
-import sys
-from pathlib import Path
-
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue, asset
 
 from dagster_project.resources import IcebergCatalogResource, PostgresDsnResource
-
-# 既存パイプラインをインポート可能にする
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "pipelines" / "bronze"))
-from ingest_postgres import TABLES, ingest_table, load_state, save_state
+from pipelines.bronze.ingest_postgres import TABLES, ingest_table, load_state, save_state
 
 
 def _make_bronze_asset(table_name: str, config: dict):

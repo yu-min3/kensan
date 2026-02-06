@@ -11,6 +11,7 @@ from kensan_ai.agents.gemini_runner import GeminiAgentRunner
 from kensan_ai.agents.message_history import MessageHistory
 from kensan_ai.agents import weekly_review
 from kensan_ai.agents import chat
+from kensan_ai.agents import planning_agent
 from kensan_ai.config import get_settings
 
 
@@ -31,4 +32,5 @@ __all__ = [
     "create_agent_runner",
     "weekly_review",
     "chat",
+    "planning_agent",
 ]

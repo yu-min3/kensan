@@ -37,6 +37,7 @@ function parseReviewFromStream(text: string): AIReviewReport | null {
       goodPoints: (parsed.goodPoints as string[]) || [],
       improvementPoints: (parsed.improvementPoints as string[]) || [],
       advice: (parsed.advice as string[]) || [],
+      diaryFeedback: (parsed.diaryFeedback as string) || undefined,
       summary: (parsed.summary as string) || '',
       createdAt: new Date(),
     }
@@ -112,6 +113,7 @@ export function AIReviewSection({ startDate, endDate }: AIReviewSectionProps) {
   "goodPoints": ["よかった点1", "よかった点2"],
   "improvementPoints": ["改善点1", "改善点2"],
   "advice": ["アドバイス1", "アドバイス2"],
+  "diaryFeedback": "日記を読んでの雑談じみたひとこと（共感、感想、励まし等。1-2文でカジュアルに）",
   "summary": "全体サマリー"
 }
 \`\`\``,

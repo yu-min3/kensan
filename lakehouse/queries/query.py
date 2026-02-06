@@ -8,15 +8,14 @@ PyIceberg経由でIcebergテーブルをDuckDBに登録し、SQLで分析可能�
 """
 
 import sys
-from pathlib import Path
 
 import duckdb
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "catalog"))
-from config import get_catalog
+from catalog.config import get_catalog
 
 # Iceberg → DuckDB テーブルマッピング
 TABLES = {
+    # Bronze
     "bronze_time_entries": "bronze.time_entries_raw",
     "bronze_tasks": "bronze.tasks_raw",
     "bronze_notes": "bronze.notes_raw",
@@ -25,11 +24,15 @@ TABLES = {
     "bronze_ai_reviews": "bronze.ai_reviews_raw",
     "bronze_ai_contexts": "bronze.ai_contexts_raw",
     "bronze_external_tool_results": "bronze.external_tool_results_raw",
+    # Silver
     "silver_time_entries": "silver.time_entries",
     "silver_tasks": "silver.tasks",
     "silver_notes": "silver.notes",
     "silver_ai_interactions": "silver.ai_interactions",
     "silver_ai_token_usage": "silver.ai_token_usage",
+    "silver_ai_facts": "silver.ai_facts",
+    "silver_ai_reviews": "silver.ai_reviews",
+    # Gold
     "gold_weekly_summary": "gold.weekly_summary",
     "gold_goal_progress": "gold.goal_progress",
     "gold_ai_usage_weekly": "gold.ai_usage_weekly",

@@ -20,6 +20,7 @@ from kensan_ai.db.queries.time_entries import get_time_entries
 from kensan_ai.db.queries.memos import get_memos, create_memo
 from kensan_ai.db.queries.notes import get_notes, create_note, update_note
 from kensan_ai.db.queries.analytics import get_analytics_summary, get_daily_summary
+from kensan_ai.db.queries.patterns import get_user_patterns
 
 __all__ = [
     "get_goals_and_milestones",
@@ -45,4 +46,5 @@ __all__ = [
     "update_note",
     "get_analytics_summary",
     "get_daily_summary",
+    "get_user_patterns",
 ]

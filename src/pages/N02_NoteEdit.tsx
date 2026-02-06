@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { NoteEditor, NoteEditorValue } from '@/components/note/NoteEditor'
@@ -296,9 +297,10 @@ export function N02NoteEdit() {
         }
       }
 
+      toast.success('保存しました')
       navigate('/notes')
-    } catch (error) {
-      console.error('Failed to save note:', error)
+    } catch {
+      // エラートーストはhttpClientで表示されるため、ここでは何もしない
     } finally {
       setIsSaving(false)
     }
@@ -308,9 +310,10 @@ export function N02NoteEdit() {
     if (id) {
       try {
         await deleteNote(id)
+        toast.success('削除しました')
         navigate('/notes')
-      } catch (error) {
-        console.error('Failed to delete note:', error)
+      } catch {
+        // エラートーストはhttpClientで表示される
       }
     }
   }
@@ -318,11 +321,13 @@ export function N02NoteEdit() {
   const handleArchive = async () => {
     if (id && existingNote) {
       try {
-        await archiveNote(id, !existingNote.archived)
+        const newArchived = !existingNote.archived
+        await archiveNote(id, newArchived)
         const updated = await fetchNote(id)
         setExistingNote(updated)
-      } catch (error) {
-        console.error('Failed to archive note:', error)
+        toast.success(newArchived ? 'アーカイブしました' : '復元しました')
+      } catch {
+        // エラートーストはhttpClientで表示される
       }
     }
   }

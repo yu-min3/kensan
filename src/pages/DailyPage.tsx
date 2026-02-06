@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel'
@@ -8,6 +8,7 @@ import { DailySummary } from '@/components/daily/DailySummary'
 import { TimeBlockSection } from '@/components/daily/TimeBlockSection'
 import { TaskListWidget, type TaskDragData } from '@/components/daily/TaskListWidget'
 import { PageMemo } from '@/components/common/PageMemo'
+import { AIPlanningCard } from '@/components/daily/AIPlanningCard'
 import { calculateTimeFromY } from '@/components/common/TimeBlockTimeline'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
@@ -33,9 +34,17 @@ export function DailyPage() {
   const { userName } = useSettingsStore()
   const { addTimeBlock } = useTimeBlockStore()
   const taskDetailPanel = useTaskDetailPanel()
+  const [searchParams] = useSearchParams()
 
-  // 選択中の日付（状態リフトアップ）
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  // 選択中の日付（URLパラメータ or 今日）
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const dateParam = searchParams.get('date')
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const d = new Date(dateParam + 'T00:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
   const selectedDateIso = formatDateIso(selectedDate)
   const isToday = formatDateIso(new Date()) === selectedDateIso
 
@@ -105,7 +114,7 @@ export function DailyPage() {
         const { startTime, endTime } = calculateTimeFromY(dragOverY, rect, actualStartHour, actualEndHour, 15)
 
         // タイムブロックを作成（選択中の日付を使用）
-        await addTimeBlock(selectedDateIso, startTime, endTime, {
+        await addTimeBlock(selectedDateIso, startTime, selectedDateIso, endTime, {
           taskId: activeDragData.taskId,
           taskName: activeDragData.taskName,
           milestoneId: activeDragData.milestoneId,
@@ -151,15 +160,19 @@ export function DailyPage() {
           <DailySummary mode="compact" selectedDate={selectedDateIso} />
         </div>
 
-        {/* メモ + 作業 */}
+        {/* メモ */}
+        <PageMemo
+          pageId="daily"
+          title="今日のメモ"
+          placeholder="今日の予定、気づき、やることなど..."
+        />
+
+        {/* AI Planning（今日の場合のみ） */}
+        {isToday && <AIPlanningCard selectedDate={selectedDateIso} />}
+
+        {/* タイムブロック + タスクリスト */}
         <div className="grid gap-4 lg:grid-cols-3">
-          {/* タイムブロック */}
-          <div className="lg:col-span-2 space-y-4">
-            <PageMemo
-              pageId="daily"
-              title="今日のメモ"
-              placeholder="今日の予定、気づき、やることなど..."
-            />
+          <div className="lg:col-span-2">
             <TimeBlockSection
               showAddButtons={true}
               isDraggingTask={isDraggingTask}

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { addDays, subDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -95,13 +96,18 @@ interface TimeEntryDialogState {
   isOpen: boolean
   editingEntryId: string | null
   taskName: string
-  date: string
-  startTime: string
-  endTime: string
+  startDatetime: string  // YYYY-MM-DDTHH:mm (local)
+  endDatetime: string    // YYYY-MM-DDTHH:mm (local)
   taskId: string | undefined
   milestoneId: string | undefined
   description: string
   taskInputMode: TaskInputMode
+}
+
+// Helper: datetime-local 形式 (YYYY-MM-DDTHH:mm) から date と time を分解
+function splitDatetime(datetime: string): { date: string; time: string } {
+  const [date, time] = datetime.split('T')
+  return { date, time }
 }
 
 export function TimeBlockSection({
@@ -140,9 +146,8 @@ export function TimeBlockSection({
     isOpen: false,
     editingEntryId: null,
     taskName: '',
-    date: formatDateIso(new Date()),
-    startTime: '09:00',
-    endTime: '10:00',
+    startDatetime: `${formatDateIso(new Date())}T09:00`,
+    endDatetime: `${formatDateIso(new Date())}T10:00`,
     taskId: undefined,
     milestoneId: undefined,
     description: '',
@@ -191,16 +196,15 @@ export function TimeBlockSection({
   const openNewEntryDialog = () => {
     const now = new Date()
     const startH = now.getHours().toString().padStart(2, '0')
-    const startM = Math.floor(now.getMinutes() / 15) * 15
+    const startM = (Math.floor(now.getMinutes() / 15) * 15).toString().padStart(2, '0')
     const endH = (now.getHours() + 1).toString().padStart(2, '0')
 
     setEntryDialog({
       isOpen: true,
       editingEntryId: null,
       taskName: '',
-      date: selectedDateIso,
-      startTime: `${startH}:${startM.toString().padStart(2, '0')}`,
-      endTime: `${endH}:${startM.toString().padStart(2, '0')}`,
+      startDatetime: `${selectedDateIso}T${startH}:${startM}`,
+      endDatetime: `${selectedDateIso}T${endH}:${startM}`,
       taskId: undefined,
       milestoneId: undefined,
       description: '',
@@ -210,13 +214,17 @@ export function TimeBlockSection({
 
   // 実績ダイアログを開く（編集）
   const openEditEntryDialog = (entry: TimeEntry) => {
+    const startDate = getLocalDate(entry.startDatetime, tz)
+    const startTime = getLocalTime(entry.startDatetime, tz)
+    const endDate = getLocalDate(entry.endDatetime, tz)
+    const endTime = getLocalTime(entry.endDatetime, tz)
+
     setEntryDialog({
       isOpen: true,
       editingEntryId: entry.id,
       taskName: entry.taskName,
-      date: getLocalDate(entry.startDatetime, tz),
-      startTime: getLocalTime(entry.startDatetime, tz),
-      endTime: getLocalTime(entry.endDatetime, tz),
+      startDatetime: `${startDate}T${startTime}`,
+      endDatetime: `${endDate}T${endTime}`,
       taskId: entry.taskId,
       milestoneId: entry.milestoneId,
       description: entry.description || '',
@@ -231,7 +239,11 @@ export function TimeBlockSection({
 
   // 実績を保存
   const handleEntrySave = async () => {
-    if (!entryDialog.taskName || !entryDialog.date || !entryDialog.startTime || !entryDialog.endTime) return
+    if (!entryDialog.taskName || !entryDialog.startDatetime || !entryDialog.endDatetime) return
+
+    // datetime を date/time に分解して store に渡す
+    const start = splitDatetime(entryDialog.startDatetime)
+    const end = splitDatetime(entryDialog.endDatetime)
 
     setIsEntrySubmitting(true)
     try {
@@ -247,21 +259,27 @@ export function TimeBlockSection({
       }
 
       if (entryDialog.editingEntryId) {
-        await updateTimeEntry(entryDialog.editingEntryId, entryDialog.date, entryDialog.startTime, entryDialog.endTime, data)
+        await updateTimeEntry(entryDialog.editingEntryId, start.date, start.time, end.date, end.time, data)
       } else {
-        await addTimeEntry(entryDialog.date, entryDialog.startTime, entryDialog.endTime, data)
+        await addTimeEntry(start.date, start.time, end.date, end.time, data)
       }
 
       closeEntryDialog()
-    } catch (error) {
-      console.error('Failed to save time entry:', error)
+      toast.success(entryDialog.editingEntryId ? '実績を更新しました' : '実績を追加しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
     } finally {
       setIsEntrySubmitting(false)
     }
   }
 
   const handleEntryDelete = async (entryId: string) => {
-    await deleteTimeEntry(entryId)
+    try {
+      await deleteTimeEntry(entryId)
+      toast.success('実績を削除しました')
+    } catch {
+      // エラートーストはhttpClientで表示される
+    }
   }
 
   const handleBlockClick = (block: TimeBlock) => {
@@ -281,6 +299,22 @@ export function TimeBlockSection({
   }
 
   const isToday = formatDateIso(new Date()) === selectedDateIso
+
+  // コールバックの安定化: ドラッグ中の再レンダリングでグローバルイベントリスナーが
+  // 再アタッチされるのを防止する
+  const handleBlockResize = useCallback(
+    (blockId: string, startTime: string, endTime: string) => {
+      updateTimeBlock(blockId, selectedDateIso, startTime, selectedDateIso, endTime)
+    },
+    [updateTimeBlock, selectedDateIso]
+  )
+
+  const handleEmptyDoubleClick = useCallback(
+    (startTime: string, endTime: string) => {
+      timeBlockDialog.openDialogWithTime(startTime, endTime)
+    },
+    [timeBlockDialog]
+  )
 
   return (
     <>
@@ -330,7 +364,7 @@ export function TimeBlockSection({
 
               {!isToday && (
                 <Button variant="ghost" size="sm" onClick={goToToday}>
-                  今日
+                  今日へ
                 </Button>
               )}
             </div>
@@ -383,20 +417,17 @@ export function TimeBlockSection({
 
           <div>
             <TimeBlockTimeline
+              isToday={isToday}
               timeBlocks={filteredBlocks}
               timeEntries={filteredEntries}
               showComparison={true}
               onBlockClick={handleBlockClick}
               onBlockDelete={timeBlockDialog.deleteBlock}
-              onBlockResize={(blockId, startTime, endTime) => {
-                updateTimeBlock(blockId, selectedDateIso, startTime, endTime)
-              }}
+              onBlockResize={handleBlockResize}
               onBlockStartTimer={handleBlockStartTimer}
               onEntryClick={openEditEntryDialog}
               onEntryDelete={handleEntryDelete}
-              onEmptyDoubleClick={(startTime, endTime) => {
-                timeBlockDialog.openDialogWithTime(startTime, endTime)
-              }}
+              onEmptyDoubleClick={handleEmptyDoubleClick}
               isDraggingTask={isDraggingTask}
               dragOverY={dragOverY}
               isTimerRunning={!!currentTimer}
@@ -425,19 +456,19 @@ export function TimeBlockSection({
         }
         mode="plan"
         taskName={timeBlockDialog.taskName}
-        startTime={timeBlockDialog.startTime}
-        endTime={timeBlockDialog.endTime}
+        startDatetime={timeBlockDialog.startDatetime}
+        endDatetime={timeBlockDialog.endDatetime}
         taskId={timeBlockDialog.taskId}
         milestoneId={timeBlockDialog.milestoneId}
         taskInputMode={timeBlockDialog.taskInputMode}
         selectedGoal={timeBlockDialog.selectedGoal}
         onTaskNameChange={(v) => timeBlockDialog.setField('taskName', v)}
-        onStartTimeChange={(v) => timeBlockDialog.setField('startTime', v)}
-        onEndTimeChange={(v) => timeBlockDialog.setField('endTime', v)}
+        onStartDatetimeChange={(v) => timeBlockDialog.setField('startDatetime', v)}
+        onEndDatetimeChange={(v) => timeBlockDialog.setField('endDatetime', v)}
         onTaskIdChange={(v) => timeBlockDialog.setField('taskId', v)}
         onMilestoneIdChange={(v) => timeBlockDialog.setField('milestoneId', v)}
         onTaskInputModeChange={(v) => timeBlockDialog.setField('taskInputMode', v)}
-        onSave={() => timeBlockDialog.save(selectedDateIso)}
+        onSave={() => timeBlockDialog.save()}
         showTaskInputModeToggle={true}
         isEditMode={!!timeBlockDialog.editingBlockId}
       />
@@ -449,21 +480,19 @@ export function TimeBlockSection({
         title={entryDialog.editingEntryId ? '実績を編集' : '実績を追加'}
         mode="entry"
         taskName={entryDialog.taskName}
-        startTime={entryDialog.startTime}
-        endTime={entryDialog.endTime}
+        startDatetime={entryDialog.startDatetime}
+        endDatetime={entryDialog.endDatetime}
         taskId={entryDialog.taskId}
         milestoneId={entryDialog.milestoneId}
         taskInputMode={entryDialog.taskInputMode}
         selectedGoal={entrySelectedGoal}
-        date={entryDialog.date}
         description={entryDialog.description}
         onTaskNameChange={(v) => setEntryDialog((prev) => ({ ...prev, taskName: v }))}
-        onStartTimeChange={(v) => setEntryDialog((prev) => ({ ...prev, startTime: v }))}
-        onEndTimeChange={(v) => setEntryDialog((prev) => ({ ...prev, endTime: v }))}
+        onStartDatetimeChange={(v) => setEntryDialog((prev) => ({ ...prev, startDatetime: v }))}
+        onEndDatetimeChange={(v) => setEntryDialog((prev) => ({ ...prev, endDatetime: v }))}
         onTaskIdChange={(v) => setEntryDialog((prev) => ({ ...prev, taskId: v }))}
         onMilestoneIdChange={(v) => setEntryDialog((prev) => ({ ...prev, milestoneId: v }))}
         onTaskInputModeChange={(v) => setEntryDialog((prev) => ({ ...prev, taskInputMode: v }))}
-        onDateChange={(v) => setEntryDialog((prev) => ({ ...prev, date: v }))}
         onDescriptionChange={(v) => setEntryDialog((prev) => ({ ...prev, description: v }))}
         onSave={handleEntrySave}
         showTaskInputModeToggle={true}

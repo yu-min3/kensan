@@ -9,7 +9,7 @@ export interface ActionItem {
   input: Record<string, unknown>
 }
 
-export type ChatSituation = 'auto' | 'morning' | 'evening' | 'weekly' | 'chat' | 'briefing'
+export type ChatSituation = 'auto' | 'weekly' | 'chat' | 'planning'
 
 export interface ChatMessage {
   id: string
@@ -29,7 +29,6 @@ interface ChatState {
   isStreaming: boolean
   pendingActions: ActionItem[] | null
   prefilledMessage: { message: string; situation?: ChatSituation } | null
-  proactiveMode: 'briefing' | 'evening' | false
 
   // History
   conversations: Conversation[]
@@ -61,7 +60,6 @@ export const useChatStore = create<ChatState>((set) => ({
   isStreaming: false,
   pendingActions: null,
   prefilledMessage: null,
-  proactiveMode: false,
 
   // History
   conversations: [],
@@ -92,7 +90,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setConversationId: (id) => set({ conversationId: id }),
 
   newConversation: () =>
-    set({ messages: [], conversationId: null, pendingActions: null, isViewingHistory: false, proactiveMode: false }),
+    set({ messages: [], conversationId: null, pendingActions: null, isViewingHistory: false }),
 
   sendPrefilled: (message, situation) =>
     set({
@@ -102,7 +100,6 @@ export const useChatStore = create<ChatState>((set) => ({
       pendingActions: null,
       prefilledMessage: { message, situation },
       isViewingHistory: false,
-      proactiveMode: situation === 'briefing' || situation === 'evening' ? situation : false,
     }),
 
   clearPrefilled: () => set({ prefilledMessage: null }),
