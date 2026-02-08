@@ -9,8 +9,8 @@ from kensan_ai.db.connection import get_connection
 
 async def create_review(
     user_id: UUID,
-    week_start: date,
-    week_end: date,
+    period_start: date,
+    period_end: date,
     summary: str,
     good_points: list[str],
     improvement_points: list[str],
@@ -23,17 +23,17 @@ async def create_review(
         row = await conn.fetchrow(
             """
             INSERT INTO ai_review_reports (
-                user_id, week_start, week_end, summary,
+                user_id, period_start, period_end, summary,
                 good_points, improvement_points, advice,
                 tokens_input, tokens_output
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id, user_id, week_start, week_end, summary,
+            RETURNING id, user_id, period_start, period_end, summary,
                 good_points, improvement_points, advice, created_at
             """,
             user_id,
-            week_start,
-            week_end,
+            period_start,
+            period_end,
             summary,
             good_points,
             improvement_points,
@@ -56,12 +56,12 @@ async def list_reviews(
         param_idx = 2
 
         if start_date:
-            conditions.append(f"week_start >= ${param_idx}")
+            conditions.append(f"period_start >= ${param_idx}")
             params.append(start_date)
             param_idx += 1
 
         if end_date:
-            conditions.append(f"week_end <= ${param_idx}")
+            conditions.append(f"period_end <= ${param_idx}")
             params.append(end_date)
             param_idx += 1
 
@@ -69,11 +69,11 @@ async def list_reviews(
 
         rows = await conn.fetch(
             f"""
-            SELECT id, user_id, week_start, week_end, summary,
+            SELECT id, user_id, period_start, period_end, summary,
                 good_points, improvement_points, advice, created_at
             FROM ai_review_reports
             WHERE {where_clause}
-            ORDER BY week_start DESC
+            ORDER BY period_start DESC
             """,
             *params,
         )
@@ -85,7 +85,7 @@ async def get_review(review_id: UUID, user_id: UUID) -> dict[str, Any] | None:
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, user_id, week_start, week_end, summary,
+            SELECT id, user_id, period_start, period_end, summary,
                 good_points, improvement_points, advice, created_at
             FROM ai_review_reports
             WHERE id = $1 AND user_id = $2
@@ -103,8 +103,8 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "userId": str(row["user_id"]),
-        "weekStart": row["week_start"].isoformat(),
-        "weekEnd": row["week_end"].isoformat(),
+        "periodStart": row["period_start"].isoformat(),
+        "periodEnd": row["period_end"].isoformat(),
         "summary": row["summary"] or "",
         "goodPoints": list(row["good_points"]) if row["good_points"] else [],
         "improvementPoints": list(row["improvement_points"]) if row["improvement_points"] else [],

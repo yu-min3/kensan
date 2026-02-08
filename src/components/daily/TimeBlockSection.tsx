@@ -34,6 +34,7 @@ interface TimeBlockSectionProps {
   // ドラッグ&ドロップ用（親のDndContextから渡される）
   isDraggingTask?: boolean
   dragOverY?: number | null
+  dragDurationMinutes?: number
   onTaskDrop?: (data: TaskDragData, startTime: string, endTime: string) => void
   // 日付状態（親コンポーネントから渡される）
   selectedDate?: Date
@@ -114,6 +115,7 @@ export function TimeBlockSection({
   showAddButtons = true,
   isDraggingTask = false,
   dragOverY = null,
+  dragDurationMinutes,
   selectedDate: propSelectedDate,
   onDateChange: propOnDateChange,
 }: TimeBlockSectionProps) {
@@ -430,6 +432,7 @@ export function TimeBlockSection({
               onEmptyDoubleClick={handleEmptyDoubleClick}
               isDraggingTask={isDraggingTask}
               dragOverY={dragOverY}
+              dragDurationMinutes={dragDurationMinutes}
               isTimerRunning={!!currentTimer}
               // 今日の場合のみ実行中タイマーを表示
               runningTimer={isToday && currentTimer ? {

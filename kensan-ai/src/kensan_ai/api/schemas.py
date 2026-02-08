@@ -1,5 +1,6 @@
 """Pydantic models for API request/response."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -39,7 +40,7 @@ class AgentStreamRequest(BaseModel):
 
     message: str = Field(..., description="User's message")
     conversation_id: str | None = Field(None, description="Conversation ID for continuity")
-    situation: Literal["auto", "weekly", "chat", "planning"] = Field(
+    situation: Literal["auto", "review", "chat", "daily_advice"] = Field(
         "auto", description="Situation context"
     )
     context: dict[str, str] | None = Field(
@@ -53,3 +54,77 @@ class AgentApproveRequest(BaseModel):
 
     conversation_id: str = Field(..., description="Conversation ID with pending actions")
     action_ids: list[str] = Field(..., description="IDs of actions to approve")
+
+
+# =============================================================================
+# Prompt Metadata
+# =============================================================================
+
+class VariableMetadataItem(BaseModel):
+    """Metadata for a system prompt variable."""
+
+    name: str
+    description: str
+    example: str
+    excludes_tools: list[str] = []
+
+
+class ToolMetadataItem(BaseModel):
+    """Metadata for an allowed tool."""
+
+    name: str
+    description: str
+    readonly: bool
+
+
+class PromptMetadataResponse(BaseModel):
+    """Response for prompt metadata (variables + tools)."""
+
+    variables: list[VariableMetadataItem]
+    tools: list[ToolMetadataItem]
+
+
+# =============================================================================
+# Prompt Management
+# =============================================================================
+
+class AIContextResponse(BaseModel):
+    """Response for an AI context."""
+
+    id: str
+    name: str
+    situation: str
+    version: str
+    is_active: bool
+    is_default: bool
+    system_prompt: str
+    allowed_tools: list[str]
+    max_turns: int
+    temperature: float
+    created_at: str
+    updated_at: str
+    current_version_number: int | None = None
+
+
+class AIContextUpdateRequest(BaseModel):
+    """Request to update an AI context."""
+
+    system_prompt: str | None = None
+    allowed_tools: list[str] | None = None
+    max_turns: int | None = None
+    temperature: float | None = None
+    changelog: str | None = None
+
+
+class AIContextVersionResponse(BaseModel):
+    """Response for an AI context version."""
+
+    id: str
+    context_id: str
+    version_number: int
+    system_prompt: str
+    allowed_tools: list[str]
+    max_turns: int
+    temperature: float
+    changelog: str | None = None
+    created_at: str

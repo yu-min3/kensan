@@ -13,6 +13,7 @@ import {
   snapToInterval,
   formatTime,
   calculateTimeFromY,
+  calculateTimeFromYWithDuration,
 } from './timeline'
 import type { TimelineBlock as CoreBlock, TimelineColumn, OverlayRenderContext, RunningTimerData, BlockRenderContext } from './timeline'
 import { TimelineItemContent } from './timeline/TimelineItemContent'
@@ -35,6 +36,7 @@ interface TimeBlockTimelineProps {
   onEmptyDoubleClick?: (startTime: string, endTime: string) => void
   isDraggingTask?: boolean
   dragOverY?: number | null
+  dragDurationMinutes?: number
   isTimerRunning?: boolean
   runningTimer?: RunningTimerData | null
   scale?: number
@@ -61,6 +63,7 @@ export function TimeBlockTimeline({
   onEmptyDoubleClick,
   isDraggingTask = false,
   dragOverY = null,
+  dragDurationMinutes = 60,
   isTimerRunning: _isTimerRunning, // Used for styling, currently unused
   runningTimer = null,
   scale,
@@ -328,6 +331,7 @@ export function TimeBlockTimeline({
     return (
       <div
         data-block
+        aria-label={`${originalBlock.taskName || 'Time block'} ${formatTime(ctx.displayTimes.startTime)}-${formatTime(ctx.displayTimes.endTime)}`}
         className={cn(
           'absolute rounded-md px-2 py-1 text-xs group overflow-hidden',
           showComparison ? 'left-1 right-[52%]' : 'left-1 right-1',
@@ -409,10 +413,11 @@ export function TimeBlockTimeline({
     const percentage = relativeY / rect.height
     const rawMinutes = percentage * totalMinutes + startHour * 60
     const snappedMinutes = snapToInterval(
-      Math.max(startHour * 60, Math.min(endHour * 60 - 60, rawMinutes))
+      Math.max(startHour * 60, Math.min(endHour * 60 - dragDurationMinutes, rawMinutes))
     )
     const timeString = minutesToTimeString(snappedMinutes)
     const topPercentage = ((snappedMinutes - startHour * 60) / totalMinutes) * 100
+    const indicatorHeight = ctx.hourHeight * (dragDurationMinutes / 60)
 
     return (
       <div
@@ -426,38 +431,40 @@ export function TimeBlockTimeline({
         <div
           className="absolute left-1 right-1 rounded-md border-2 border-dashed border-primary bg-primary/10"
           style={{
-            height: `${ctx.hourHeight}px`,
-            minHeight: `${ctx.hourHeight}px`,
+            height: `${indicatorHeight}px`,
+            minHeight: `${indicatorHeight}px`,
           }}
         />
       </div>
     )
-  }, [isDraggingTask, dragOverY, totalMinutes, startHour, endHour])
+  }, [isDraggingTask, dragOverY, totalMinutes, startHour, endHour, dragDurationMinutes])
 
   return (
-    <TimelineCore
-      columns={columns}
-      blocks={coreBlocks}
-      startHour={startHour}
-      endHour={endHour}
-      baseHourHeight={BASE_HOUR_HEIGHT}
-      scale={scale}
-      onScaleChange={onScaleChange}
-      onBlockClick={handleBlockClick}
-      onBlockDelete={onBlockDelete}
-      onBlockResize={handleBlockResize}
-      onEmptyDoubleClick={handleEmptyDoubleClick}
-      isDragging={isDraggingTask}
-      getDroppableId={() => 'timeblock-timeline-droppable'}
-      getDroppableData={() => ({})}
-      currentTimeMinutes={isToday ? currentTimeMinutes : undefined}
-      initialScrollHour={8}
-      renderOverlay={renderOverlay}
-      renderDropIndicator={renderDropIndicator}
-      renderBlock={renderBlock}
-    />
+    <div role="grid" aria-label="Time Block Schedule">
+      <TimelineCore
+        columns={columns}
+        blocks={coreBlocks}
+        startHour={startHour}
+        endHour={endHour}
+        baseHourHeight={BASE_HOUR_HEIGHT}
+        scale={scale}
+        onScaleChange={onScaleChange}
+        onBlockClick={handleBlockClick}
+        onBlockDelete={onBlockDelete}
+        onBlockResize={handleBlockResize}
+        onEmptyDoubleClick={handleEmptyDoubleClick}
+        isDragging={isDraggingTask}
+        getDroppableId={() => 'timeblock-timeline-droppable'}
+        getDroppableData={() => ({})}
+        currentTimeMinutes={isToday ? currentTimeMinutes : undefined}
+        initialScrollHour={8}
+        renderOverlay={renderOverlay}
+        renderDropIndicator={renderDropIndicator}
+        renderBlock={renderBlock}
+      />
+    </div>
   )
 }
 
-// Re-export calculateTimeFromY for external use
-export { calculateTimeFromY }
+// Re-export for external use
+export { calculateTimeFromY, calculateTimeFromYWithDuration }

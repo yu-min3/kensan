@@ -68,7 +68,7 @@ kensan-mockup/
 │   ├── api/                      # APIクライアント層
 │   │   ├── config.ts             # 環境変数設定
 │   │   ├── client.ts             # HTTPクライアント（JWT認証対応）
-│   │   └── services/             # 10個のAPIサービス
+│   │   └── services/             # 11個のAPIサービス
 │   ├── mocks/                    # MSWモック（オプトイン）
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui コンポーネント
@@ -78,8 +78,8 @@ kensan-mockup/
 │   │   ├── task/                 # タスク管理コンポーネント
 │   │   ├── editor/               # エディタ（Markdown, Drawio）
 │   │   └── note/                 # ノートコンポーネント
-│   ├── pages/                    # 10画面
-│   ├── stores/                   # 16個のZustandストア
+│   ├── pages/                    # 10ページ
+│   ├── stores/                   # 17個のZustandストア
 │   ├── hooks/                    # カスタムフック
 │   ├── lib/                      # ユーティリティ（timezone等）
 │   └── types/                    # 型定義
@@ -93,7 +93,7 @@ kensan-mockup/
 │   │   ├── note/                 # 統合ノート (:8091)
 │   │   └── routine/              # 定期タスク（docker-compose未登録）
 │   ├── shared/                   # 共有パッケージ（auth, bootstrap, config, database, middleware, errors, telemetry, types）
-│   ├── migrations/               # DBマイグレーション（34ファイル）
+│   ├── migrations/               # DBマイグレーション（51ファイル）
 │   └── Makefile
 ├── kensan-ai/                    # AIサービス (Python/FastAPI)
 │   └── src/kensan_ai/
@@ -117,12 +117,12 @@ kensan-mockup/
 | - | ログイン | `/login` | メール・パスワード認証 |
 | S01 | 設定 | `/settings` | ユーザー設定（初期設定も兼用） |
 | - | デイリー（ホーム） | `/` | 朝の計画・夜の振り返り・タイムライン |
+| W01 | 週間計画 | `/weekly` | 週間カレンダー・DnD対応 |
 | T01 | タスク管理 | `/tasks` | 目標・マイルストーン・タスク・ガントチャート |
 | N01 | ノート一覧 | `/notes` | 日記・学習記録の一覧・検索 |
 | N02 | ノート編集 | `/notes/:id` | Markdown/Drawioエディタ |
 | A01 | 分析レポート | `/analytics` | 時間分析・週次/月次サマリー |
-| B01 | ブリーフィング | `/briefing` | 朝のAIブリーフィング（自動データ収集・カード表示） |
-| B02 | 振り返り | `/reflection` | 夜のAI振り返り（実績分析・学習日記・明日の計画） |
+| A03 | プロンプト管理 | `/prompts` | AIコンテキスト編集・バージョン管理 |
 | O01 | インタラクション探索 | `/interactions` | AI対話履歴の探索 |
 
 ---
@@ -164,7 +164,7 @@ kensan-mockup/
 
 ## フロントエンド詳細
 
-### Zustandストア（15個）
+### Zustandストア（17個）
 
 | ストア | 役割 |
 |--------|------|
@@ -173,6 +173,7 @@ kensan-mockup/
 | `useGoalStore` | 目標CRUD |
 | `useMilestoneStore` | マイルストーンCRUD |
 | `useTagStore` | タグCRUD |
+| `useNoteTagStore` | ノートタグ（タスクタグと分離） |
 | `useTaskStore` | タスクCRUD |
 | `useTaskManagerStore` | 上記4ストアの統合フック |
 | `useTimeBlockStore` | タイムブロック・時間記録 |
@@ -182,12 +183,12 @@ kensan-mockup/
 | `useMemoStore` | メモ |
 | `useAnalyticsStore` | 分析データ |
 | `useChatStore` | AIチャット |
-| `useBriefingStore` | ブリーフィング・振り返り |
+| `usePromptStore` | AIコンテキスト・バージョン管理 |
 | `createCrudStore` | ストアファクトリ |
 
-### APIサービス（10個）
+### APIサービス（11個）
 
-`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, observability
+`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, prompts, observability
 
 ---
 

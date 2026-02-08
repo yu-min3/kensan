@@ -27,7 +27,7 @@ ENV VITE_AI_SERVICE_URL=$VITE_AI_SERVICE_URL
 
 # Install dependencies
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source code
 COPY . .

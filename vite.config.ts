@@ -5,6 +5,7 @@ import path from 'path'
 // In Docker containers, use internal network hostnames; on host, use localhost
 const lokiTarget = process.env.LOKI_URL || 'http://localhost:3100'
 const tempoTarget = process.env.TEMPO_URL || 'http://localhost:3200'
+const otlpTarget = process.env.OTLP_URL || 'http://localhost:4318'
 
 const observabilityProxy = {
   '/loki': {
@@ -16,6 +17,11 @@ const observabilityProxy = {
     target: tempoTarget,
     changeOrigin: true,
     rewrite: (path: string) => path.replace(/^\/tempo/, ''),
+  },
+  '/otlp': {
+    target: otlpTarget,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/otlp/, ''),
   },
 }
 

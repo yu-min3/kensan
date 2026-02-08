@@ -22,6 +22,7 @@ import {
   formatDaysUntil,
   type UrgencyLevel,
 } from '@/lib/taskUtils'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Target,
   GripVertical,
@@ -35,6 +36,7 @@ export interface TaskDragData {
   type: 'task'
   taskId: string
   taskName: string
+  estimatedMinutes?: number
   milestoneId?: string
   milestoneName?: string
   goalId?: string
@@ -57,20 +59,6 @@ function getCardBgColor(level: UrgencyLevel): string {
   }
 }
 
-// 緊急度インジケーター
-function UrgencyIndicator({ level }: { level: UrgencyLevel }) {
-  return (
-    <span
-      className={cn('w-2 h-2 rounded-full inline-block flex-shrink-0 mt-1', {
-        'bg-red-500': level === 'danger',
-        'bg-yellow-500': level === 'warning',
-        'bg-green-500': level === 'normal',
-        'bg-muted-foreground/50': level === 'no-deadline',
-      })}
-    />
-  )
-}
-
 // ドラッグ可能なタスクカード
 interface DraggableTaskCardProps {
   task: Task
@@ -80,13 +68,15 @@ interface DraggableTaskCardProps {
   isScheduledToday: boolean
   frequencyLabel: string | null
   onTaskClick?: (taskId: string) => void
+  onToggleComplete?: (taskId: string) => void
 }
 
-function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel, onTaskClick }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel, onTaskClick, onToggleComplete }: DraggableTaskCardProps) {
   const dragData: TaskDragData = {
     type: 'task',
     taskId: task.id,
     taskName: task.name,
+    estimatedMinutes: task.estimatedMinutes,
     milestoneId: milestone?.id,
     milestoneName: milestone?.name,
     goalId: goal?.id,
@@ -119,14 +109,18 @@ function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday,
       )}
       {...listeners}
       {...attributes}
+      role="listitem"
     >
-      {/* 1行目: インジケーター + タスク名 + 定期バッジ */}
+      {/* 1行目: チェックボックス + タスク名 + 定期バッジ */}
       <div className="flex items-start gap-2">
-        {isScheduledToday ? (
-          <RefreshCw className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-        ) : (
-          <UrgencyIndicator level={level} />
-        )}
+        <Checkbox
+          checked={false}
+          onCheckedChange={() => onToggleComplete?.(task.id)}
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          className="flex-shrink-0 mt-0.5"
+          aria-label={`Complete ${task.name}`}
+        />
         <span
           className="text-sm font-medium flex-1 leading-tight cursor-pointer hover:text-primary"
           onClick={e => {
@@ -191,7 +185,7 @@ interface TaskListWidgetProps {
 }
 
 export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
-  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskManagerStore()
+  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal, toggleTaskComplete } = useTaskManagerStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
   const taskData = useMemo(() => {
@@ -266,7 +260,7 @@ export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
           </div>
         ) : (
         <ScrollArea className="h-full">
-          <div className="p-2 space-y-2">
+          <div role="list" className="p-2 space-y-2">
             {taskData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">
                 <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -283,6 +277,7 @@ export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
                   isScheduledToday={isScheduledToday}
                   frequencyLabel={frequencyLabel}
                   onTaskClick={onTaskClick}
+                  onToggleComplete={toggleTaskComplete}
                 />
               ))
             )}

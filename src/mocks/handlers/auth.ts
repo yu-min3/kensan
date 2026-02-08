@@ -93,7 +93,7 @@ export const authHandlers = [
         timezone: userSettings.timezone,
         theme: userSettings.theme,
         isConfigured: true,
-        aiEnabled: false,
+        aiEnabled: true,
         aiConsentGiven: true,
       },
     })
@@ -110,7 +110,7 @@ export const authHandlers = [
         timezone: userSettings.timezone,
         theme: userSettings.theme,
         isConfigured: true,
-        aiEnabled: false,
+        aiEnabled: true,
         aiConsentGiven: true,
       },
     })

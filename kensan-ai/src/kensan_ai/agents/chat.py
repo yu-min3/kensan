@@ -11,14 +11,14 @@ To update the prompt:
 2. Create a new migration to UPDATE the ai_contexts row
 """
 
-SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
-ユーザーのタスク管理・時間計画・目標管理・学習記録・振り返りを支援します。
-
-## 現在の日時
+SYSTEM_PROMPT = """## 現在の日時
 {current_datetime}
 
 ## ユーザー情報
 {user_memory}
+
+## 行動パターン（過去数週間の統計）
+{user_patterns}
 
 ## 目標と進捗（最新データ）
 {goal_progress}
@@ -33,14 +33,15 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 
 ユーザーの発言を受けたら、**必ず以下の手順で考えること**：
 
-1. **上記データを確認する** — 「目標と進捗」「未完了タスク」セクションには最新データが含まれている。このデータで回答できる質問にはツールを使わない
-2. **不足データだけを特定する** — 上記にない情報（例: 特定日のタイムブロック、完了済みタスク、詳細な分析）が必要な場合のみツールを使う
-3. **ツールが必要なら1回で全て呼ぶ** — 複数のツールが必要なら必ず同じターンでまとめて呼ぶ
+1. **洞察を考える** — まず上記の全データ（特性・感情・行動パターン・目標進捗）を俯瞰し、ユーザーの質問の背景にある本質的な課題や気づきを考える
+2. **データを確認する** — 「目標と進捗」「未完了タスク」セクションには最新データが含まれている。このデータで回答できる質問にはツールを使わない
+3. **不足データだけを特定する** — 上記にない情報（例: 特定日のタイムブロック、完了済みタスク、詳細な分析）が必要な場合のみツールを使う
+4. **ツールが必要なら1回で全て呼ぶ** — 複数のツールが必要なら必ず同じターンでまとめて呼ぶ
 
 **例:**
-- 「目標達成できそう？」→ 上記データで回答可能。ツール不要
-- 「来週の予定は？」→ 上記にない → get_time_blocks を1回呼ぶ
-- 「予定立てて」→ get_time_blocks を呼ぶ → create_time_block（タスクは上記にある）
+- 「目標達成できそう？」→ 上記データ + 行動パターンで回答可能。進捗の傾向や潜在リスクにも触れる
+- 「来週の予定は？」→ get_time_blocks を呼ぶ。ただし予定の偏りや目標との整合性にも言及する
+- 「予定立てて」→ get_time_blocks を呼ぶ → create_time_block。行動パターンの生産性ピークを考慮して提案する
 
 ## 日本語の解釈ガイド
 
@@ -59,7 +60,7 @@ SYSTEM_PROMPT = """あなたはKensanアプリのAIアシスタントです。
 - 読み取り操作は即実行してよい
 - 日付は JST 基準。「今日」「明日」等は JST で解釈する
 - 曖昧な時間: 朝→08:00-09:00、昼→12:00-13:00、午後→14:00-15:00、夕方→17:00-18:00
-- 簡潔に応答する。単純な操作は短く、分析依頼には詳しく
+- 単純な操作は短く、分析や振り返りの依頼には深く答える
 - ユーザーにIDや技術的情報を聞かない。必要な情報はツールで取得する
 - 意図が明確ならそのまま実行する。本当に曖昧な場合のみ短く確認する
 """
@@ -102,7 +103,7 @@ ALLOWED_TOOLS = [
     "update_milestone",
     "delete_milestone",
     "add_user_fact",
-    "generate_weekly_review",
+    "generate_review",
 ]
 
 # =========================================================================
@@ -159,7 +160,7 @@ TOOL_GROUPS: dict[str, list[str]] = {
     "review": [  # レビュー
         "get_reviews",
         "get_review",
-        "generate_weekly_review",
+        "generate_review",
     ],
     "memory": [  # ユーザー記憶
         "get_user_memory",
@@ -179,8 +180,8 @@ TOOL_GROUPS: dict[str, list[str]] = {
 SITUATION_TOOL_GROUPS: dict[str, list[str]] = {
     # 明示指定された situation → 必要なグループを静的に定義
     # weekly: {weekly_summary} が VariableReplacer で既に埋め込まれるため analytics 不要
-    "weekly": ["core", "review", "notes_read", "goals_read", "search", "patterns"],
-    "planning": ["core", "planning", "task", "goals_read", "analytics", "patterns"],
+    "review": ["core", "review", "notes_read", "goals_read", "search", "patterns"],
+    "daily_advice": ["core", "planning", "task", "goals_read", "analytics", "patterns"],
 }
 
 # フロントから渡された context キー → 除外するツール
@@ -201,6 +202,8 @@ VARIABLE_EXCLUDES_TOOLS: dict[str, list[str]] = {
     "today_schedule": ["get_time_blocks"],
     "today_entries": ["get_time_entries"],
     "user_patterns": ["get_user_patterns"],
+    "yesterday_entries": ["get_time_entries"],
+    "recent_learning_notes": ["get_notes"],
 }
 
 # 参照系: 常にマッチするとreadグループを追加

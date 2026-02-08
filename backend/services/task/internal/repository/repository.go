@@ -877,7 +877,7 @@ func (r *PostgresRepository) DeleteMilestone(ctx context.Context, userID, milest
 // ListTags returns all task-type tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE user_id = $1 AND COALESCE(type, 'task') = 'task'
 		ORDER BY pinned DESC, usage_count DESC, name ASC
@@ -893,7 +893,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 	for rows.Next() {
 		var t task.Tag
 		var tagType string
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
@@ -907,7 +907,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 // ListNoteTags returns all note-type tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE user_id = $1 AND COALESCE(type, 'task') = 'note'
 		ORDER BY pinned DESC, usage_count DESC, name ASC
@@ -923,7 +923,7 @@ func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([
 	for rows.Next() {
 		var t task.Tag
 		var tagType string
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note tag: %w", err)
 		}
@@ -937,14 +937,14 @@ func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([
 // GetTagByID returns a tag by ID
 func (r *PostgresRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -964,17 +964,21 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 	if input.Pinned != nil {
 		pinned = *input.Pinned
 	}
+	category := input.Category
+	if category == "" {
+		category = "general"
+	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'task', $5, 0, $6, $6)
-		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
+		INSERT INTO tags (id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'task', $5, $6, 0, $7, $7)
+		RETURNING id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, category, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
@@ -995,17 +999,21 @@ func (r *PostgresRepository) CreateNoteTag(ctx context.Context, userID string, i
 	if input.Pinned != nil {
 		pinned = *input.Pinned
 	}
+	category := input.Category
+	if category == "" {
+		category = "general"
+	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'note', $5, 0, $6, $6)
-		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
+		INSERT INTO tags (id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'note', $5, $6, 0, $7, $7)
+		RETURNING id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, category, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
@@ -1023,6 +1031,7 @@ func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string
 	b := sqlbuilder.NewUpdateBuilder()
 	sqlbuilder.AddField(b, "name", input.Name)
 	sqlbuilder.AddField(b, "color", input.Color)
+	sqlbuilder.AddField(b, "category", input.Category)
 	sqlbuilder.AddField(b, "pinned", input.Pinned)
 
 	if !b.HasUpdates() {
@@ -1034,12 +1043,12 @@ func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string
 
 	query := fmt.Sprintf(`
 		UPDATE tags SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		RETURNING id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 	`, b.SetClause(), idArg, userArg)
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -1491,15 +1500,15 @@ func (r *PostgresRepository) DeleteTodo(ctx context.Context, userID, todoID stri
 // ========== TodoCompletion Operations ==========
 
 // GetTodoCompletion returns a completion record for a todo on a specific date
-func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
 	query := `
 		SELECT id, todo_id, completed_date, completed_at
 		FROM todo_completions
-		WHERE todo_id = $1 AND completed_date = $2
+		WHERE user_id = $1 AND todo_id = $2 AND completed_date = $3
 	`
 
 	var c task.TodoCompletion
-	err := r.pool.QueryRow(ctx, query, todoID, date).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
+	err := r.pool.QueryRow(ctx, query, userID, todoID, date).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -1511,18 +1520,18 @@ func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, todoID, date
 }
 
 // CreateTodoCompletion creates a completion record for a todo
-func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
 	query := `
-		INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, todo_id, completed_date, completed_at
 	`
 
 	var c task.TodoCompletion
-	err := r.pool.QueryRow(ctx, query, id, todoID, date, now).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
+	err := r.pool.QueryRow(ctx, query, id, userID, todoID, date, now).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
 			return nil, ErrTodoCompletionAlreadyExists
@@ -1534,9 +1543,9 @@ func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, todoID, d
 }
 
 // DeleteTodoCompletion deletes a completion record
-func (r *PostgresRepository) DeleteTodoCompletion(ctx context.Context, todoID, date string) error {
-	query := `DELETE FROM todo_completions WHERE todo_id = $1 AND completed_date = $2`
-	result, err := r.pool.Exec(ctx, query, todoID, date)
+func (r *PostgresRepository) DeleteTodoCompletion(ctx context.Context, userID, todoID, date string) error {
+	query := `DELETE FROM todo_completions WHERE user_id = $1 AND todo_id = $2 AND completed_date = $3`
+	result, err := r.pool.Exec(ctx, query, userID, todoID, date)
 	if err != nil {
 		return fmt.Errorf("failed to delete todo completion: %w", err)
 	}

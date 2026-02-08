@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useGoalStore } from '@/stores/useGoalStore'
 import { useMilestoneStore } from '@/stores/useMilestoneStore'
 import { useTagStore } from '@/stores/useTagStore'
+import { useNoteTagStore } from '@/stores/useNoteTagStore'
 import { useTaskOnlyStore } from '@/stores/useTaskStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { useNoteStore } from '@/stores/useNoteStore'
@@ -32,6 +33,9 @@ export function useInitializeData() {
   // TimeBlock store (timezone-aware fetch methods)
   const fetchTimeBlocksForLocalDate = useTimeBlockStore((state) => state.fetchTimeBlocksForLocalDate)
   const fetchTimeEntriesForLocalDate = useTimeBlockStore((state) => state.fetchTimeEntriesForLocalDate)
+
+  // Note tag store (separate from task tags)
+  const fetchNoteTags = useNoteTagStore((state) => state.fetchAll)
 
   // Notes store (unified diary + learning records)
   const fetchNotes = useNoteStore((state) => state.fetchNotes)
@@ -76,11 +80,12 @@ export function useInitializeData() {
           fetchNotes(),
           fetchCurrentTimer(),
           fetchNoteTypes(),
+          fetchNoteTags(),
         ])
 
         // Log any failures but don't block initialization
         const failures = results
-          .map((r, i) => ({ result: r, name: ['tasks', 'timeBlocks', 'timeEntries', 'notes', 'timer', 'noteTypes'][i] }))
+          .map((r, i) => ({ result: r, name: ['tasks', 'timeBlocks', 'timeEntries', 'notes', 'timer', 'noteTypes', 'noteTags'][i] }))
           .filter((r) => r.result.status === 'rejected')
 
         if (failures.length > 0) {
@@ -105,7 +110,7 @@ export function useInitializeData() {
       }
     }
     init()
-  }, [isAuthenticated, fetchAllTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, fetchNoteTypes, timezone])
+  }, [isAuthenticated, fetchAllTasks, fetchTimeBlocksForLocalDate, fetchTimeEntriesForLocalDate, fetchNotes, fetchSettings, fetchCurrentTimer, fetchNoteTypes, fetchNoteTags, timezone])
 
   return { initialized, isLoading, error }
 }

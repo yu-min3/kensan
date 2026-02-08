@@ -13,11 +13,11 @@ OPENMETADATA := -f docker-compose.openmetadata.yml
 # Lakehouse Stack (requires: make up in root for MinIO)
 # =============================================================================
 
-## Base: Nessie + Dagster
+## Base: Polaris + Dagster
 up:
 	docker compose $(COMMON) up -d
 	@echo ""
-	@echo "Nessie API:       http://localhost:19120"
+	@echo "Polaris API:      http://localhost:8181"
 	@echo "Dagster UI:       http://localhost:3070"
 
 down:
@@ -27,7 +27,7 @@ down:
 dremio-up:
 	docker compose $(DREMIO) up -d
 	@echo ""
-	@echo "Nessie API:       http://localhost:19120"
+	@echo "Polaris API:      http://localhost:8181"
 	@echo "Dagster UI:       http://localhost:3070"
 	@echo "Dremio UI:        http://localhost:9047"
 
@@ -38,7 +38,7 @@ dremio-down:
 trino-up:
 	docker compose $(TRINO) up -d
 	@echo ""
-	@echo "Nessie API:       http://localhost:19120"
+	@echo "Polaris API:      http://localhost:8181"
 	@echo "Dagster UI:       http://localhost:3070"
 	@echo "Trino:            http://localhost:8085"
 	@echo "Superset:         http://localhost:8088 (admin / admin)"
@@ -50,7 +50,7 @@ trino-down:
 all-up:
 	docker compose $(ALL) up -d
 	@echo ""
-	@echo "Nessie API:       http://localhost:19120"
+	@echo "Polaris API:      http://localhost:8181"
 	@echo "Dagster UI:       http://localhost:3070"
 	@echo "Dremio UI:        http://localhost:9047"
 	@echo "Trino:            http://localhost:8085"
@@ -76,8 +76,8 @@ openmetadata-down:
 health:
 	@echo "=== MinIO (main stack) ==="
 	@curl -sf http://localhost:9000/minio/health/live && echo " OK" || echo " FAIL"
-	@echo "=== Nessie ==="
-	@curl -sf http://localhost:19120/api/v2/config > /dev/null && echo " OK" || echo " FAIL"
+	@echo "=== Polaris ==="
+	@curl -sf http://localhost:8182/q/health > /dev/null && echo " OK" || echo " FAIL"
 
 # =============================================================================
 # Python Dependencies
@@ -159,7 +159,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Stack Patterns:"
-	@echo "  up           Base stack (Nessie + Dagster)"
+	@echo "  up           Base stack (Polaris + Dagster)"
 	@echo "  dremio-up    Base + Dremio"
 	@echo "  trino-up     Base + Trino + Superset"
 	@echo "  all-up       Base + Dremio + Trino + Superset"
@@ -184,7 +184,7 @@ help:
 	@echo "  summary      Run summary query"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  health       Check MinIO and Nessie health"
+	@echo "  health       Check MinIO and Polaris health"
 	@echo "  logs         View all lakehouse logs"
 	@echo "  dagster-logs View Dagster logs"
 	@echo "  dagster-dev  Run Dagster dev server locally"

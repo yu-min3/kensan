@@ -110,11 +110,11 @@ def is_readonly_tool(name: str) -> bool:
         name: The tool name
 
     Returns:
-        True if readonly, False if write tool. Defaults to True for unknown tools.
+        True if readonly, False if write tool. Defaults to False for unknown tools.
     """
     tool_def = get_tool(name)
     if tool_def is None:
-        return True
+        return False
     return tool_def.readonly
 
 

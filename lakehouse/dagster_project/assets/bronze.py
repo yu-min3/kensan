@@ -47,5 +47,5 @@ def _make_bronze_asset(table_name: str, config: dict):
     return _asset
 
 
-# 7 Bronze Assets を生成
+# 9 Bronze Assets を生成
 bronze_assets = [_make_bronze_asset(name, cfg) for name, cfg in TABLES.items()]

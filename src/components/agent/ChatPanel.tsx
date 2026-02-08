@@ -306,7 +306,7 @@ export function ChatPanel() {
   if (!isOpen) return null
 
   return (
-    <div className="border-l flex flex-col bg-background h-full relative" style={{ width: panelWidth }}>
+    <div role="complementary" aria-label="AI Chat" className="border-l flex flex-col bg-background h-full relative" style={{ width: panelWidth }}>
       {/* Resize handle */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 z-10"
@@ -322,12 +322,13 @@ export function ChatPanel() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={handleBackFromHistory}
+                aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-sm font-semibold">履歴</h2>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close} aria-label="Close">
               <X className="h-4 w-4" />
             </Button>
           </>
@@ -346,6 +347,7 @@ export function ChatPanel() {
                 className="h-7 w-7"
                 onClick={handleShowHistory}
                 title="履歴"
+                aria-label="History"
               >
                 <History className="h-4 w-4" />
               </Button>
@@ -355,10 +357,11 @@ export function ChatPanel() {
                 className="h-7 w-7"
                 onClick={handleNewFromHistory}
                 title="新しい会話"
+                aria-label="New conversation"
               >
                 <Plus className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close} aria-label="Close">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -402,8 +405,8 @@ export function ChatPanel() {
       ) : (
         <>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto py-2">
-            {messages.length === 0 && <WelcomeMessage />}
+          <div role="log" aria-live="polite" className="flex-1 overflow-y-auto py-2">
+            {messages.length === 0 && <WelcomeMessage onSend={handleSend} />}
             {messages.map((msg) => {
               return msg.type === 'action_proposal' && msg.actions ? (
                 <ActionProposal

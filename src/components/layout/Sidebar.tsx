@@ -6,6 +6,7 @@ import {
   FolderKanban,
   BarChart3,
   Activity,
+  FileCode2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +41,7 @@ const navSections: NavSection[] = [
     label: 'AI',
     items: [
       { to: '/interactions', icon: Activity, label: 'AI Explorer' },
+      { to: '/prompts', icon: FileCode2, label: 'プロンプト管理' },
     ],
   },
 ]
@@ -72,7 +74,7 @@ function NavItemLink({ item }: { item: NavItem }) {
 export function Sidebar() {
   return (
     <aside className="w-60 border-r bg-muted/40 h-full">
-      <nav className="flex flex-col gap-4 p-4">
+      <nav role="navigation" aria-label="Main navigation" className="flex flex-col gap-4 p-4">
         {navSections.map((section, i) => (
           <div key={i} className="flex flex-col gap-1">
             {section.label && (

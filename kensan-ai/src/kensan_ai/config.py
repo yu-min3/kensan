@@ -74,8 +74,10 @@ class Settings(BaseSettings):
     # External Tools
     tavily_api_key: str = ""
 
-    # Lakehouse (Iceberg direct write)
-    nessie_uri: str = "http://localhost:19120/iceberg/"
+    # Lakehouse (Iceberg direct write via Polaris)
+    polaris_uri: str = "http://localhost:8181/api/catalog"
+    polaris_credential: str = "root:s3cr3t"
+    polaris_warehouse: str = "kensan-lakehouse"
     lakehouse_s3_endpoint: str = "http://localhost:9000"
     lakehouse_s3_access_key: str = "kensan"
     lakehouse_s3_secret_key: str = "kensan-minio"

@@ -432,7 +432,7 @@ class AgentRunner:
                 "event": "agent.prompt",
                 "user_id": user_id or "",
                 "conversation_id": conv_id,
-                "user_message": user_message[:500],
+                "user_message": user_message,
                 "model": self.model,
                 "context_id": self.context_id or "",
                 "context_name": self.context_name or "",
@@ -560,7 +560,7 @@ class AgentRunner:
                                 "cache_creation_input_tokens": cache_creation,
                                 "cache_read_input_tokens": cache_read,
                                 "tool_call_count": len(tool_use_blocks),
-                                "response_text": response_text[:1000],
+                                "response_text": response_text,
                             }, ensure_ascii=False),
                         )
 
@@ -613,8 +613,8 @@ class AgentRunner:
                                             "event": "agent.tool_call",
                                             "conversation_id": conv_id,
                                             "tool_name": tc["name"],
-                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False)[:500],
-                                            "tool_output": result_str[:500],
+                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False),
+                                            "tool_output": result_str,
                                             "success": True,
                                         }, ensure_ascii=False),
                                     )
@@ -634,7 +634,7 @@ class AgentRunner:
                                             "event": "agent.tool_call",
                                             "conversation_id": conv_id,
                                             "tool_name": tc["name"],
-                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False)[:500],
+                                            "tool_input": json.dumps(tc["input"], ensure_ascii=False),
                                             "success": False,
                                             "error": str(e),
                                         }, ensure_ascii=False),

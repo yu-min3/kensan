@@ -53,6 +53,17 @@ def _combine_to_utc(
     return local_dt.astimezone(ZoneInfo("UTC"))
 
 
+def _to_local(utc_iso: str | None, tz: ZoneInfo) -> str | None:
+    """Convert a UTC ISO 8601 string to a readable local datetime string.
+
+    Returns a human-readable format like '2026-02-08 09:00' in the user's timezone.
+    """
+    if not utc_iso:
+        return utc_iso
+    dt = datetime.fromisoformat(utc_iso)
+    return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
 @tool(
     name="get_goals_and_milestones",
     description="目標とマイルストーンの一覧を取得する。各目標には紐づくマイルストーンとタスクの完了状況が含まれる。",
@@ -264,11 +275,12 @@ async def get_time_blocks(args: dict[str, Any]) -> dict[str, Any]:
         end_datetime=end_dt,
     )
     # Slim down: flatten nested objects, remove IDs not needed for reading
+    # Convert UTC datetimes to user's local timezone
     return {"timeBlocks": [
         {
             "id": b["id"],
-            "startDatetime": b["startDatetime"],
-            "endDatetime": b["endDatetime"],
+            "startDatetime": _to_local(b["startDatetime"], user_tz),
+            "endDatetime": _to_local(b["endDatetime"], user_tz),
             "taskName": b["taskName"],
             "goalName": b["goal"]["name"] if b.get("goal") else None,
             "milestoneName": b["milestone"]["name"] if b.get("milestone") else None,
@@ -355,6 +367,9 @@ async def create_time_block(args: dict[str, Any]) -> dict[str, Any]:
         goal_id=parse_uuid(args.get("goal_id")),
         is_routine=args.get("is_routine", False),
     )
+    # Convert UTC datetimes to user's local timezone
+    block["startDatetime"] = _to_local(block["startDatetime"], user_tz)
+    block["endDatetime"] = _to_local(block["endDatetime"], user_tz)
     return {"timeBlock": block}
 
 
@@ -406,10 +421,11 @@ async def get_time_entries(args: dict[str, Any]) -> dict[str, Any]:
         end_datetime=end_dt,
     )
     # Slim down: flatten nested objects, remove IDs not needed for reading
+    # Convert UTC datetimes to user's local timezone
     return {"timeEntries": [
         {
-            "startDatetime": e["startDatetime"],
-            "endDatetime": e["endDatetime"],
+            "startDatetime": _to_local(e["startDatetime"], user_tz),
+            "endDatetime": _to_local(e["endDatetime"], user_tz),
             "taskName": e["taskName"],
             "goalName": e["goal"]["name"] if e.get("goal") else None,
             "description": e.get("description"),
@@ -495,6 +511,11 @@ async def update_time_block(args: dict[str, Any]) -> dict[str, Any]:
     )
     if block is None:
         return {"error": "Time block not found or no updates provided"}
+    # Convert UTC datetimes to user's local timezone
+    if block.get("startDatetime"):
+        block["startDatetime"] = _to_local(block["startDatetime"], user_tz)
+    if block.get("endDatetime"):
+        block["endDatetime"] = _to_local(block["endDatetime"], user_tz)
     return {"timeBlock": block}
 
 
@@ -575,10 +596,12 @@ async def create_memo(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     name="get_notes",
-    description="ノート一覧を取得する。学習記録や日記の確認に使う。",
+    description="ノート一覧を取得する。学習記録や日記の確認に使う。日付フィルタ（start_date/end_date）はノートの内容日付（日記の対象日）で絞り込む。",
     input_schema={
         "properties": {
             "type": {"type": "string", "description": "ノート種別で絞り込み (例: diary, learning, general, book_review)"},
+            "start_date": {"type": "string", "description": "開始日 (YYYY-MM-DD形式、省略可)。ノートの対象日付でフィルタ"},
+            "end_date": {"type": "string", "description": "終了日 (YYYY-MM-DD形式、省略可)。ノートの対象日付でフィルタ"},
             "limit": {"type": "integer", "description": "取得件数（デフォルト20）"},
         },
         "required": [],
@@ -589,19 +612,27 @@ async def get_notes(args: dict[str, Any]) -> dict[str, Any]:
     user_id = parse_uuid(args.get("user_id"))
     if not user_id:
         return {"error": "Invalid or missing user_id"}
+
+    user_tz = await get_user_timezone(user_id)
+
     notes = await db_get_notes(
         user_id,
         note_type=args.get("type"),
+        start_date=parse_date(args.get("start_date")),
+        end_date=parse_date(args.get("end_date")),
         limit=args.get("limit", 20),
     )
     # Slim down: truncate content, remove updatedAt
+    # Convert UTC createdAt to user's local timezone
+    # Include note date (content date) for clarity
     return {"notes": [
         {
             "id": n["id"],
             "title": n["title"],
             "type": n["type"],
+            "date": n.get("date"),
             "content": n["content"][:300] + "..." if n.get("content") and len(n["content"]) > 300 else n.get("content"),
-            "createdAt": n.get("createdAt"),
+            "createdAt": _to_local(n.get("createdAt"), user_tz),
         }
         for n in notes
     ]}
@@ -765,11 +796,15 @@ async def delete_goal(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def create_milestone(args: dict[str, Any]) -> dict[str, Any]:
     """Create a new milestone under a goal."""
+    user_id = parse_uuid(args.get("user_id"))
     goal_id = parse_uuid(args.get("goal_id"))
+    if not user_id:
+        return {"error": "Invalid or missing user_id"}
     if not goal_id:
         return {"error": "Invalid or missing goal_id"}
     milestone = await db_create_milestone(
         goal_id=goal_id,
+        user_id=user_id,
         name=args["name"],
         due_date=parse_date(args.get("due_date")),
     )
@@ -791,11 +826,13 @@ async def create_milestone(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def update_milestone(args: dict[str, Any]) -> dict[str, Any]:
     """Update an existing milestone."""
+    user_id = parse_uuid(args.get("user_id"))
     milestone_id = parse_uuid(args.get("milestone_id"))
-    if not milestone_id:
-        return {"error": "Invalid or missing milestone_id"}
+    if not user_id or not milestone_id:
+        return {"error": "Invalid or missing user_id or milestone_id"}
     milestone = await db_update_milestone(
         milestone_id=milestone_id,
+        user_id=user_id,
         name=args.get("name"),
         due_date=parse_date(args.get("due_date")),
     )
@@ -817,10 +854,11 @@ async def update_milestone(args: dict[str, Any]) -> dict[str, Any]:
 )
 async def delete_milestone(args: dict[str, Any]) -> dict[str, Any]:
     """Delete a milestone."""
+    user_id = parse_uuid(args.get("user_id"))
     milestone_id = parse_uuid(args.get("milestone_id"))
-    if not milestone_id:
-        return {"error": "Invalid or missing milestone_id"}
-    deleted = await db_delete_milestone(milestone_id)
+    if not user_id or not milestone_id:
+        return {"error": "Invalid or missing user_id or milestone_id"}
+    deleted = await db_delete_milestone(milestone_id, user_id)
     return {"deleted": deleted}
 
 

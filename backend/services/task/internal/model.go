@@ -134,6 +134,25 @@ const (
 	TagTypeNote TagType = "note"
 )
 
+// TagCategory represents the category of a tag for AI personalization
+type TagCategory string
+
+const (
+	TagCategoryGeneral TagCategory = "general"
+	TagCategoryTrait   TagCategory = "trait"
+	TagCategoryTech    TagCategory = "tech"
+	TagCategoryProject TagCategory = "project"
+)
+
+// IsValidTagCategory checks if the tag category is valid
+func IsValidTagCategory(c string) bool {
+	switch TagCategory(c) {
+	case TagCategoryGeneral, TagCategoryTrait, TagCategoryTech, TagCategoryProject:
+		return true
+	}
+	return false
+}
+
 // Tag represents a tag entity
 type Tag struct {
 	ID         string    `json:"id"`
@@ -141,6 +160,7 @@ type Tag struct {
 	Name       string    `json:"name"`
 	Color      string    `json:"color"`
 	Type       TagType   `json:"type"`
+	Category   string    `json:"category"`
 	Pinned     bool      `json:"pinned"`
 	UsageCount int       `json:"usageCount"`
 	CreatedAt  time.Time `json:"createdAt"`
@@ -149,16 +169,18 @@ type Tag struct {
 
 // CreateTagInput represents the input for creating a tag
 type CreateTagInput struct {
-	Name   string `json:"name"`
-	Color  string `json:"color"`
-	Pinned *bool  `json:"pinned,omitempty"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	Category string `json:"category,omitempty"`
+	Pinned   *bool  `json:"pinned,omitempty"`
 }
 
 // UpdateTagInput represents the input for updating a tag
 type UpdateTagInput struct {
-	Name   *string `json:"name,omitempty"`
-	Color  *string `json:"color,omitempty"`
-	Pinned *bool   `json:"pinned,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Color    *string `json:"color,omitempty"`
+	Category *string `json:"category,omitempty"`
+	Pinned   *bool   `json:"pinned,omitempty"`
 }
 
 // TaskFrequency represents the frequency of a recurring task

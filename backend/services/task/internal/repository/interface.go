@@ -77,9 +77,9 @@ type TodoRepository interface {
 
 // TodoCompletionRepository defines the interface for todo completion data access
 type TodoCompletionRepository interface {
-	GetTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error)
-	CreateTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error)
-	DeleteTodoCompletion(ctx context.Context, todoID, date string) error
+	GetTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error)
+	CreateTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error)
+	DeleteTodoCompletion(ctx context.Context, userID, todoID, date string) error
 }
 
 // Repository is the combined interface that embeds all repository interfaces

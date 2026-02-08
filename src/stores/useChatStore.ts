@@ -9,7 +9,7 @@ export interface ActionItem {
   input: Record<string, unknown>
 }
 
-export type ChatSituation = 'auto' | 'weekly' | 'chat' | 'planning'
+export type ChatSituation = 'auto' | 'review' | 'chat' | 'daily_advice'
 
 export interface ChatMessage {
   id: string

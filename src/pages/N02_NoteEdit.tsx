@@ -8,6 +8,7 @@ import { NoteMetadataSidebar } from '@/components/note/NoteMetadataSidebar'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
 import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
+import { useNoteTagStore } from '@/stores/useNoteTagStore'
 import { useNoteContents } from '@/hooks/useNoteContents'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { validateMetadata } from '@/components/note/MetadataForm'
@@ -35,7 +36,10 @@ export function N02NoteEdit() {
     archiveNote,
   } = useNoteStore()
   const { types, getBySlug, getConstraints, getMetadataSchema } = useNoteTypeStore()
-  const { goals, milestones, tasks, tags, addTag, getMilestoneById, getGoalById } = useTaskManagerStore()
+  const { goals, milestones, tasks, getMilestoneById, getGoalById } = useTaskManagerStore()
+  const noteTags = useNoteTagStore((s) => s.items)
+  const addNoteTag = useNoteTagStore((s) => s.add)
+  const updateNoteTag = useNoteTagStore((s) => s.update)
 
   const isNew = !id
   const initialType = (searchParams.get('type') as NoteType) || (types[0]?.slug ?? 'diary')
@@ -452,8 +456,9 @@ export function N02NoteEdit() {
             goals={goals}
             milestones={milestones}
             tasks={tasks}
-            tags={tags}
-            onCreateTag={(name, color) => addTag({ name, color })}
+            tags={noteTags}
+            onCreateTag={(name, color) => addNoteTag({ name, color })}
+            onUpdateTag={(id, data) => updateNoteTag(id, data)}
             showTypeSelector={isNew}
             existingNote={existingNote}
           />

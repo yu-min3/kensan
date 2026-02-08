@@ -176,6 +176,12 @@ export function TimeBlockDialog({
                       if (task.milestoneId) {
                         onMilestoneIdChange(task.milestoneId)
                       }
+                      if (task.estimatedMinutes && startDatetime) {
+                        const start = new Date(startDatetime)
+                        start.setMinutes(start.getMinutes() + task.estimatedMinutes)
+                        const end = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
+                        onEndDatetimeChange(end)
+                      }
                     }
                   }}
                 >
@@ -344,6 +350,12 @@ export function TimeBlockDialog({
                     onTaskNameChange(task.name)
                     if (task.milestoneId) {
                       onMilestoneIdChange(task.milestoneId)
+                    }
+                    if (task.estimatedMinutes && startDatetime) {
+                      const start = new Date(startDatetime)
+                      start.setMinutes(start.getMinutes() + task.estimatedMinutes)
+                      const end = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
+                      onEndDatetimeChange(end)
                     }
                   }
                 }}

@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kensan/backend/shared/auth"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type contextKey string
@@ -87,6 +89,9 @@ func Auth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+			if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+				span.SetAttributes(attribute.String("user.id", claims.UserID))
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -1,102 +1,60 @@
-import { useMemo } from 'react'
-import { useSettingsStore } from '@/stores/useSettingsStore'
-import { useTaskOnlyStore } from '@/stores/useTaskStore'
-import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
-import { useGoalStore } from '@/stores/useGoalStore'
-import { useTimerStore } from '@/stores/useTimerStore'
-import { getLocalTime } from '@/lib/timezone'
-import { MarkdownContent } from './MarkdownContent'
+import {
+  BookOpen,
+  TrendingUp,
+  ListChecks,
+  Target,
+} from 'lucide-react'
 
-function getGreeting(timezone: string): string {
-  const now = new Date()
-  const hour = new Date(now.toLocaleString('en-US', { timeZone: timezone })).getHours()
-  if (hour < 11) return 'おはようございます'
-  if (hour < 17) return 'こんにちは'
-  return 'おつかれさまです'
+interface SuggestionItem {
+  icon: React.ReactNode
+  label: string
+  message: string
 }
 
-export function WelcomeMessage() {
-  const userName = useSettingsStore((s) => s.userName)
-  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
-  const tasks = useTaskOnlyStore((s) => s.tasks)
-  const timeBlocks = useTimeBlockStore((s) => s.getTodayTimeBlocks())
-  const goals = useGoalStore((s) => s.items)
-  const currentTimer = useTimerStore((s) => s.currentTimer)
+const suggestions: SuggestionItem[] = [
+  {
+    icon: <TrendingUp className="h-4 w-4 shrink-0" />,
+    label: '最近の傾向を分析して',
+    message: '最近の行動パターンや感情の傾向を分析して、気になる点があれば率直に教えて',
+  },
+  {
+    icon: <ListChecks className="h-4 w-4 shrink-0" />,
+    label: '今週の優先順位を整理して',
+    message: '今週の優先順位を整理して。何に集中すべきか、後回しにしていいものは何か教えて',
+  },
+  {
+    icon: <Target className="h-4 w-4 shrink-0" />,
+    label: '目標の進め方にフィードバック',
+    message: '目標の進捗状況を見て、進め方に率直なフィードバックをちょうだい',
+  },
+  {
+    icon: <BookOpen className="h-4 w-4 shrink-0" />,
+    label: '今日を振り返って明日に活かす',
+    message: '今日の進捗と時間の使い方を振り返って、明日に活かせることを教えて',
+  },
+]
 
-  const content = useMemo(() => {
-    const lines: string[] = []
+interface WelcomeMessageProps {
+  onSend?: (message: string) => void
+}
 
-    // Greeting
-    const greeting = getGreeting(timezone)
-    lines.push(`${greeting}、${userName} さん`)
-    lines.push('')
-    lines.push('---')
-    lines.push('')
-
-    // Timer
-    if (currentTimer) {
-      lines.push('**タイマー稼働中**')
-      lines.push('')
-    }
-
-    // Tasks (incomplete, sorted by due date, max 5)
-    const incompleteTasks = tasks
-      .filter((t) => !t.completed)
-      .sort((a, b) => {
-        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
-        if (a.dueDate) return -1
-        if (b.dueDate) return 1
-        return a.sortOrder - b.sortOrder
-      })
-      .slice(0, 5)
-
-    if (incompleteTasks.length > 0) {
-      const totalIncomplete = tasks.filter((t) => !t.completed).length
-      lines.push(`**今日のタスク** — ${totalIncomplete}件`)
-      for (const task of incompleteTasks) {
-        const due = task.dueDate ? `（期限: ${task.dueDate}）` : ''
-        lines.push(`- [ ] ${task.name}${due}`)
-      }
-      if (totalIncomplete > 5) {
-        lines.push(`- ...他 ${totalIncomplete - 5}件`)
-      }
-      lines.push('')
-    }
-
-    // Time blocks (sorted by start time)
-    const sortedBlocks = [...timeBlocks].sort((a, b) =>
-      a.startDatetime.localeCompare(b.startDatetime)
-    )
-
-    if (sortedBlocks.length > 0) {
-      lines.push(`**予定** — ${sortedBlocks.length}ブロック`)
-      for (const block of sortedBlocks) {
-        const start = getLocalTime(block.startDatetime, timezone)
-        const end = getLocalTime(block.endDatetime, timezone)
-        lines.push(`- ${start}–${end} ${block.taskName}`)
-      }
-      lines.push('')
-    }
-
-    // Active goals
-    const activeGoals = goals.filter((g) => g.status === 'active')
-    if (activeGoals.length > 0) {
-      lines.push(`**進行中のゴール** — ${activeGoals.length}件`)
-      lines.push('')
-    }
-
-    lines.push('---')
-    lines.push('')
-    lines.push('予定の作成やタスクの確認など、お気軽にどうぞ')
-
-    return lines.join('\n')
-  }, [userName, timezone, tasks, timeBlocks, goals, currentTimer])
-
+export function WelcomeMessage({ onSend }: WelcomeMessageProps) {
   return (
-    <div className="flex flex-col h-full px-4 py-6 overflow-y-auto">
-      <div className="text-sm text-foreground/90">
-        <MarkdownContent content={content} />
-      </div>
+    <div className="flex flex-col h-full justify-center px-4 py-6 overflow-y-auto">
+      {onSend && (
+        <div className="flex flex-col gap-2">
+          {suggestions.map((s) => (
+            <button
+              key={s.label}
+              onClick={() => onSend(s.message)}
+              className="flex items-center gap-2.5 px-3 py-2.5 text-left text-sm rounded-lg border border-border/60 bg-muted/30 hover:bg-muted/60 hover:border-border transition-colors"
+            >
+              <span className="text-muted-foreground">{s.icon}</span>
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

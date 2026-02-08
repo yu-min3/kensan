@@ -55,10 +55,13 @@ pytest --cov=kensan_ai  # カバレッジ付き
 | POST | `/agent/approve` | 書き込みアクションの承認・実行 |
 | GET | `/conversations` | 会話一覧 |
 | GET | `/conversations/{id}` | 会話詳細 |
-| POST | `/ai/reviews/generate` | 週次レビュー生成 |
-| GET | `/ai/reviews` | レビュー一覧 |
-| GET | `/ai/reviews/{id}` | レビュー詳細 |
 | POST | `/interactions/{id}/feedback` | フィードバック送信 |
+| GET | `/prompts` | AIコンテキスト一覧 |
+| GET | `/prompts/{id}` | AIコンテキスト詳細 |
+| PATCH | `/prompts/{id}` | AIコンテキスト更新（自動バージョン作成） |
+| GET | `/prompts/{id}/versions` | バージョン履歴一覧 |
+| GET | `/prompts/{id}/versions/{version_number}` | 特定バージョン取得 |
+| POST | `/prompts/{id}/rollback/{version_number}` | 指定バージョンにロールバック |
 
 ---
 

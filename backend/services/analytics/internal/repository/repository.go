@@ -92,15 +92,33 @@ func (r *PostgresRepository) GetTotalMinutesByDateRange(ctx context.Context, use
 
 // GetDailyBreakdown returns daily minutes for a datetime range, grouped by local date
 func (r *PostgresRepository) GetDailyBreakdown(ctx context.Context, userID, startDatetime, endDatetime, timezone string) ([]analytics.DailyBreakdown, error) {
+	// Split multi-day entries across the dates they span.
+	// For each entry, generate_series produces one row per local date it covers.
+	// GREATEST/LEAST clamp the entry's start/end to the day boundaries so each date
+	// only gets the minutes that actually fall on that day.
 	query := `
+		WITH entry_dates AS (
+			SELECT
+				gs::date AS local_date,
+				GREATEST(e.start_datetime, gs AT TIME ZONE $4) AS eff_start,
+				LEAST(e.end_datetime, (gs + interval '1 day') AT TIME ZONE $4) AS eff_end
+			FROM analytics_time_entries e
+			CROSS JOIN LATERAL generate_series(
+				(e.start_datetime AT TIME ZONE $4)::date::timestamp,
+				((e.end_datetime - interval '1 microsecond') AT TIME ZONE $4)::date::timestamp,
+				interval '1 day'
+			) AS gs
+			WHERE e.user_id = $1
+			  AND e.start_datetime >= $2::timestamptz
+			  AND e.start_datetime < $3::timestamptz
+			  AND e.end_datetime IS NOT NULL
+		)
 		SELECT
-			(start_datetime AT TIME ZONE $4)::date::text AS local_date,
-			SUM(
-				EXTRACT(EPOCH FROM (end_datetime - start_datetime)) / 60
-			)::integer AS minutes
-		FROM analytics_time_entries
-		WHERE user_id = $1 AND start_datetime >= $2::timestamptz AND start_datetime < $3::timestamptz
-		GROUP BY (start_datetime AT TIME ZONE $4)::date
+			local_date::text AS local_date,
+			SUM(EXTRACT(EPOCH FROM (eff_end - eff_start)) / 60)::integer AS minutes
+		FROM entry_dates
+		WHERE eff_end > eff_start
+		GROUP BY local_date
 		ORDER BY local_date ASC
 	`
 

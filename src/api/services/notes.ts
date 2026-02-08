@@ -570,13 +570,14 @@ export const noteTypesApi = {
 // ============================================
 // Note Tags API (note-type tags)
 // ============================================
-import type { Tag, TagType } from '@/types'
+import type { Tag, TagType, TagCategory } from '@/types'
 
 interface NoteTagResponse {
   id: string
   name: string
   color: string
   type: TagType
+  category: TagCategory
   pinned: boolean
   usageCount: number
   createdAt: string
@@ -588,6 +589,7 @@ const transformNoteTag = (t: NoteTagResponse): Tag => ({
   name: t.name,
   color: t.color,
   type: t.type,
+  category: t.category || 'general',
   pinned: t.pinned,
   usageCount: t.usageCount,
   createdAt: new Date(t.createdAt),
@@ -597,6 +599,14 @@ const transformNoteTag = (t: NoteTagResponse): Tag => ({
 export interface CreateNoteTagInput {
   name: string
   color: string
+  category?: TagCategory
+  pinned?: boolean
+}
+
+export interface UpdateNoteTagInput {
+  name?: string
+  color?: string
+  category?: TagCategory
   pinned?: boolean
 }
 
@@ -616,6 +626,22 @@ export const noteTagsApi = {
       input
     )
     return transformNoteTag(response)
+  },
+
+  async update(id: string, input: UpdateNoteTagInput): Promise<Tag> {
+    const response = await httpClient.put<NoteTagResponse>(
+      API_CONFIG.baseUrls.task,
+      `/note-tags/${id}`,
+      input
+    )
+    return transformNoteTag(response)
+  },
+
+  async delete(id: string): Promise<void> {
+    await httpClient.delete(
+      API_CONFIG.baseUrls.task,
+      `/note-tags/${id}`
+    )
   },
 }
 

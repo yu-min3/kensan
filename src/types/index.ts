@@ -35,12 +35,14 @@ export interface Milestone {
 // Tag (タグ) - 集計用の自由タグ
 // ============================================
 export type TagType = 'task' | 'note'
+export type TagCategory = 'general' | 'trait' | 'tech' | 'project'
 
 export interface Tag {
   id: string
   name: string
   color: string // Hex color
   type: TagType
+  category: TagCategory
   pinned: boolean
   usageCount: number
   createdAt: Date
@@ -345,18 +347,34 @@ export interface TimeEvaluation {
   goalName: string
   goalColor?: string
   actualMinutes: number
-  targetMinutes: number
+  targetMinutes?: number
   comment: string
+}
+
+export interface LearningTopic {
+  topic: string
+  goalName?: string
+  goalColor?: string
+  depth: 'deep' | 'moderate' | 'light'
+  insight: string
+}
+
+export interface LearningSummaryData {
+  overview: string
+  topics: LearningTopic[]
+  weeklyPattern?: string
+  goalConnection?: string
 }
 
 export interface AIReviewReport {
   id: string
-  weekStart: string
-  weekEnd: string
+  periodStart: string
+  periodEnd: string
   // 4セクション構造
   taskEvaluations: TaskEvaluation[]
   timeEvaluations: TimeEvaluation[]
   learningSummary: string
+  learningSummaryData?: LearningSummaryData
   goodPoints: string[]
   improvementPoints: string[]
   advice: string[]
@@ -415,7 +433,15 @@ export interface PlanningAlert {
   message: string
 }
 
+export interface YesterdayReview {
+  summary: string
+  highlights: string[]
+  learningConnections: string[]
+}
+
 export interface AIPlanningResult {
+  message?: string
+  yesterdayReview?: YesterdayReview
   insights: PlanningInsight[]
   proposedBlocks: ProposedBlock[]
   taskPriorities: TaskPrioritySuggestion[]

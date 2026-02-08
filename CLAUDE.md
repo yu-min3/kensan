@@ -91,7 +91,6 @@ make dev-backend     # Backend only (for local frontend dev)
 | Document | Location |
 |----------|----------|
 | Project Proposal | `docs/spec/kensan_proposal_v0.5.md` |
-| Screen Requirements | `docs/spec/kensan_screen_requirements.md` |
 | API Specification | `docs/spec/api_specification.md` |
 | Development Status | `docs/status/DEVELOPMENT_STATUS.md` |
 | ADRs | `docs/adr/` |

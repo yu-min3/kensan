@@ -1,12 +1,15 @@
 """Interaction logger for recording all AI conversations."""
 
 import json
+import logging
 from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
 from kensan_ai.agents.base import ToolCall
 from kensan_ai.db.connection import get_connection
+
+logger = logging.getLogger("kensan_ai.interaction")
 
 
 class InteractionLogger:
@@ -31,7 +34,7 @@ class InteractionLogger:
         Args:
             user_id: The user's ID
             session_id: The conversation session ID
-            situation: The situation type (chat, morning, evening, weekly)
+            situation: The situation type (chat, review, daily_advice)
             user_input: The user's input message
             ai_output: The AI's response
             tool_calls: List of tool calls made during the interaction
@@ -77,7 +80,23 @@ class InteractionLogger:
                 context_id,
                 conversation_id,
             )
-            return row["id"]
+            interaction_id = row["id"]
+
+            logger.info(json.dumps({
+                "event": "interaction.logged",
+                "interaction_id": str(interaction_id),
+                "user_id": str(user_id),
+                "session_id": str(session_id),
+                "situation": situation,
+                "tokens_input": tokens_input,
+                "tokens_output": tokens_output,
+                "latency_ms": latency_ms,
+                "context_id": str(context_id) if context_id else None,
+                "conversation_id": str(conversation_id) if conversation_id else None,
+                "tool_call_count": len(tool_calls_json),
+            }, ensure_ascii=False))
+
+            return interaction_id
 
     @staticmethod
     async def add_feedback(

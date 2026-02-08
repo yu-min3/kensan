@@ -45,28 +45,28 @@ def transform_time_entries(catalog: Catalog) -> int:
         logger.info("No data in bronze.time_entries_raw")
         return 0
 
-    # start_datetimeからdate (日付部分) を抽出
-    dates = []
-    duration_minutes = []
-    for i in range(len(df)):
-        start = df.column("start_datetime")[i].as_py()
-        end = df.column("end_datetime")[i].as_py()
-        if start and end:
-            dates.append(start.date())
-            delta = (end - start).total_seconds() / 60
-            duration_minutes.append(max(0, int(delta)))
-        else:
-            dates.append(None)
-            duration_minutes.append(0)
+    # Vectorized: extract date from start_datetime
+    dates = pc.cast(df.column("start_datetime"), pa.date32())
+
+    # Vectorized: duration = (end - start) in minutes
+    start_us = pc.cast(df.column("start_datetime"), pa.int64())
+    end_us = pc.cast(df.column("end_datetime"), pa.int64())
+    diff_us = pc.subtract(end_us, start_us)
+    # microseconds → minutes: divide by 60_000_000
+    duration_minutes = pc.cast(
+        pc.divide(diff_us, 60_000_000), pa.int32()
+    )
+    # Clamp negatives to 0
+    duration_minutes = pc.max_element_wise(duration_minutes, pa.scalar(0, pa.int32()))
 
     try:
         silver_table = pa.table({
             "id": df.column("id"),
             "user_id": df.column("user_id"),
-            "date": pa.array(dates, type=pa.date32()),
+            "date": dates,
             "start_datetime": df.column("start_datetime"),
             "end_datetime": df.column("end_datetime"),
-            "duration_minutes": pa.array(duration_minutes, type=pa.int32()),
+            "duration_minutes": duration_minutes,
             "task_id": df.column("task_id"),
             "task_name": df.column("task_name"),
             "goal_name": df.column("goal_name"),
@@ -149,11 +149,11 @@ def transform_notes(catalog: Catalog) -> int:
         logger.info("No data in bronze.notes_raw")
         return 0
 
-    # content_length: contentの文字数
-    content_length = pa.array([
-        len(c.as_py()) if c.as_py() else 0
-        for c in df.column("content")
-    ], type=pa.int32())
+    # Vectorized: content_length via PyArrow utf8_length
+    content_col = df.column("content")
+    # Replace nulls with empty string for length calc
+    content_filled = pc.if_else(pc.is_null(content_col), "", content_col)
+    content_length = pc.cast(pc.utf8_length(content_filled), pa.int32())
 
     try:
         silver_table = pa.table({
@@ -372,24 +372,19 @@ def transform_ai_facts(catalog: Catalog) -> int:
         logger.info("No data in bronze.ai_facts_raw")
         return 0
 
-    # date抽出、content_length算出
-    dates: list = []
-    content_lengths: list[int] = []
-
-    for i in range(len(df)):
-        created = df.column("created_at")[i].as_py()
-        content = df.column("content")[i].as_py()
-
-        dates.append(created.date() if created else None)
-        content_lengths.append(len(content) if content else 0)
+    # Vectorized: date extraction and content_length
+    dates = pc.cast(df.column("created_at"), pa.date32())
+    content_col = df.column("content")
+    content_filled = pc.if_else(pc.is_null(content_col), "", content_col)
+    content_lengths = pc.cast(pc.utf8_length(content_filled), pa.int32())
 
     try:
         silver_table = pa.table({
             "id": df.column("id"),
             "user_id": df.column("user_id"),
-            "date": pa.array(dates, type=pa.date32()),
+            "date": dates,
             "fact_type": df.column("fact_type"),
-            "content_length": pa.array(content_lengths, type=pa.int32()),
+            "content_length": content_lengths,
             "source": df.column("source"),
             "confidence": df.column("confidence"),
             "created_at": df.column("created_at"),

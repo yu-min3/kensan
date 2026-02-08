@@ -438,6 +438,410 @@ def aggregate_ai_quality_weekly(catalog: Catalog) -> int:
     return len(gold_table)
 
 
+def aggregate_interest_profile(catalog: Catalog) -> int:
+    """ユーザー関心プロファイル集約
+
+    silver.tag_usage_profile を user_id でグループ化し、
+    top_tags, emerging_tags, fading_tags, クラスタを算出。
+
+    Returns:
+        集計した行数
+
+    Raises:
+        AggregationError: 集計処理に失敗した場合
+    """
+    try:
+        silver_tags = catalog.load_table("silver.tag_usage_profile")
+        gold = catalog.load_table("gold.user_interest_profile")
+        df = silver_tags.scan().to_arrow()
+    except Exception as e:
+        raise AggregationError(f"Failed to load interest_profile tables: {e}") from e
+
+    if len(df) == 0:
+        logger.info("No data to aggregate for interest_profile")
+        return 0
+
+    # user_id ごとに集約
+    user_profiles: dict[str, list[dict[str, Any]]] = {}
+    for i in range(len(df)):
+        user_id = df.column("user_id")[i].as_py()
+        tag_name = df.column("tag_name")[i].as_py()
+        note_count = df.column("note_count")[i].as_py() or 0
+        trend = df.column("monthly_trend")[i].as_py() or "stable"
+        co_tags_json = df.column("co_tags_json")[i].as_py()
+
+        if user_id not in user_profiles:
+            user_profiles[user_id] = []
+
+        co_tags = []
+        if co_tags_json:
+            try:
+                co_tags = json.loads(co_tags_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        user_profiles[user_id].append({
+            "tag_name": tag_name,
+            "note_count": note_count,
+            "trend": trend,
+            "co_tags": co_tags,
+        })
+
+    if not user_profiles:
+        logger.info("No user profiles to aggregate")
+        return 0
+
+    today = date.today()
+    week_start = _iso_week_start(today)
+
+    try:
+        user_ids = []
+        week_starts = []
+        top_tags_list = []
+        emerging_list = []
+        fading_list = []
+        clusters_list = []
+        total_notes_list = []
+
+        for user_id, tags in user_profiles.items():
+            # Sort by note_count descending
+            sorted_tags = sorted(tags, key=lambda x: x["note_count"], reverse=True)
+
+            # Top 10 tags
+            top_tags = [
+                {"name": t["tag_name"], "count": t["note_count"], "trend": t["trend"]}
+                for t in sorted_tags[:10]
+            ]
+
+            # Emerging: growing trend
+            emerging = [
+                {"name": t["tag_name"], "count": t["note_count"]}
+                for t in sorted_tags if t["trend"] == "growing"
+            ]
+
+            # Fading: fading trend
+            fading = [
+                {"name": t["tag_name"], "count": t["note_count"]}
+                for t in sorted_tags if t["trend"] == "fading"
+            ]
+
+            # Clusters: group tags that frequently co-occur
+            # Simple approach: for each top tag, list its top co-tags
+            clusters = []
+            seen = set()
+            for t in sorted_tags[:5]:
+                if t["tag_name"] in seen:
+                    continue
+                cluster_tags = [t["tag_name"]]
+                seen.add(t["tag_name"])
+                for co in t["co_tags"][:3]:
+                    co_name = co.get("tag") or co.get("name", "")
+                    if co_name and co_name not in seen:
+                        cluster_tags.append(co_name)
+                        seen.add(co_name)
+                if len(cluster_tags) > 1:
+                    clusters.append(cluster_tags)
+
+            total_notes = sum(t["note_count"] for t in tags)
+
+            user_ids.append(user_id)
+            week_starts.append(week_start)
+            top_tags_list.append(json.dumps(top_tags, ensure_ascii=False))
+            emerging_list.append(json.dumps(emerging, ensure_ascii=False))
+            fading_list.append(json.dumps(fading, ensure_ascii=False))
+            clusters_list.append(json.dumps(clusters, ensure_ascii=False))
+            total_notes_list.append(total_notes)
+
+        gold_table = pa.table({
+            "user_id": pa.array(user_ids, type=pa.string()),
+            "week_start": pa.array(week_starts, type=pa.date32()),
+            "top_tags_json": pa.array(top_tags_list, type=pa.string()),
+            "emerging_tags_json": pa.array(emerging_list, type=pa.string()),
+            "fading_tags_json": pa.array(fading_list, type=pa.string()),
+            "tag_clusters_json": pa.array(clusters_list, type=pa.string()),
+            "total_tagged_notes": pa.array(total_notes_list, type=pa.int32()),
+        })
+        gold.overwrite(gold_table)
+    except Exception as e:
+        raise AggregationError(f"Failed to write interest_profile: {e}") from e
+
+    logger.info(f"Aggregated {len(gold_table)} user interest profiles to Gold")
+    return len(gold_table)
+
+
+def aggregate_trait_profile(catalog: Catalog) -> int:
+    """ユーザー性格プロファイル集約
+
+    silver.user_trait_segments を user_id でグループ化し、
+    confidence 加重・最新優先で work_style, learning_style 等を決定。
+
+    Returns:
+        集計した行数
+
+    Raises:
+        AggregationError: 集計処理に失敗した場合
+    """
+    try:
+        silver_traits = catalog.load_table("silver.user_trait_segments")
+        gold = catalog.load_table("gold.user_trait_profile")
+        df = silver_traits.scan().to_arrow()
+    except Exception as e:
+        raise AggregationError(f"Failed to load trait_profile tables: {e}") from e
+
+    if len(df) == 0:
+        logger.info("No data to aggregate for trait_profile")
+        return 0
+
+    from datetime import datetime as dt, timezone as tz
+
+    # user_id ごとにトレイトを収集
+    user_traits: dict[str, list[dict[str, Any]]] = {}
+    for i in range(len(df)):
+        user_id = df.column("user_id")[i].as_py()
+        category = df.column("trait_category")[i].as_py()
+        value = df.column("trait_value")[i].as_py()
+        confidence = df.column("confidence")[i].as_py() or 0.5
+        extracted_at = df.column("extracted_at")[i].as_py()
+
+        user_traits.setdefault(user_id, []).append({
+            "category": category,
+            "value": value,
+            "confidence": confidence,
+            "extracted_at": extracted_at,
+        })
+
+    if not user_traits:
+        return 0
+
+    now = dt.now(tz.utc)
+
+    def _best_value(traits: list[dict], category: str) -> str | None:
+        """指定カテゴリの最も確信度が高い値を取得（最新優先）"""
+        matching = [t for t in traits if t["category"] == category]
+        if not matching:
+            return None
+        # confidence * recency で最良を選択
+        matching.sort(key=lambda t: (t["confidence"], t["extracted_at"] or now), reverse=True)
+        return matching[0]["value"]
+
+    def _collect_values(traits: list[dict], category: str) -> list[str]:
+        """指定カテゴリの全値をconfidence順で収集"""
+        matching = [t for t in traits if t["category"] == category]
+        matching.sort(key=lambda t: t["confidence"], reverse=True)
+        return [t["value"] for t in matching[:5]]
+
+    try:
+        user_ids = []
+        updated_ats = []
+        work_styles = []
+        learning_styles = []
+        collaborations = []
+        strengths_list = []
+        challenges_list = []
+        triggers_list = []
+        trait_counts = []
+        avg_confidences = []
+
+        for user_id, traits in user_traits.items():
+            user_ids.append(user_id)
+            updated_ats.append(now)
+            work_styles.append(_best_value(traits, "work_style"))
+            learning_styles.append(_best_value(traits, "learning_style"))
+            collaborations.append(_best_value(traits, "collaboration"))
+            strengths_list.append(json.dumps(_collect_values(traits, "strengths"), ensure_ascii=False))
+            challenges_list.append(json.dumps(_collect_values(traits, "challenges"), ensure_ascii=False))
+            triggers_list.append(json.dumps(_collect_values(traits, "triggers"), ensure_ascii=False))
+            trait_counts.append(len(traits))
+            avg_conf = sum(t["confidence"] for t in traits) / len(traits) if traits else 0.0
+            avg_confidences.append(avg_conf)
+
+        gold_table = pa.table({
+            "user_id": pa.array(user_ids, type=pa.string()),
+            "updated_at": pa.array(updated_ats, type=pa.timestamp("us", tz="UTC")),
+            "work_style": pa.array(work_styles, type=pa.string()),
+            "learning_style": pa.array(learning_styles, type=pa.string()),
+            "collaboration": pa.array(collaborations, type=pa.string()),
+            "strengths_json": pa.array(strengths_list, type=pa.string()),
+            "challenges_json": pa.array(challenges_list, type=pa.string()),
+            "triggers_json": pa.array(triggers_list, type=pa.string()),
+            "trait_count": pa.array(trait_counts, type=pa.int32()),
+            "avg_confidence": pa.array(avg_confidences, type=pa.float32()),
+        })
+        gold.overwrite(gold_table)
+    except Exception as e:
+        raise AggregationError(f"Failed to write trait_profile: {e}") from e
+
+    logger.info(f"Aggregated {len(gold_table)} user trait profiles to Gold")
+    return len(gold_table)
+
+
+def aggregate_emotion_weekly(catalog: Catalog) -> int:
+    """感情データの週次集計
+
+    silver.emotion_segments を (user_id, week_start) でグループ化し、
+    平均valence/energy/stress、最頻感情、タスク相関、トレンドを算出。
+
+    Returns:
+        集計した行数
+
+    Raises:
+        AggregationError: 集計処理に失敗した場合
+    """
+    try:
+        silver_emotion = catalog.load_table("silver.emotion_segments")
+        gold = catalog.load_table("gold.emotion_weekly")
+        df = silver_emotion.scan().to_arrow()
+    except Exception as e:
+        raise AggregationError(f"Failed to load emotion_weekly tables: {e}") from e
+
+    if len(df) == 0:
+        logger.info("No data to aggregate for emotion_weekly")
+        return 0
+
+    summaries: dict[tuple[str, date | None], dict[str, Any]] = {}
+
+    for i in range(len(df)):
+        user_id = df.column("user_id")[i].as_py()
+        date_val = df.column("date")[i].as_py()
+        valence = df.column("valence")[i].as_py()
+        energy = df.column("energy")[i].as_py()
+        stress = df.column("stress")[i].as_py()
+        emotion = df.column("dominant_emotion")[i].as_py()
+        related_tasks_json = df.column("related_tasks_json")[i].as_py()
+
+        if date_val is None:
+            continue
+
+        week_start = _iso_week_start(date_val)
+        key = (user_id, week_start)
+        if key not in summaries:
+            summaries[key] = {
+                "valence_sum": 0.0,
+                "energy_sum": 0.0,
+                "stress_sum": 0.0,
+                "count": 0,
+                "emotion_dist": {},
+                "task_valence": {},  # task_name -> {sum, count}
+            }
+
+        s = summaries[key]
+        s["valence_sum"] += valence or 0.0
+        s["energy_sum"] += energy or 0.0
+        s["stress_sum"] += stress or 0.0
+        s["count"] += 1
+
+        if emotion:
+            s["emotion_dist"][emotion] = s["emotion_dist"].get(emotion, 0) + 1
+
+        # タスク相関
+        if related_tasks_json:
+            try:
+                tasks = json.loads(related_tasks_json)
+                for t in tasks:
+                    tname = t.get("task_name")
+                    if tname and valence is not None:
+                        if tname not in s["task_valence"]:
+                            s["task_valence"][tname] = {"sum": 0.0, "count": 0}
+                        s["task_valence"][tname]["sum"] += valence
+                        s["task_valence"][tname]["count"] += 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if not summaries:
+        logger.info("No data to aggregate for emotion_weekly")
+        return 0
+
+    # 前週比のトレンド算出用: user_id → [(week_start, avg_valence)]
+    user_weekly: dict[str, list[tuple[date, float]]] = {}
+    for (user_id, week_start), s in summaries.items():
+        if week_start is None:
+            continue
+        avg_v = s["valence_sum"] / s["count"] if s["count"] > 0 else 0.0
+        user_weekly.setdefault(user_id, []).append((week_start, avg_v))
+
+    for uid in user_weekly:
+        user_weekly[uid].sort(key=lambda x: x[0])
+
+    def _calc_trend(user_id: str, week_start: date | None) -> str:
+        if week_start is None:
+            return "stable"
+        weeks = user_weekly.get(user_id, [])
+        if len(weeks) < 2:
+            return "stable"
+        # この週のインデックスを探す
+        idx = next((i for i, w in enumerate(weeks) if w[0] == week_start), -1)
+        if idx <= 0:
+            return "stable"
+        prev_val = weeks[idx - 1][1]
+        curr_val = weeks[idx][1]
+        diff = curr_val - prev_val
+        if diff > 0.1:
+            return "improving"
+        elif diff < -0.1:
+            return "declining"
+        return "stable"
+
+    try:
+        keys = list(summaries.keys())
+        vals = list(summaries.values())
+
+        gold_table = pa.table({
+            "user_id": pa.array([k[0] for k in keys], type=pa.string()),
+            "week_start": pa.array([k[1] for k in keys], type=pa.date32()),
+            "avg_valence": pa.array(
+                [v["valence_sum"] / v["count"] if v["count"] > 0 else None for v in vals],
+                type=pa.float32(),
+            ),
+            "avg_energy": pa.array(
+                [v["energy_sum"] / v["count"] if v["count"] > 0 else None for v in vals],
+                type=pa.float32(),
+            ),
+            "avg_stress": pa.array(
+                [v["stress_sum"] / v["count"] if v["count"] > 0 else None for v in vals],
+                type=pa.float32(),
+            ),
+            "dominant_emotion": pa.array(
+                [
+                    max(v["emotion_dist"], key=v["emotion_dist"].get) if v["emotion_dist"] else None
+                    for v in vals
+                ],
+                type=pa.string(),
+            ),
+            "emotion_distribution_json": pa.array(
+                [json.dumps(v["emotion_dist"], ensure_ascii=False) for v in vals],
+                type=pa.string(),
+            ),
+            "diary_count": pa.array([v["count"] for v in vals], type=pa.int32()),
+            "task_correlation_json": pa.array(
+                [
+                    json.dumps(
+                        [
+                            {
+                                "task_name": tn,
+                                "avg_valence": round(tv["sum"] / tv["count"], 2),
+                                "count": tv["count"],
+                            }
+                            for tn, tv in v["task_valence"].items()
+                        ],
+                        ensure_ascii=False,
+                    )
+                    for v in vals
+                ],
+                type=pa.string(),
+            ),
+            "valence_trend": pa.array(
+                [_calc_trend(k[0], k[1]) for k in keys],
+                type=pa.string(),
+            ),
+        })
+        gold.overwrite(gold_table)
+    except Exception as e:
+        raise AggregationError(f"Failed to write emotion_weekly: {e}") from e
+
+    logger.info(f"Aggregated {len(gold_table)} emotion weekly records to Gold")
+    return len(gold_table)
+
+
 def main() -> None:
     """メインエントリーポイント"""
     logger.info("Gold aggregation started.")
@@ -454,6 +858,9 @@ def main() -> None:
         ("goal_progress", aggregate_goal_progress),
         ("ai_usage_weekly", aggregate_ai_usage_weekly),
         ("ai_quality_weekly", aggregate_ai_quality_weekly),
+        ("interest_profile", aggregate_interest_profile),
+        ("trait_profile", aggregate_trait_profile),
+        ("emotion_weekly", aggregate_emotion_weekly),
     ]
 
     for name, func in aggregations:

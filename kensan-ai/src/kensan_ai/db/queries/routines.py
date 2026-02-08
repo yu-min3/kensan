@@ -32,9 +32,9 @@ async def get_routine_tasks(
         rows = await conn.fetch(
             f"""
             SELECT id, name, frequency, days_of_week, estimated_minutes, tag_ids
-            FROM tasks
+            FROM todos
             WHERE {where_clause}
-            ORDER BY sort_order, name
+            ORDER BY name
             """,
             *params,
         )
@@ -62,10 +62,10 @@ async def get_routine_completions(
             """
             SELECT t.id as task_id, t.name,
                    tc.completed_date IS NOT NULL as completed
-            FROM tasks t
+            FROM todos t
             LEFT JOIN todo_completions tc ON t.id = tc.todo_id AND tc.completed_date = $2
             WHERE t.user_id = $1 AND t.frequency IS NOT NULL AND t.enabled = true
-            ORDER BY t.sort_order, t.name
+            ORDER BY t.name
             """,
             user_id,
             target_date,

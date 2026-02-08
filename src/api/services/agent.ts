@@ -1,6 +1,7 @@
 // Agent API Service - SSE streaming for AI agent interactions
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { injectTraceHeaders } from '../telemetry'
 
 // Types
 export interface AgentStreamEvent {
@@ -11,7 +12,7 @@ export interface AgentStreamEvent {
 export interface AgentStreamRequest {
   message: string
   conversation_id?: string | null
-  situation?: 'auto' | 'weekly' | 'chat' | 'planning'
+  situation?: 'auto' | 'review' | 'chat' | 'daily_advice'
   context?: Record<string, string> | null
 }
 
@@ -74,6 +75,7 @@ export async function* streamAgentChat(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  injectTraceHeaders(headers)
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`
   }
@@ -180,6 +182,7 @@ export async function* streamApproveActions(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  injectTraceHeaders(headers)
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`
   }

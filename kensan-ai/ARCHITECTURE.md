@@ -40,7 +40,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 | データベース | PostgreSQL 16 + pgvector (asyncpg) |
 | ストレージ | MinIO (S3互換、読み取り専用) |
 | 外部検索 | Tavily API (web_search / web_fetch) |
-| データレイク | Iceberg via Nessie Catalog (オプション) |
+| データレイク | Iceberg via Polaris REST Catalog (オプション) |
 
 ### ディレクトリ構成
 
@@ -52,9 +52,7 @@ kensan-ai/src/kensan_ai/
 ├── agents/                    # エージェント実装
 │   ├── base.py               # AgentRunner (Anthropic, プロンプトキャッシング)
 │   ├── gemini_runner.py       # GeminiAgentRunner
-│   ├── chat.py               # チャットエージェント（動的ツール選択）※DBマイグレーション元ネタ
-│   ├── weekly_review.py       # 週次レビューエージェント ※DBマイグレーション元ネタ
-│   └── planning_agent.py      # 計画提案エージェント ※DBマイグレーション元ネタ
+│   └── chat.py               # チャットエージェント（動的ツール選択）※DBマイグレーション元ネタ
 ├── tools/                     # Direct Tools (39+)
 │   ├── base.py               # ツールレジストリ & デコレータ
 │   ├── db_tools.py           # DB操作 (21)
@@ -74,7 +72,7 @@ kensan-ai/src/kensan_ai/
 ├── embeddings/                # ベクトル埋め込み
 ├── indexing/                  # チャンク分割+インデックス
 ├── logging/                   # インタラクションログ
-├── lakehouse/                 # Iceberg Bronze書き込み
+├── lakehouse/                 # Iceberg Bronze書き込み + Gold読み取り
 └── batch/                     # オフラインジョブ
 ```
 
@@ -85,12 +83,12 @@ kensan-ai/src/kensan_ai/
 ```mermaid
 flowchart TB
     subgraph "API層"
-        Request["POST /chat/stream"]
+        Request["POST /agent/stream"]
         JWT["JWTからuserID抽出"]
     end
 
     subgraph "コンテキスト解決"
-        Detect["状況検出<br/>(chat/weekly/planning)"]
+        Detect["状況検出<br/>(chat/review/daily_advice/persona)"]
         Load["DBからAIコンテキスト読込"]
         AB{"A/Bテスト?"}
         ABSelect["重みでバリアント選択"]
@@ -137,8 +135,6 @@ flowchart TB
 graph TB
     subgraph "エージェント"
         Chat["ChatAgent<br/>汎用会話 + タスク管理<br/>動的ツール選択"]
-        Review["WeeklyReviewAgent<br/>構造化振り返り<br/>セクション解析"]
-        Planning["PlanningAgent<br/>日次計画提案<br/>JSON構造化出力"]
     end
 
     subgraph "基盤"
@@ -150,19 +146,13 @@ graph TB
 
     Chat --> BaseAnth
     Chat --> BaseGemini
-    Review --> BaseAnth
-    Review --> BaseGemini
-    Planning --> BaseAnth
-    Planning --> BaseGemini
     BaseAnth --> History
     BaseGemini --> History
 ```
 
 | エージェント | 用途 | 出力形式 | ツール |
 |------------|------|---------|--------|
-| ChatAgent | 汎用会話、タスク管理 | テキスト (SSEストリーミング) | 動的選択 (7-39ツール) |
-| WeeklyReviewAgent | 週次振り返り | 構造化テキスト (セクション解析) | DB読み取り系 |
-| PlanningAgent | 日次計画提案 | JSON (insights, proposedBlocks, taskPriorities, alerts) | 計画系 + パターン分析 |
+| ChatAgent | 汎用会話、タスク管理、レビュー、日次アドバイス | テキスト (SSEストリーミング) | 動的選択 (7-39ツール) |
 
 ### AgentRunner コア動作
 
@@ -240,7 +230,7 @@ flowchart TB
 | `notes_write` | Write | create/update_note, create_memo |
 | `analytics` | Read | get_analytics_summary, get_daily_summary |
 | `search` | Read/Write | semantic_search, keyword_search, hybrid_search, reindex_notes |
-| `review` | Read/Write | get_reviews, get_review, generate_weekly_review |
+| `review` | Read/Write | get_reviews, get_review, generate_review |
 | `memory` | Read/Write | get_user_memory, get_user_facts, add_user_fact |
 | `patterns` | Read | get_user_patterns |
 | `web` | Read | web_search, web_fetch |
@@ -249,8 +239,8 @@ flowchart TB
 
 | Situation | 使用グループ |
 |-----------|------------|
-| `weekly` | core, review, notes_read, goals_read, search, patterns |
-| `planning` | core, planning, task, goals_read, analytics, patterns |
+| `review` | core, review, notes_read, goals_read, search, patterns |
+| `daily_advice` | core, planning, task, goals_read, analytics, patterns |
 
 ---
 
@@ -289,7 +279,7 @@ graph TB
 | **DB操作** | `db_tools.py` | 21 | get_tasks, create_task, get_time_blocks, create_time_block, get_notes, create_note |
 | **メモリ** | `memory_tools.py` | 4 | get_user_memory, get_user_facts, add_user_fact, get_recent_interactions |
 | **検索** | `search_tools.py` | 6 | semantic_search, keyword_search, hybrid_search, search_notes, reindex_notes |
-| **レビュー** | `review_tools.py` | 3 | get_reviews, get_review, generate_weekly_review |
+| **レビュー** | `review_tools.py` | 3 | get_reviews, get_review, generate_review |
 | **分析** | `analytics_tools.py` | 2 | get_analytics_summary, get_daily_summary |
 | **パターン** | `pattern_tools.py` | 1 | get_user_patterns |
 | **Web** | `web_tools.py` | 2 | web_search (Tavily Search), web_fetch (Tavily Extract) |
@@ -328,9 +318,55 @@ flowchart LR
 
 Lakehouse書き込みはfire & forget。失敗はログのみで応答をブロックしない。`LAKEHOUSE_ENABLED=false` で全操作no-op。
 
+### Lakehouse Reader (Gold層読み取り)
+
+`LakehouseReader` は Gold 層のテーブルを PyIceberg で直接読み取り、プロンプト変数として注入する。
+
+| メソッド | テーブル | 用途 |
+|---------|--------|------|
+| `get_emotion_weekly(user_id, weeks)` | `gold.emotion_weekly` | 感情週次集計（valence/energy/stress/トレンド） |
+| `get_interest_profile(user_id)` | `gold.user_interest_profile` | タグベース関心プロファイル（top_tags, emerging, fading, clusters） |
+| `get_trait_profile(user_id)` | `gold.user_trait_profile` | 性格プロファイル（work_style, learning_style, strengths, challenges） |
+| `get_explorer_interactions(user_id, start, end)` | `silver.ai_explorer_interactions` + `silver.ai_explorer_events` | AI Interaction Explorer 用データ |
+
+- Writer と同じ Polaris REST Catalog 接続をラージーシングルトンで共有
+- エラー時は空リスト/None返却（プロンプト解決をブロックしない）
+- `LAKEHOUSE_ENABLED=false` で全メソッドが空リスト/None返却
+
+### Explorer API
+
+| エンドポイント | メソッド | 説明 |
+|--------------|--------|------|
+| `/explorer/interactions` | GET | Silver層から AI インタラクション一覧取得 |
+
+クエリパラメータ: `start_timestamp`, `end_timestamp` (ISO8601)。JWT で user_id フィルタ自動適用。
+
 ---
 
 ## コンテキスト管理
+
+### 2層プロンプト構造
+
+システムプロンプトは **ペルソナ層**（共有）と **タスク固有層** の2層で構成される:
+
+```
+┌─────────────────────────────┐
+│  Persona (situation=persona) │  ← 全situation共通（1行のみ）
+│  - AIの人格・基本姿勢         │     {user_traits}, {communication_style},
+│  - ユーザー特性・感情状態     │     {emotion_summary} を含む
+├─────────────────────────────┤
+│  Task-specific               │  ← situation別（chat/review/daily_advice）
+│  - データセクション           │     タスク固有の変数・指示・出力形式
+│  - 思考プロセス・ルール       │
+└─────────────────────────────┘
+```
+
+`ContextResolver.get_context()` がランタイムで結合:
+1. タスク固有コンテキストをDBから取得
+2. 変数置換を適用
+3. ペルソナ行を取得 → 変数置換 → タスク固有プロンプトの前に結合
+
+ペルソナを1箇所で管理することで、人格定義の変更が全situationに即時反映される。
 
 ### コンテキスト選択フロー
 
@@ -349,11 +385,15 @@ flowchart TB
     end
 
     subgraph "変数置換"
-        Variables["{user_memory}<br/>{today_schedule}<br/>{pending_tasks}<br/>{recent_context}<br/>{weekly_summary}<br/>{goal_progress}<br/>{user_patterns}"]
+        Variables["{user_memory}<br/>{today_schedule}<br/>{pending_tasks}<br/>{recent_context}<br/>{weekly_summary}<br/>{goal_progress}<br/>{user_patterns}<br/>{emotion_summary}<br/>{interest_profile}<br/>{user_traits}<br/>{communication_style}"]
+    end
+
+    subgraph "ペルソナ結合"
+        Persona["situation=persona 行を取得<br/>→ 変数置換<br/>→ タスク固有プロンプトの前に結合"]
     end
 
     subgraph "出力"
-        Context["AIContext<br/>system_prompt + tools + settings"]
+        Context["AIContext<br/>persona + task prompt + tools + settings"]
     end
 
     Explicit --> Query
@@ -361,7 +401,7 @@ flowchart TB
     Query --> HasExp
     HasExp -->|Yes| ABSelect --> Variables
     HasExp -->|No| DefaultCtx --> Variables
-    Variables --> Context
+    Variables --> Persona --> Context
 ```
 
 ### 動的プロンプト変数
@@ -370,12 +410,20 @@ flowchart TB
 |------|------------|------|
 | `{user_memory}` | user_memory テーブル | プロフィール要約 + 強み + 成長領域 |
 | `{today_schedule}` | time_blocks テーブル | 今日のタイムブロック一覧 |
+| `{tomorrow_schedule}` | time_blocks テーブル | 明日のタイムブロック一覧 |
+| `{routine_tasks}` | tasks + todo_completions | 今日の定期タスク完了状況（✓/○表記） |
 | `{today_entries}` | time_entries テーブル | 今日の実績一覧 |
-| `{pending_tasks}` | tasks テーブル | 未完了タスク一覧 |
+| `{pending_tasks}` | tasks テーブル | 未完了タスク一覧（期限を「あとN日」形式で表示、⚠️=緊急） |
 | `{recent_context}` | ai_interactions テーブル | 最近3件のやり取り |
 | `{weekly_summary}` | analytics クエリ | 今週のサマリー統計 |
 | `{goal_progress}` | goals + milestones | 目標・マイルストーン進捗 |
 | `{user_patterns}` | パターン分析クエリ | 生産性ピーク、計画精度、目標トレンド |
+| `{yesterday_entries}` | time_entries テーブル | 昨日の実績一覧（合計時間・セッション数サマリ付き） |
+| `{recent_learning_notes}` | notes テーブル | 直近3日間の学習記録・日記（タイトル、タグ、冒頭抜粋） |
+| `{emotion_summary}` | Lakehouse Gold (gold.emotion_weekly) | 感情傾向、タスク相関、ストレスレベル |
+| `{interest_profile}` | Lakehouse Gold (gold.user_interest_profile) | 関心タグ、トレンド、クラスタ |
+| `{user_traits}` | Lakehouse Gold (gold.user_trait_profile) | 仕事/学習スタイル、強み、課題 |
+| `{communication_style}` | interest_profile + trait_profile 合成 | AIコミュニケーション指針（技術深度、提案スタイル） |
 
 ### A/Bテスト
 
@@ -421,7 +469,7 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant Chat as POST /chat
+    participant Chat as POST /agent/stream
     participant Logger as InteractionLogger
     participant Extractor as FactExtractor
     participant LLM as LLM API
@@ -507,16 +555,18 @@ graph TB
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/health` | ヘルスチェック |
-| POST | `/chat/stream` | SSEストリーミングチャット |
-| POST | `/chat` | 非ストリーミングチャット |
-| POST | `/advice` | 朝の計画アドバイス |
-| POST | `/reflect` | 夕方の振り返り |
-| POST | `/review` | 週次レビュー |
-| POST | `/ai/reviews/generate` | レビュー生成 |
-| GET | `/ai/reviews` | レビュー一覧 |
-| GET | `/ai/reviews/{id}` | レビュー詳細 |
-| POST | `/ai/ask` | 質問応答 |
+| POST | `/agent/stream` | 統合エージェントSSEストリーミング（状況検出、動的ツール選択、書き込み提案） |
+| POST | `/agent/approve` | 書き込みアクションの承認・実行（提案IDベース） |
+| GET | `/conversations` | 会話一覧（`?limit=&offset=` 対応） |
+| GET | `/conversations/{id}` | 会話詳細（メッセージ一覧） |
 | POST | `/interactions/{id}/feedback` | フィードバック送信 (1-5評価) |
+| GET | `/prompts/metadata` | 変数・ツールのメタデータ取得（静的データ、DBクエリなし） |
+| GET | `/prompts` | AIコンテキスト一覧 (`?situation=chat` フィルタ対応) |
+| GET | `/prompts/{id}` | AIコンテキスト詳細 + 現在のバージョン番号 |
+| PATCH | `/prompts/{id}` | AIコンテキスト更新 → 自動バージョン作成 |
+| GET | `/prompts/{id}/versions` | バージョン履歴一覧 |
+| GET | `/prompts/{id}/versions/{version_number}` | 特定バージョン取得 |
+| POST | `/prompts/{id}/rollback/{version_number}` | 指定バージョンにロールバック |
 
 認証: `Authorization: Bearer <token>` → JWT (HS256) から `user_id` を抽出。
 
@@ -535,7 +585,7 @@ graph TB
 | **DB** | `DATABASE_URL` or `DB_HOST/PORT/USER/PASSWORD/NAME` | PostgreSQL 16 |
 | **ストレージ** | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | MinIO (ノートコンテンツ読み取り) |
 | **Web検索** | `TAVILY_API_KEY` | Tavily API (web_search/web_fetch) |
-| **Lakehouse** | `LAKEHOUSE_ENABLED`, `NESSIE_URI` | Iceberg Bronze書き込み (オプション) |
+| **Lakehouse** | `LAKEHOUSE_ENABLED`, `POLARIS_URI`, `POLARIS_CREDENTIAL`, `POLARIS_WAREHOUSE` | Iceberg Bronze書き込み + Explorer読み取り (オプション) |
 | **OTel** | `OTEL_ENABLED`, `OTEL_COLLECTOR_URL` | OpenTelemetry |
 | **サーバー** | `SERVER_PORT`, `SERVER_ENV` | FastAPI (デフォルト: 8089, development) |
 
@@ -552,7 +602,7 @@ graph TB
 
 ### 構造化ログイベント
 
-各実行フェーズで構造化JSONログを出力。Lokiに収集されフロントエンドのInteraction Explorerで可視化:
+各実行フェーズで構造化JSONログを出力。Lokiに収集され、Dagster 5分バッチで Lakehouse Bronze/Silver に格納。フロントエンドの Interaction Explorer は kensan-ai API 経由で Silver テーブルを参照:
 
 ```mermaid
 flowchart LR
@@ -577,3 +627,7 @@ flowchart LR
 | `gen_ai.client.operation.count` | Counter | エージェント実行回数 |
 
 自動計装: FastAPI (HTTPスパン)、asyncpg (DBスパン)、httpx (外部HTTPスパン)。`OTEL_ENABLED=false` で全no-op。
+
+### InteractionLogger OTel ログ
+
+`InteractionLogger.log()` は DB 保存後に `kensan_ai.interaction` ロガーで `interaction.logged` イベントを構造化 JSON 出力。OTel LoggingHandler 経由で trace_id 付きで Loki に送信される。フィールド: `interaction_id`, `user_id`, `session_id`, `situation`, `tokens_input/output`, `latency_ms`, `context_id`, `conversation_id`, `tool_call_count`。

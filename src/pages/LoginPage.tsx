@@ -22,7 +22,7 @@ const PERSONAS: PersonaInfo[] = [
     id: 'tanaka',
     name: '田中翔太',
     role: 'バックエンドエンジニア',
-    description: '32歳・テックリードを目指す中堅エンジニア',
+    description: '30歳・Go+GCP 5年目。AIが学習パターンを完全把握',
     color: 'bg-blue-500',
   },
   {

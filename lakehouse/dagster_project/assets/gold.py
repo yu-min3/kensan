@@ -9,7 +9,10 @@ from dagster_project.resources import IcebergCatalogResource
 from pipelines.gold.aggregate import (
     aggregate_ai_quality_weekly,
     aggregate_ai_usage_weekly,
+    aggregate_emotion_weekly,
     aggregate_goal_progress,
+    aggregate_interest_profile,
+    aggregate_trait_profile,
     aggregate_weekly_summary,
 )
 
@@ -64,3 +67,39 @@ def gold_ai_quality_weekly(
 ):
     catalog = iceberg_catalog.get_catalog()
     aggregate_ai_quality_weekly(catalog)
+
+
+@asset(
+    deps=["silver_tag_usage_profile"],
+    group_name="gold",
+    compute_kind="aggregation",
+)
+def gold_user_interest_profile(
+    context: AssetExecutionContext, iceberg_catalog: IcebergCatalogResource
+):
+    catalog = iceberg_catalog.get_catalog()
+    aggregate_interest_profile(catalog)
+
+
+@asset(
+    deps=["silver_user_trait_segments"],
+    group_name="gold",
+    compute_kind="aggregation",
+)
+def gold_user_trait_profile(
+    context: AssetExecutionContext, iceberg_catalog: IcebergCatalogResource
+):
+    catalog = iceberg_catalog.get_catalog()
+    aggregate_trait_profile(catalog)
+
+
+@asset(
+    deps=["silver_emotion_segments"],
+    group_name="gold",
+    compute_kind="aggregation",
+)
+def gold_emotion_weekly(
+    context: AssetExecutionContext, iceberg_catalog: IcebergCatalogResource
+):
+    catalog = iceberg_catalog.get_catalog()
+    aggregate_emotion_weekly(catalog)

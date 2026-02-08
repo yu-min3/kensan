@@ -50,34 +50,34 @@ async def get_review(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
-    name="generate_weekly_review",
-    description="指定した週の週次レビューを生成しDBに保存する。事前に get_analytics_summary と get_time_entries で週のデータを取得してから生成すること。",
+    name="generate_review",
+    description="指定した期間のレビューを生成しDBに保存する。事前に get_analytics_summary と get_time_entries で期間のデータを取得してから生成すること。",
     readonly=False,
     input_schema={
         "properties": {
-            "week_start": {"type": "string", "description": "週の開始日 (YYYY-MM-DD, 月曜日)"},
-            "week_end": {"type": "string", "description": "週の終了日 (YYYY-MM-DD, 日曜日)"},
-            "summary": {"type": "string", "description": "週の概要"},
+            "period_start": {"type": "string", "description": "期間の開始日 (YYYY-MM-DD)"},
+            "period_end": {"type": "string", "description": "期間の終了日 (YYYY-MM-DD)"},
+            "summary": {"type": "string", "description": "期間の概要"},
             "good_points": {"type": "array", "items": {"type": "string"}, "description": "良かった点"},
             "improvement_points": {"type": "array", "items": {"type": "string"}, "description": "改善点"},
-            "advice": {"type": "array", "items": {"type": "string"}, "description": "来週へのアドバイス"},
+            "advice": {"type": "array", "items": {"type": "string"}, "description": "次の期間へのアドバイス"},
         },
-        "required": ["week_start", "week_end", "summary", "good_points", "improvement_points", "advice"],
+        "required": ["period_start", "period_end", "summary", "good_points", "improvement_points", "advice"],
     },
 )
-async def generate_weekly_review(args: dict[str, Any]) -> dict[str, Any]:
-    """Generate and save a weekly review report."""
+async def generate_review(args: dict[str, Any]) -> dict[str, Any]:
+    """Generate and save a review report for the specified period."""
     user_id = parse_uuid(args.get("user_id"))
-    week_start = parse_date(args.get("week_start"))
-    week_end = parse_date(args.get("week_end"))
+    period_start = parse_date(args.get("period_start"))
+    period_end = parse_date(args.get("period_end"))
 
-    if not user_id or not week_start or not week_end:
-        return {"error": "Invalid or missing user_id, week_start, or week_end"}
+    if not user_id or not period_start or not period_end:
+        return {"error": "Invalid or missing user_id, period_start, or period_end"}
 
     review = await ai_reviews.create_review(
         user_id=user_id,
-        week_start=week_start,
-        week_end=week_end,
+        period_start=period_start,
+        period_end=period_end,
         summary=args.get("summary", ""),
         good_points=args.get("good_points", []),
         improvement_points=args.get("improvement_points", []),
@@ -89,5 +89,5 @@ async def generate_weekly_review(args: dict[str, Any]) -> dict[str, Any]:
 ALL_REVIEW_TOOLS = [
     get_reviews,
     get_review,
-    generate_weekly_review,
+    generate_review,
 ]

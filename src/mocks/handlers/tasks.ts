@@ -1,6 +1,6 @@
 // Goals, Milestones, Tags, Tasks MSW handlers
 import { http, HttpResponse } from 'msw'
-import { goals, milestones, tags, tasks } from '../data'
+import { goals, milestones, tags, noteTags, tasks } from '../data'
 import { createMockCrudHandlers, createToggleHandler } from '../createMockCrudHandlers'
 
 const BASE_URL = 'http://localhost:8082/api/v1'
@@ -32,7 +32,11 @@ const toTagResponse = (t: (typeof tags)[0]) => ({
   id: t.id,
   name: t.name,
   color: t.color,
+  type: t.type,
+  pinned: t.pinned,
+  usageCount: t.usageCount,
   createdAt: t.createdAt.toISOString(),
+  updatedAt: t.updatedAt.toISOString(),
 })
 
 const toTaskResponse = (t: (typeof tasks)[0], index?: number) => ({
@@ -100,6 +104,21 @@ const tagHandlers = createMockCrudHandlers(
     getId: (t) => t.id,
     idPrefix: 'tag-',
     resourceName: 'Tag',
+    prependOnAdd: false,
+  },
+  {}
+)
+
+// Note Tag handlers (separate from task tags)
+const noteTagHandlers = createMockCrudHandlers(
+  {
+    baseUrl: BASE_URL,
+    resourcePath: '/note-tags',
+    transform: toTagResponse,
+    data: noteTags,
+    getId: (t) => t.id,
+    idPrefix: 'ntag-',
+    resourceName: 'NoteTag',
     prependOnAdd: false,
   },
   {}
@@ -199,6 +218,7 @@ export const taskHandlers = [
   ...goalHandlers,
   ...milestoneHandlers,
   ...tagHandlers,
+  ...noteTagHandlers,
   ...taskCrudHandlers,
   taskToggleHandler,
   taskReorderHandler,

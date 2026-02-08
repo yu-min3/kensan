@@ -331,24 +331,24 @@ func (m *MockRepository) DeleteTodo(ctx context.Context, userID, todoID string) 
 }
 
 // TodoCompletion Operations
-func (m *MockRepository) GetTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
-	args := m.Called(ctx, todoID, date)
+func (m *MockRepository) GetTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
+	args := m.Called(ctx, userID, todoID, date)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*task.TodoCompletion), args.Error(1)
 }
 
-func (m *MockRepository) CreateTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
-	args := m.Called(ctx, todoID, date)
+func (m *MockRepository) CreateTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
+	args := m.Called(ctx, userID, todoID, date)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*task.TodoCompletion), args.Error(1)
 }
 
-func (m *MockRepository) DeleteTodoCompletion(ctx context.Context, todoID, date string) error {
-	args := m.Called(ctx, todoID, date)
+func (m *MockRepository) DeleteTodoCompletion(ctx context.Context, userID, todoID, date string) error {
+	args := m.Called(ctx, userID, todoID, date)
 	return args.Error(0)
 }
 
@@ -1253,13 +1253,17 @@ func TestCreateTag_Success(t *testing.T) {
 	}
 
 	expectedTag := &task.Tag{
-		ID:     "tag-new",
-		UserID: userID,
-		Name:   "New Tag",
-		Color:  "#FF0000",
+		ID:       "tag-new",
+		UserID:   userID,
+		Name:     "New Tag",
+		Color:    "#FF0000",
+		Category: "general",
 	}
 
-	mockRepo.On("CreateTag", ctx, userID, input).Return(expectedTag, nil)
+	// Service sets default category to "general"
+	expectedInput := input
+	expectedInput.Category = "general"
+	mockRepo.On("CreateTag", ctx, userID, expectedInput).Return(expectedTag, nil)
 
 	tag, err := svc.CreateTag(ctx, userID, input)
 

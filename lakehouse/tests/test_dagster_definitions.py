@@ -5,7 +5,7 @@ Dagster Definitions の構造テスト
 
 from dagster import AssetKey
 
-from dagster_project import all_assets, defs, daily_schedule, full_pipeline
+from dagster_project import all_assets, defs, daily_schedule, ai_explorer_schedule, full_pipeline, ai_explorer_pipeline
 from dagster_project.assets.bronze import bronze_assets
 
 
@@ -14,28 +14,38 @@ from dagster_project.assets.bronze import bronze_assets
 # ---------------------------------------------------------------------------
 
 def test_total_asset_count():
-    """Bronze 7 + Silver 7 + Gold 4 = 18 アセットが登録されている"""
-    assert len(all_assets) == 18
+    """Bronze 10 + Silver 12 + Gold 7 = 29 アセットが登録されている"""
+    assert len(all_assets) == 29
 
 
 def test_bronze_asset_count():
-    """Bronze レイヤーは 7 テーブル分のアセットを持つ"""
-    assert len(bronze_assets) == 7
+    """Bronze レイヤーは 9 テーブル分 (PG) + 1 (Loki) = 10 アセットを持つ"""
+    bronze = [a for a in all_assets if hasattr(a, 'key') and a.key.to_user_string().startswith("bronze_")]
+    assert len(bronze) == 10
 
 
-def test_bronze_asset_names():
-    """Bronze アセット名が期待通り"""
+def test_bronze_pg_asset_names():
+    """Bronze PG アセット名が期待通り"""
     names = {a.key.to_user_string() for a in bronze_assets}
     expected = {
         "bronze_time_entries_raw",
         "bronze_tasks_raw",
         "bronze_notes_raw",
+        "bronze_tags_raw",
+        "bronze_note_tags_raw",
         "bronze_ai_interactions_raw",
         "bronze_ai_facts_raw",
         "bronze_ai_reviews_raw",
         "bronze_ai_contexts_raw",
     }
     assert names == expected
+
+
+def test_bronze_loki_asset_exists():
+    """Bronze Loki アセットが存在する"""
+    bronze = [a for a in all_assets if hasattr(a, 'key') and a.key.to_user_string().startswith("bronze_")]
+    names = {a.key.to_user_string() for a in bronze}
+    assert "bronze_ai_explorer_events_raw" in names
 
 
 def test_silver_asset_names():
@@ -50,6 +60,11 @@ def test_silver_asset_names():
         "silver_ai_token_usage",
         "silver_ai_facts",
         "silver_ai_reviews",
+        "silver_emotion_segments",
+        "silver_tag_usage_profile",
+        "silver_user_trait_segments",
+        "silver_ai_explorer_interactions",
+        "silver_ai_explorer_events",
     }
     assert names == expected
 
@@ -63,6 +78,9 @@ def test_gold_asset_names():
         "gold_goal_progress",
         "gold_ai_usage_weekly",
         "gold_ai_quality_weekly",
+        "gold_user_interest_profile",
+        "gold_user_trait_profile",
+        "gold_emotion_weekly",
     }
     assert names == expected
 
@@ -110,6 +128,70 @@ def test_gold_ai_quality_depends_on_silver_only():
     assert not any(d.startswith("bronze_") for d in deps)
 
 
+def test_silver_emotion_depends_on_bronze():
+    """silver_emotion_segments は bronze_notes_raw と bronze_tasks_raw に依存"""
+    asset = _find_asset("silver_emotion_segments")
+    deps = _get_asset_dep_keys(asset)
+    assert "bronze_notes_raw" in deps
+    assert "bronze_tasks_raw" in deps
+
+
+def test_silver_tag_usage_depends_on_bronze():
+    """silver_tag_usage_profile は 3つの Bronze テーブルに依存"""
+    asset = _find_asset("silver_tag_usage_profile")
+    deps = _get_asset_dep_keys(asset)
+    assert "bronze_notes_raw" in deps
+    assert "bronze_tags_raw" in deps
+    assert "bronze_note_tags_raw" in deps
+
+
+def test_gold_interest_profile_depends_on_silver():
+    """gold_user_interest_profile は silver_tag_usage_profile に依存"""
+    asset = _find_asset("gold_user_interest_profile")
+    deps = _get_asset_dep_keys(asset)
+    assert "silver_tag_usage_profile" in deps
+    assert not any(d.startswith("bronze_") for d in deps)
+
+
+def test_silver_trait_segments_depends_on_bronze():
+    """silver_user_trait_segments は 3つの Bronze テーブルに依存"""
+    asset = _find_asset("silver_user_trait_segments")
+    deps = _get_asset_dep_keys(asset)
+    assert "bronze_notes_raw" in deps
+    assert "bronze_tags_raw" in deps
+    assert "bronze_note_tags_raw" in deps
+
+
+def test_gold_trait_profile_depends_on_silver():
+    """gold_user_trait_profile は silver_user_trait_segments に依存"""
+    asset = _find_asset("gold_user_trait_profile")
+    deps = _get_asset_dep_keys(asset)
+    assert "silver_user_trait_segments" in deps
+    assert not any(d.startswith("bronze_") for d in deps)
+
+
+def test_gold_emotion_depends_on_silver():
+    """gold_emotion_weekly は silver_emotion_segments に依存"""
+    asset = _find_asset("gold_emotion_weekly")
+    deps = _get_asset_dep_keys(asset)
+    assert "silver_emotion_segments" in deps
+    assert not any(d.startswith("bronze_") for d in deps)
+
+
+def test_silver_explorer_interactions_depends_on_bronze():
+    """silver_ai_explorer_interactions は bronze_ai_explorer_events_raw に依存"""
+    asset = _find_asset("silver_ai_explorer_interactions")
+    deps = _get_asset_dep_keys(asset)
+    assert "bronze_ai_explorer_events_raw" in deps
+
+
+def test_silver_explorer_events_depends_on_bronze():
+    """silver_ai_explorer_events は bronze_ai_explorer_events_raw に依存"""
+    asset = _find_asset("silver_ai_explorer_events")
+    deps = _get_asset_dep_keys(asset)
+    assert "bronze_ai_explorer_events_raw" in deps
+
+
 # ---------------------------------------------------------------------------
 # ジョブ / スケジュール
 # ---------------------------------------------------------------------------
@@ -119,10 +201,21 @@ def test_full_pipeline_job():
     assert full_pipeline.name == "full_pipeline"
 
 
+def test_ai_explorer_pipeline_job():
+    """ai_explorer_pipeline ジョブが存在する"""
+    assert ai_explorer_pipeline.name == "ai_explorer_pipeline"
+
+
 def test_daily_schedule():
-    """daily_schedule が毎日 02:00、初期 STOPPED"""
+    """daily_schedule が毎日 02:00、初期 RUNNING"""
     assert daily_schedule.cron_schedule == "0 2 * * *"
-    assert daily_schedule.default_status.value == "STOPPED"
+    assert daily_schedule.default_status.value == "RUNNING"
+
+
+def test_ai_explorer_schedule():
+    """ai_explorer_schedule が5分ごと、初期 RUNNING"""
+    assert ai_explorer_schedule.cron_schedule == "*/5 * * * *"
+    assert ai_explorer_schedule.default_status.value == "RUNNING"
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +226,13 @@ def test_definitions_resolve():
     """Definitions が矛盾なく解決される"""
     repo = defs.get_repository_def()
     asset_keys = repo.asset_graph.get_all_asset_keys()
-    assert len(asset_keys) == 18
+    assert len(asset_keys) == 29
 
 
 def test_definitions_resources():
-    """iceberg_catalog と pg_dsn リソースが登録されている"""
+    """iceberg_catalog, pg_dsn, loki リソースが登録されている"""
     repo = defs.get_repository_def()
     resource_defs = repo.get_top_level_resources()
     assert "iceberg_catalog" in resource_defs
     assert "pg_dsn" in resource_defs
+    assert "loki" in resource_defs

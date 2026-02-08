@@ -128,6 +128,44 @@ TABLES = {
             ("_ingested_at", pa.timestamp("us", tz="UTC")),
         ]),
     },
+    # ===== Tag Tables =====
+    "bronze.tags_raw": {
+        "query": """
+            SELECT id, user_id, name, color, type,
+                   COALESCE(category, 'general') AS category,
+                   pinned, usage_count, created_at, updated_at
+            FROM tags
+            WHERE updated_at > %(since)s
+            ORDER BY updated_at
+        """,
+        "arrow_schema": pa.schema([
+            ("id", pa.string()),
+            ("user_id", pa.string()),
+            ("name", pa.string()),
+            ("color", pa.string()),
+            ("type", pa.string()),
+            ("category", pa.string()),
+            ("pinned", pa.bool_()),
+            ("usage_count", pa.int32()),
+            ("created_at", pa.timestamp("us", tz="UTC")),
+            ("updated_at", pa.timestamp("us", tz="UTC")),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+    },
+    "bronze.note_tags_raw": {
+        "query": """
+            SELECT note_id, tag_id
+            FROM note_tags
+            WHERE %(since)s IS NOT NULL OR TRUE
+            ORDER BY note_id
+        """,
+        "arrow_schema": pa.schema([
+            ("note_id", pa.string()),
+            ("tag_id", pa.string()),
+            ("_ingested_at", pa.timestamp("us", tz="UTC")),
+        ]),
+        "always_full": True,
+    },
     # ===== AI Data Tables =====
     "bronze.ai_interactions_raw": {
         "query": """
@@ -337,23 +375,30 @@ def ingest_table(
     except Exception as e:
         raise IngestionError(f"Failed to load table {iceberg_table_name}: {e}") from e
 
+    always_full = config.get("always_full", False)
     since_column = config.get("since_column", "updated_at")
     is_append_only = since_column == "created_at"
     since = get_last_ingested(state, iceberg_table_name)
     is_initial = since == EPOCH
 
-    mode = "append" if is_append_only and not is_initial else "overwrite"
-    if mode == "overwrite" and not is_initial:
-        # mutable テーブル: 変更があるかチェックしてから全件取得
-        check_rows = fetch_rows(dsn, config["query"], since)
-        if not check_rows:
-            logger.info(f"No changes for {iceberg_table_name} (since {since.isoformat()})")
-            return state
-        # 変更があったので全件再取得
-        since = EPOCH
+    if always_full:
+        # タイムスタンプカラムなしのテーブル: 毎回全件 overwrite
+        mode = "overwrite"
+        logger.info(f"Fetching: {iceberg_table_name} (full overwrite)...")
+        rows = fetch_rows(dsn, config["query"], EPOCH)
+    else:
+        mode = "append" if is_append_only and not is_initial else "overwrite"
+        if mode == "overwrite" and not is_initial:
+            # mutable テーブル: 変更があるかチェックしてから全件取得
+            check_rows = fetch_rows(dsn, config["query"], since)
+            if not check_rows:
+                logger.info(f"No changes for {iceberg_table_name} (since {since.isoformat()})")
+                return state
+            # 変更があったので全件再取得
+            since = EPOCH
 
-    logger.info(f"Fetching: {iceberg_table_name} ({mode}, since {since.isoformat()})...")
-    rows = fetch_rows(dsn, config["query"], since)
+        logger.info(f"Fetching: {iceberg_table_name} ({mode}, since {since.isoformat()})...")
+        rows = fetch_rows(dsn, config["query"], since)
 
     if not rows:
         logger.info(f"No new rows for {iceberg_table_name}")
@@ -369,8 +414,9 @@ def ingest_table(
     except Exception as e:
         raise IngestionError(f"Failed to write to {iceberg_table_name}: {e}") from e
 
-    max_ts = get_max_timestamp(rows, since_column)
-    state[iceberg_table_name] = max_ts.isoformat()
+    if not always_full:
+        max_ts = get_max_timestamp(rows, since_column)
+        state[iceberg_table_name] = max_ts.isoformat()
     logger.info(f"Ingested {len(rows)} rows into {iceberg_table_name} ({mode})")
     return state
 

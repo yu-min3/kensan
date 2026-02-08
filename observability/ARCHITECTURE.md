@@ -69,6 +69,7 @@ graph TB
 
     Go -->|OTLP HTTP| OTLP
     AI -->|OTLP HTTP| OTLP
+    FE -->|OTLP HTTP<br/>/otlp proxy| OTLP
     OTLP --> Filter --> Batch
     Batch -->|traces| Tempo
     Batch -->|metrics| Prom
@@ -128,7 +129,7 @@ flowchart LR
 
 ### 3.4 ログ
 
-- Go サービス: zerolog → OTel ログエクスポーター（trace_id/span_id 自動注入）
+- Go サービス: slog → OTel ログエクスポーター（trace_id/span_id 自動注入）
 - Python (kensan-ai): Python logging → OTel LoggingHandler → Loki
 - フロントエンドは Loki API に直接クエリして AI イベントを取得
 
@@ -155,10 +156,16 @@ flowchart LR
 |-------------|-----------|------|
 | `OTelTrace` | `otelhttp.NewHandler` | HTTP スパンの自動生成（メソッド、ルート、ステータス、レイテンシ） |
 | `Metrics` | `shared/middleware/metrics.go` | `http.server.request.duration` ヒストグラムの記録 |
-| `Logger` | zerolog | 構造化ログに trace_id / span_id を自動注入 |
+| `Logger` | slog | 構造化ログに trace_id / span_id を自動注入 |
+
+**スパン属性:**
+- `Auth` ミドルウェアで JWT 認証後に `user.id` 属性をスパンに自動付与。全認証済みリクエストのトレースからユーザーを特定可能。
 
 **ビジネスロジック層のトレーシング:**
 `shared/telemetry/tracing.go` の `StartSpan` ヘルパーでサービス層のオペレーションをスパン化。属性として task ID やプロジェクト ID を付与できる。
+
+**アウトバウンド HTTP:**
+- `shared/telemetry/transport.go` の `InstrumentedTransport` で `otelhttp.NewTransport` をラップ。note-service の MinIO クライアントに適用し、ストレージアクセスにトレース伝搬。
 
 | 環境変数 | デフォルト | 説明 |
 |---------|-----------|------|
@@ -201,9 +208,31 @@ flowchart LR
 
 トレースコンテキスト（trace_id, span_id）が自動でログに付与されるため、Loki → Tempo へのジャンプが可能。
 
+**InteractionLogger:**
+`InteractionLogger.log()` は DB 保存後に `kensan_ai.interaction` ロガーで構造化 JSON を出力。OTel LoggingHandler 経由で trace_id 付きで Loki に送信され、DB ログと OTel ログの両系統でインタラクションを追跡可能。
+
 ### 4.3 フロントエンド
 
-フロントエンド自体は OTel 計装していない。`src/api/services/observability.ts` で Loki API に直接クエリし、AI インタラクションの詳細を取得・表示する。
+`src/api/telemetry.ts` で OTel SDK (WebTracerProvider) を初期化し、HTTP リクエストごとにスパンを生成する。
+
+**SDK 構成:**
+
+| コンポーネント | 実装 |
+|---------------|------|
+| Provider | `WebTracerProvider` |
+| Exporter | `OTLPTraceExporter` (`/otlp/v1/traces` → Vite プロキシ → Collector:4318) |
+| Processor | `BatchSpanProcessor` |
+| Propagation | W3C TraceContext（`propagation.inject()` で traceparent ヘッダー自動注入） |
+
+**計装ポイント:**
+
+| 箇所 | 方法 |
+|------|------|
+| `HttpClient.request()` | `tracer.startActiveSpan('HTTP ${method}')` でスパン作成。`http.method`, `http.url`, `http.status_code` 属性付与 |
+| `streamAgentChat()` | `injectTraceHeaders()` で SSE リクエストにトレースヘッダー注入 |
+| `streamApproveActions()` | `injectTraceHeaders()` で SSE リクエストにトレースヘッダー注入 |
+
+`src/api/services/observability.ts` で kensan-ai API (`/explorer/interactions`) を介して Lakehouse Silver テーブルから AI インタラクションの詳細を取得・表示する。データは Loki → Dagster 5分バッチ → Bronze → Silver の経路で蓄積される。
 
 **取得可能な AI イベントタイプ:**
 

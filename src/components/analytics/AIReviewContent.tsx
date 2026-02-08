@@ -1,6 +1,6 @@
 import { Progress } from '@/components/ui/progress'
-import type { AIReviewReport, TaskEvaluationStatus } from '@/types'
-import { Target, Clock, BookOpen, MessageSquare, CheckCircle2, AlertTriangle, Lightbulb, MessageCircle } from 'lucide-react'
+import type { AIReviewReport, TaskEvaluationStatus, LearningSummaryData } from '@/types'
+import { Target, Clock, BookOpen, MessageSquare, CheckCircle2, AlertTriangle, Lightbulb, MessageCircle, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const statusConfig: Record<TaskEvaluationStatus, { label: string; className: string }> = {
@@ -22,8 +22,83 @@ const statusConfig: Record<TaskEvaluationStatus, { label: string; className: str
   },
 }
 
+const depthConfig: Record<string, { label: string; className: string }> = {
+  deep: {
+    label: '深い学習',
+    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+  },
+  moderate: {
+    label: '学習',
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  },
+  light: {
+    label: '概観',
+    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400',
+  },
+}
+
 interface AIReviewContentProps {
   review: AIReviewReport
+}
+
+function LearningSummaryStructured({ data }: { data: LearningSummaryData }) {
+  return (
+    <div className="space-y-4">
+      {/* Overview */}
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {data.overview}
+      </p>
+
+      {/* Topic Cards */}
+      {data.topics.length > 0 && (
+        <div className="space-y-2">
+          {data.topics.map((topic, i) => {
+            const depth = depthConfig[topic.depth] || depthConfig.moderate
+            return (
+              <div
+                key={i}
+                className="rounded-md border bg-card p-3"
+                style={{ borderLeftWidth: '3px', borderLeftColor: topic.goalColor || 'var(--border)' }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium">{topic.topic}</span>
+                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', depth.className)}>
+                    {depth.label}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">{topic.insight}</p>
+                {topic.goalName && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <div
+                      className="w-2 h-2 rounded-sm"
+                      style={{ backgroundColor: topic.goalColor || '#888' }}
+                    />
+                    <span className="text-[11px] text-muted-foreground">{topic.goalName}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Weekly Pattern */}
+      {data.weeklyPattern && (
+        <div className="flex items-start gap-2 text-sm">
+          <TrendingUp className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+          <p className="text-muted-foreground">{data.weeklyPattern}</p>
+        </div>
+      )}
+
+      {/* Goal Connection */}
+      {data.goalConnection && (
+        <div className="flex items-start gap-2 text-sm">
+          <Target className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+          <p className="text-muted-foreground">{data.goalConnection}</p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function AIReviewContent({ review }: AIReviewContentProps) {
@@ -68,12 +143,12 @@ export function AIReviewContent({ review }: AIReviewContentProps) {
           </div>
           <div className="space-y-4">
             {review.timeEvaluations.map((evaluation, i) => {
-              const percent =
-                evaluation.targetMinutes > 0
-                  ? Math.round((evaluation.actualMinutes / evaluation.targetMinutes) * 100)
-                  : 0
+              const hasTarget = evaluation.targetMinutes && evaluation.targetMinutes > 0
+              const percent = hasTarget
+                ? Math.round((evaluation.actualMinutes / evaluation.targetMinutes!) * 100)
+                : null
               const actualH = Math.round(evaluation.actualMinutes / 60)
-              const targetH = Math.round(evaluation.targetMinutes / 60)
+              const targetH = hasTarget ? Math.round(evaluation.targetMinutes! / 60) : null
               return (
                 <div key={i}>
                   <div className="flex items-center justify-between mb-1">
@@ -87,10 +162,12 @@ export function AIReviewContent({ review }: AIReviewContentProps) {
                       <span className="text-sm font-medium">{evaluation.goalName}</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {actualH}h/{targetH}h
+                      {targetH != null ? `${actualH}h/${targetH}h` : `${actualH}h`}
                     </span>
                   </div>
-                  <Progress value={Math.min(percent, 100)} className="h-2 mb-1" />
+                  {percent != null && (
+                    <Progress value={Math.min(percent, 100)} className="h-2 mb-1" />
+                  )}
                   <p className="text-xs text-muted-foreground">{evaluation.comment}</p>
                 </div>
               )
@@ -103,15 +180,19 @@ export function AIReviewContent({ review }: AIReviewContentProps) {
       </div>
 
       {/* Section C: 学習記録サマリー */}
-      {review.learningSummary && (
+      {(review.learningSummaryData || review.learningSummary) && (
         <div className="rounded-lg border p-4">
           <div className="flex items-center gap-2 mb-3">
             <BookOpen className="h-4 w-4 text-muted-foreground" />
             <h4 className="font-medium text-sm">学習記録サマリー</h4>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-            {review.learningSummary}
-          </p>
+          {review.learningSummaryData ? (
+            <LearningSummaryStructured data={review.learningSummaryData} />
+          ) : (
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {review.learningSummary}
+            </p>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
+import { useTimerStore } from '@/stores/useTimerStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { getLocalDate } from '@/lib/timezone'
 import { formatDurationShort, formatDateIso } from '@/lib/dateFormat'
@@ -21,6 +22,7 @@ interface DailySummaryProps {
 
 export function DailySummary({ mode, selectedDate }: DailySummaryProps) {
   const { timeBlocks, timeEntries } = useTimeBlockStore()
+  const { currentTimer, elapsedSeconds } = useTimerStore()
   const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
 
   const targetDateIso = selectedDate || formatDateIso(new Date())
@@ -29,9 +31,15 @@ export function DailySummary({ mode, selectedDate }: DailySummaryProps) {
   const todayBlocks = timeBlocks.filter((b) => getLocalDate(b.startDatetime, timezone) === targetDateIso && b.goalId)
   const todayEntries = timeEntries.filter((e) => getLocalDate(e.startDatetime, timezone) === targetDateIso && e.goalId)
 
+  // 進行中タイマーが今日＆目標ありなら経過時間を加算
+  const runningMinutes =
+    currentTimer?.goalId && currentTimer.startedAt && getLocalDate(currentTimer.startedAt, timezone) === targetDateIso
+      ? elapsedSeconds / 60
+      : 0
+
   // 目標ありのみを達成率計算の対象とする
   const plannedMinutes = calculateMinutesFromDatetimes(todayBlocks)
-  const actualMinutes = calculateMinutesFromDatetimes(todayEntries)
+  const actualMinutes = calculateMinutesFromDatetimes(todayEntries) + runningMinutes
   const difference = actualMinutes - plannedMinutes
   const completionRate = calculateRate(actualMinutes, plannedMinutes)
 
@@ -52,6 +60,20 @@ export function DailySummary({ mode, selectedDate }: DailySummaryProps) {
     },
     {} as Record<string, { name: string; color: string; value: number }>
   )
+
+  // 進行中タイマーの時間を円グラフにも反映
+  if (runningMinutes > 0 && currentTimer?.goalId) {
+    const goalId = currentTimer.goalId
+    if (timeByGoalMap[goalId]) {
+      timeByGoalMap[goalId].value += runningMinutes
+    } else {
+      timeByGoalMap[goalId] = {
+        name: currentTimer.goalName || 'Unknown',
+        color: currentTimer.goalColor || '#6b7280',
+        value: runningMinutes,
+      }
+    }
+  }
 
   const pieData = Object.values(timeByGoalMap).filter((d) => d.value > 0)
 

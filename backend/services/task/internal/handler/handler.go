@@ -135,6 +135,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/note-tags", func(r chi.Router) {
 		r.Get("/", h.ListNoteTags)
 		r.Post("/", h.CreateNoteTag)
+		r.Put("/{tagId}", h.UpdateTag)
+		r.Delete("/{tagId}", h.DeleteTag)
 	})
 
 	// Task routes

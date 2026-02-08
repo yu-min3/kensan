@@ -26,21 +26,22 @@ class LakehouseWriter:
         self._settings = settings
 
     def _get_catalog(self):
-        """Nessie catalog への接続 (lazy, cached)."""
+        """Polaris catalog への接続 (lazy, cached)."""
         if self._catalog is None:
             from pyiceberg.catalog import load_catalog
 
             self._catalog = load_catalog(
-                "nessie",
+                "polaris",
                 **{
                     "type": "rest",
-                    "uri": self._settings.nessie_uri,
+                    "uri": self._settings.polaris_uri,
+                    "credential": self._settings.polaris_credential,
+                    "warehouse": self._settings.polaris_warehouse,
                     "s3.endpoint": self._settings.lakehouse_s3_endpoint,
                     "s3.access-key-id": self._settings.lakehouse_s3_access_key,
                     "s3.secret-access-key": self._settings.lakehouse_s3_secret_key,
                     "s3.path-style-access": "true",
                     "s3.region": "us-east-1",
-                    "warehouse": f"s3://{self._settings.lakehouse_s3_bucket}",
                 },
             )
         return self._catalog

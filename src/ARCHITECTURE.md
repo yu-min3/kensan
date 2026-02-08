@@ -48,9 +48,10 @@ Kensanパーソナル生産性アプリケーションのReact + TypeScript SPA�
 src/
 ├── api/                          # HTTPクライアントとAPIサービス
 │   ├── client.ts                 # HttpClientシングルトン
+│   ├── telemetry.ts              # OTel SDK 初期化 + トレースヘルパー
 │   ├── config.ts                 # サービスURL設定
 │   ├── createApiService.ts       # 汎用CRUDファクトリ
-│   └── services/                 # ドメイン別API（13ファイル）
+│   └── services/                 # ドメイン別API（11ファイル）
 ├── components/
 │   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
@@ -61,9 +62,10 @@ src/
 │   ├── note/                     # ノートエディタ
 │   ├── agent/                    # AIチャットUI
 │   ├── weekly/                   # ウィークリーページ（DnD対応）
-│   └── interactions/             # AI Interaction Explorer
-├── pages/                        # ページコンポーネント（13ファイル）
-├── stores/                       # Zustandストア（13ストア）
+│   ├── interactions/             # AI Interaction Explorer
+│   └── prompt/                  # プロンプト管理 (PromptSidebar, PromptEditor, VersionHistory, VersionDiffDialog)
+├── pages/                        # ページコンポーネント（10ファイル）
+├── stores/                       # Zustandストア（17ストア）
 ├── hooks/                        # カスタムReactフック
 ├── lib/                          # ユーティリティ（timezone, taskUtils等）
 ├── mocks/                        # MSWハンドラとモックデータ
@@ -96,7 +98,7 @@ graph TB
         Weekly["W01_WeeklyPlanning<br/>週間カレンダー"]
         Tasks["T01_TaskManagement<br/>目標・タスク管理"]
         Notes["N01_NoteList / N02_NoteEdit"]
-        Analytics["A01 / A02<br/>分析・AIレビュー"]
+        Analytics["A01 / A03<br/>分析・プロンプト管理"]
         Interactions["O01_InteractionExplorer"]
     end
 
@@ -228,14 +230,18 @@ flowchart TB
 | `useSettingsStore` | 設定 (timezone, theme) | localStorage | 全ストアのタイムゾーン源泉 |
 | `useGoalStore` | 目標 | - | createCrudStoreファクトリ + reorder拡張 |
 | `useMilestoneStore` | マイルストーン | - | createCrudStoreファクトリ |
-| `useTagStore` | タグ | - | createCrudStoreファクトリ |
+| `useTagStore` | タスクタグ | - | createCrudStoreファクトリ |
+| `useNoteTagStore` | ノートタグ | - | noteTagsApi (list/create)。タスクタグと完全分離 |
 | `useTaskOnlyStore` | タスク | - | 独自実装（toggle, reorder, bulk操作） |
 | `useTimeBlockStore` | 予定・実績 | - | タイムゾーン対応フェッチ |
 | `useTimerStore` | タイマー | - | start/stop/fetch |
 | `useNoteTypeStore` | ノートタイプ設定 | - | APIから取得、isLoadedでキャッシュ |
 | `useNoteStore` | ノート | - | noteCache (Map) でフルコンテンツキャッシュ |
 | `useMemoStore` | メモ | - | createCrudStoreファクトリ |
-| `useRoutineStore` | ルーティン | - | createCrudStoreファクトリ |
+| `useAnalyticsStore` | 分析データ | - | 週次/月次サマリー |
+| `useChatStore` | AIチャット | - | SSEストリーミング対話 |
+| `usePromptStore` | プロンプト管理 | - | AIコンテキスト一覧・バージョン管理 |
+| `useTaskManagerStore` | タスク管理統合 | - | Goal/Milestone/Tag/Taskストアの統合フック |
 
 ### ストア初期化フロー
 
@@ -257,7 +263,6 @@ flowchart TB
     Parallel --> TB["fetchTimeBlocks<br/>(today, timezone)"]
     Parallel --> TE["fetchTimeEntries<br/>(today, timezone)"]
     Parallel --> NoteTypes["fetchNoteTypes"]
-    Parallel --> Routines["fetchRoutines"]
 ```
 
 ### ストア連携図
@@ -319,7 +324,7 @@ graph TB
 
     subgraph "自動処理"
         JWT["JWT Bearer 自動付与"]
-        Trace["traceparent 自動生成"]
+        Trace["OTel スパン + traceparent 注入"]
         Unwrap["レスポンスエンベロープ<br/>{data} → data"]
         Auth401["401 → 自動ログアウト"]
     end
@@ -342,12 +347,12 @@ graph TB
 | `tasks.ts` | task-service | ファクトリ + extend（Goals, Milestones, Tags, Tasks） |
 | `timeblocks.ts` | timeblock-service | カスタム（タイムゾーン変換付き） |
 | `timer.ts` | timeblock-service | カスタム |
-| `routines.ts` | routine-service | ファクトリ |
 | `notes.ts` | note-service | ファクトリ + extend |
 | `memos.ts` | memo-service | ファクトリ |
 | `agent.ts` | kensan-ai | カスタム（SSE対応） |
 | `analytics.ts` | analytics-service | カスタム |
-| `observability.ts` | Loki直接 | カスタム（AI Interaction Explorer用） |
+| `prompts.ts` | kensan-ai | カスタム（AIコンテキスト・バージョン管理） |
+| `observability.ts` | kensan-ai | カスタム（AI Interaction Explorer用、Lakehouse Silver経由） |
 
 ### タイムゾーン変換（timeblocks.ts）
 
@@ -390,10 +395,9 @@ graph TB
         NotesRoute["/notes → N01_NoteList"]
         NoteNew["/notes/new → N02_NoteEdit"]
         NoteEdit["/notes/:id → N02_NoteEdit"]
-        RoutinesRoute["/routines → R01_RoutineTaskManagement"]
         AnalyticsRoute["/analytics → A01_AnalyticsReport"]
-        AIReviewRoute["/ai-review → A02_AIReview"]
         InteractionsRoute["/interactions → O01_InteractionExplorer"]
+        PromptsRoute["/prompts → A03_PromptEditor"]
     end
 ```
 
@@ -417,8 +421,7 @@ flowchart TB
 | D | デイリー | DailyPage |
 | N | ノート | N01_NoteList, N02_NoteEdit |
 | T | タスク | T01_TaskManagement |
-| R | ルーティン | R01_RoutineTaskManagement |
-| A | 分析/AI | A01_AnalyticsReport, A02_AIReview |
+| A | 分析/AI | A01_AnalyticsReport, A03_PromptEditor |
 | O | Observability | O01_InteractionExplorer |
 
 ---
@@ -469,13 +472,16 @@ flowchart LR
 
 ### AI Interaction Explorer
 
-Lokiログからリアルタイムにkensan-aiのインタラクションを可視化:
+Lakehouse Silver テーブルから kensan-ai API 経由で AI インタラクションを可視化（5分バッチ更新）:
 
 ```mermaid
 flowchart LR
-    Loki["Loki<br/>(構造化ログ)"] --> API["observability.ts<br/>fetchAiEvents()"]
-    API --> Parse["traceIdでグループ化<br/>→ Interactionリスト"]
-    Parse --> Table["InteractionTable<br/>一覧表示"]
+    Loki["Loki<br/>(構造化ログ)"] --> Dagster["Dagster<br/>(5分バッチ)"]
+    Dagster --> Bronze["Bronze<br/>ai_explorer_events_raw"]
+    Bronze --> Silver["Silver<br/>ai_explorer_interactions<br/>ai_explorer_events"]
+    Silver --> API["kensan-ai API<br/>/explorer/interactions"]
+    API --> TS["observability.ts<br/>fetchInteractions()"]
+    TS --> Table["InteractionTable<br/>一覧表示"]
     Table -->|選択| Flow["ConversationFlow<br/>詳細タイムライン"]
 ```
 

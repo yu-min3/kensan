@@ -1,26 +1,25 @@
 services:
-  nessie:
-    image: ghcr.io/projectnessie/nessie:latest
-    container_name: kensan-nessie
+  polaris:
+    image: apache/polaris:latest
+    container_name: kensan-polaris
     ports:
-      - "19120:19120"
+      - "8181:8181"
+      - "8182:8182"
     environment:
-      NESSIE_VERSION_STORE_TYPE: IN_MEMORY
-      QUARKUS_PROFILE: ""
-      nessie.catalog.default-warehouse: lakehouse
-      nessie.catalog.warehouses.lakehouse.location: s3://kensan-lakehouse/
-      nessie.catalog.service.s3.default-options.endpoint: http://kensan-minio:9000
-      nessie.catalog.service.s3.default-options.external-endpoint: http://localhost:9000
-      nessie.catalog.service.s3.default-options.path-style-access: "true"
-      nessie.catalog.service.s3.default-options.region: us-east-1
-      nessie.catalog.service.s3.default-options.access-key: urn:nessie-secret:quarkus:nessie.catalog.secrets.s3
-      nessie.catalog.secrets.s3.name: kensan
-      nessie.catalog.secrets.s3.secret: kensan-minio
+      POLARIS_BOOTSTRAP_CREDENTIALS: "POLARIS,root,s3cr3t"
+      POLARIS_FEATURES_DEFAULTS_CREDENTIAL_VENDING_ENABLED: "false"
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: kensan
+      AWS_SECRET_ACCESS_KEY: kensan-minio
+      AWS_S3_ENDPOINT: http://kensan-minio:9000
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:19120/api/v2/config"]
+      test: ["CMD", "curl", "-f", "http://localhost:8182/q/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
     networks:
       - kensan-network
 
@@ -35,6 +34,7 @@ services:
       POSTGRES_DB: dagster
     volumes:
       - dagster_pg_data:/var/lib/postgresql/data
+      - ./init-polaris-db.sql:/docker-entrypoint-initdb.d/02-polaris.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dagster"]
       interval: 10s

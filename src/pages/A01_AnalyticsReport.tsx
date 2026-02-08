@@ -101,7 +101,12 @@ function createStackedBarTooltip(
 
     return (
       <div className="rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md">
-        <p className="font-medium mb-1">{label}</p>
+        <p className="font-medium mb-1">
+          {label}
+          {payload[0]?.payload?.day && label !== payload[0].payload.day && (
+            <span className="text-muted-foreground ml-1">({payload[0].payload.day})</span>
+          )}
+        </p>
         {nonZeroItems.map((item) => {
           const goal = goalList.find((g) => g.id === item.dataKey)
           return (
@@ -478,7 +483,11 @@ export function A01AnalyticsReport() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={stackedChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" fontSize={12} />
+              <XAxis
+                dataKey={period === 'month' || period === 'custom' ? 'date' : 'day'}
+                fontSize={12}
+                interval={period === 'month' ? 2 : 0}
+              />
               <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} unit="h" />
               <Tooltip
                 content={createStackedBarTooltip(goalList)}

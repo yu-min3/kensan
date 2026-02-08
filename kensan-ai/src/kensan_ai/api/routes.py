@@ -5,7 +5,7 @@ import json
 import logging
 import time as time_module
 import uuid as uuid_module
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 import jwt
@@ -25,6 +25,12 @@ from kensan_ai.api.schemas import (
     FeedbackResponse,
     AgentStreamRequest,
     AgentApproveRequest,
+    AIContextResponse,
+    AIContextUpdateRequest,
+    AIContextVersionResponse,
+    PromptMetadataResponse,
+    VariableMetadataItem,
+    ToolMetadataItem,
 )
 from kensan_ai.api.sse import sse_event
 from kensan_ai.agents.chat import select_tools
@@ -34,7 +40,9 @@ from kensan_ai.logging import InteractionLogger
 from kensan_ai.extraction.fact_extractor import get_fact_extractor
 from kensan_ai.batch.profile_summarizer import ProfileSummarizer
 from kensan_ai.db.queries import interactions as interactions_queries
+from kensan_ai.db.queries import ai_contexts as ai_contexts_queries
 from kensan_ai.lib.parsers import parse_uuid as lib_parse_uuid, parse_date as lib_parse_date
+from kensan_ai.lakehouse import get_reader
 from kensan_ai.telemetry import get_tracer
 
 _tracer = get_tracer("kensan-ai.routes")
@@ -90,15 +98,16 @@ def _get_user_id_from_header(authorization: str | None) -> UUID:
     except jwt.InvalidTokenError:
         pass  # Fall through to other methods
 
-    # Fallback: simple format "user_id:uuid" (for testing)
-    if token.startswith("user_id:"):
-        return _parse_uuid(token[8:])
+    # Fallback: only in development
+    if get_settings().server_env != "production":
+        if token.startswith("user_id:"):
+            return _parse_uuid(token[8:])
+        try:
+            return UUID(token)
+        except ValueError:
+            pass
 
-    # Fallback: try to parse as just a UUID (for testing)
-    try:
-        return UUID(token)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
+    raise HTTPException(status_code=401, detail="Invalid token")
 
 
 # =============================================================================
@@ -436,8 +445,10 @@ async def get_conversation_detail(
 async def feedback_endpoint(
     interaction_id: str,
     request: FeedbackRequest,
+    authorization: str | None = Header(None),
 ) -> FeedbackResponse:
     """Add feedback to an AI interaction."""
+    _get_user_id_from_header(authorization)
     try:
         interaction_uuid = _parse_uuid(interaction_id)
         success = await InteractionLogger.add_feedback(
@@ -452,3 +463,158 @@ async def feedback_endpoint(
             raise HTTPException(status_code=404, detail="Interaction not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# =============================================================================
+# Prompt Management
+# =============================================================================
+
+@router.get("/prompts", response_model=list[AIContextResponse])
+async def list_prompts(
+    authorization: str | None = Header(None),
+    situation: str | None = Query(None),
+) -> list[dict]:
+    """List all AI contexts (prompts)."""
+    _get_user_id_from_header(authorization)
+    contexts = await ai_contexts_queries.list_contexts(situation=situation)
+    return contexts
+
+
+@router.get("/prompts/metadata", response_model=PromptMetadataResponse)
+async def get_prompt_metadata(
+    authorization: str | None = Header(None),
+) -> PromptMetadataResponse:
+    """Get metadata for all available variables and tools.
+
+    Returns static data (no DB queries). Used by the prompt editor UI
+    to show descriptions and examples for variables and tools.
+    """
+    _get_user_id_from_header(authorization)
+
+    from kensan_ai.context.variable_replacer import VariableReplacer
+    from kensan_ai.tools import get_all_tools
+
+    variables = [
+        VariableMetadataItem(**v) for v in VariableReplacer.get_variable_metadata()
+    ]
+
+    tools = [
+        ToolMetadataItem(
+            name=t.name,
+            description=t.description,
+            readonly=t.readonly,
+        )
+        for t in get_all_tools()
+    ]
+
+    return PromptMetadataResponse(variables=variables, tools=tools)
+
+
+@router.get("/prompts/{context_id}", response_model=AIContextResponse)
+async def get_prompt(
+    context_id: str,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Get a single AI context by ID."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    context = await ai_contexts_queries.get_context(ctx_uuid)
+    if not context:
+        raise HTTPException(status_code=404, detail="Context not found")
+    return context
+
+
+@router.patch("/prompts/{context_id}", response_model=AIContextResponse)
+async def update_prompt(
+    context_id: str,
+    request: AIContextUpdateRequest,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Update an AI context and create a new version."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    result = await ai_contexts_queries.update_context(
+        context_id=ctx_uuid,
+        system_prompt=request.system_prompt,
+        allowed_tools=request.allowed_tools,
+        max_turns=request.max_turns,
+        temperature=request.temperature,
+        changelog=request.changelog,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Context not found")
+    return result
+
+
+@router.get("/prompts/{context_id}/versions", response_model=list[AIContextVersionResponse])
+async def list_prompt_versions(
+    context_id: str,
+    authorization: str | None = Header(None),
+) -> list[dict]:
+    """List all versions for a context."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    versions = await ai_contexts_queries.list_versions(ctx_uuid)
+    return versions
+
+
+@router.get("/prompts/{context_id}/versions/{version_number}", response_model=AIContextVersionResponse)
+async def get_prompt_version(
+    context_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Get a specific version of a context."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    version = await ai_contexts_queries.get_version(ctx_uuid, version_number)
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return version
+
+
+@router.post("/prompts/{context_id}/rollback/{version_number}", response_model=AIContextResponse)
+async def rollback_prompt(
+    context_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Rollback a context to a specific version."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    result = await ai_contexts_queries.rollback_to_version(ctx_uuid, version_number)
+    if not result:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return result
+
+
+# =============================================================================
+# Explorer (Lakehouse Silver)
+# =============================================================================
+
+@router.get("/explorer/interactions")
+async def get_explorer_interactions(
+    authorization: str | None = Header(None),
+    start_timestamp: str = Query(..., description="ISO8601 start time"),
+    end_timestamp: str = Query(..., description="ISO8601 end time"),
+) -> dict:
+    """Get AI interactions from Lakehouse Silver layer.
+
+    JWT-based user_id filtering ensures data isolation.
+    """
+    user_id = _get_user_id_from_header(authorization)
+
+    try:
+        start = datetime.fromisoformat(start_timestamp.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_timestamp.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid timestamp format: {e}")
+
+    reader = get_reader()
+    interactions = reader.get_explorer_interactions(
+        user_id=str(user_id),
+        start=start,
+        end=end,
+    )
+
+    return {"interactions": interactions}

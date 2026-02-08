@@ -59,7 +59,7 @@ from kensan_ai.tools.search_tools import (
 from kensan_ai.tools.review_tools import (
     get_reviews,
     get_review,
-    generate_weekly_review,
+    generate_review,
     ALL_REVIEW_TOOLS,
 )
 from kensan_ai.tools.analytics_tools import (
@@ -136,7 +136,7 @@ __all__ = [
     # Review Tools
     "get_reviews",
     "get_review",
-    "generate_weekly_review",
+    "generate_review",
     "ALL_REVIEW_TOOLS",
     # Analytics Tools
     "get_analytics_summary",

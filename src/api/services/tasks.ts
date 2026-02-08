@@ -2,7 +2,7 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 import { createApiService, extendApiService } from '../createApiService'
-import type { Goal, GoalStatus, Milestone, MilestoneStatus, Tag, Task, EntityMemo, EntityType, Todo, TodoWithStatus, TodoFrequency } from '@/types'
+import type { Goal, GoalStatus, Milestone, MilestoneStatus, Tag, TagCategory, Task, EntityMemo, EntityType, Todo, TodoWithStatus, TodoFrequency } from '@/types'
 
 // ============================================
 // Goal API
@@ -144,6 +144,7 @@ interface TagResponse {
   name: string
   color: string
   type: 'task' | 'note'
+  category: 'general' | 'trait' | 'tech' | 'project'
   pinned: boolean
   usageCount: number
   createdAt: string
@@ -155,6 +156,7 @@ const transformTag = (t: TagResponse): Tag => ({
   name: t.name,
   color: t.color,
   type: t.type,
+  category: t.category || 'general',
   pinned: t.pinned,
   usageCount: t.usageCount,
   createdAt: new Date(t.createdAt),
@@ -164,12 +166,14 @@ const transformTag = (t: TagResponse): Tag => ({
 export interface CreateTagInput {
   name: string
   color: string
+  category?: TagCategory
   pinned?: boolean
 }
 
 export interface UpdateTagInput {
   name?: string
   color?: string
+  category?: TagCategory
   pinned?: boolean
 }
 

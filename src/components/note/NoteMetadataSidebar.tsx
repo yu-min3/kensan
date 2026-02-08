@@ -49,6 +49,7 @@ interface NoteMetadataSidebarProps {
   tasks?: Task[]
   tags?: TagType[]
   onCreateTag?: (name: string, color: string) => Promise<TagType>
+  onUpdateTag?: (id: string, data: { name: string; color: string }) => Promise<TagType>
   showTypeSelector?: boolean
   existingNote?: Note | null
 }
@@ -61,6 +62,7 @@ export function NoteMetadataSidebar({
   tasks = [],
   tags = [],
   onCreateTag,
+  onUpdateTag,
   showTypeSelector = false,
   existingNote,
 }: NoteMetadataSidebarProps) {
@@ -211,6 +213,7 @@ export function NoteMetadataSidebar({
         selectedTagIds={value.tagIds || []}
         onChange={handleTagsChange}
         onCreateTag={onCreateTag}
+        onUpdateTag={onUpdateTag}
       />
 
       {/* 5. Type-specific metadata */}

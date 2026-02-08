@@ -139,7 +139,7 @@ const formatters: Record<string, (input: Input) => string> = {
     return name ? `マイルストーンを更新: ${name}` : 'マイルストーンを更新'
   },
 
-  generate_weekly_review: () => '週次レビューを生成',
+  generate_review: () => 'レビューを生成',
 
   create_time_entry: (input) => {
     const name = str(input, 'task_name') || str(input, 'name')

@@ -8,8 +8,8 @@ import { DailySummary } from '@/components/daily/DailySummary'
 import { TimeBlockSection } from '@/components/daily/TimeBlockSection'
 import { TaskListWidget, type TaskDragData } from '@/components/daily/TaskListWidget'
 import { PageMemo } from '@/components/common/PageMemo'
-import { AIPlanningCard } from '@/components/daily/AIPlanningCard'
-import { calculateTimeFromY } from '@/components/common/TimeBlockTimeline'
+import { AIAdviceCard } from '@/components/daily/AIAdviceCard'
+import { calculateTimeFromYWithDuration } from '@/components/common/TimeBlockTimeline'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { formatDateJa, formatDateIso } from '@/lib/dateFormat'
@@ -111,7 +111,8 @@ export function DailyPage() {
         // TimeBlockTimelineの実際の表示範囲を読み取る（動的に変わるため）
         const actualStartHour = parseInt(timelineElement.getAttribute('data-start-hour') || '6', 10)
         const actualEndHour = parseInt(timelineElement.getAttribute('data-end-hour') || '24', 10)
-        const { startTime, endTime } = calculateTimeFromY(dragOverY, rect, actualStartHour, actualEndHour, 15)
+        const durationMinutes = activeDragData.estimatedMinutes || 60
+        const { startTime, endTime } = calculateTimeFromYWithDuration(dragOverY, rect, actualStartHour, actualEndHour, durationMinutes, 15)
 
         // タイムブロックを作成（選択中の日付を使用）
         await addTimeBlock(selectedDateIso, startTime, selectedDateIso, endTime, {
@@ -168,7 +169,7 @@ export function DailyPage() {
         />
 
         {/* AI Planning（今日の場合のみ） */}
-        {isToday && <AIPlanningCard selectedDate={selectedDateIso} />}
+        {isToday && <AIAdviceCard selectedDate={selectedDateIso} />}
 
         {/* タイムブロック + タスクリスト */}
         <div className="grid gap-4 lg:grid-cols-3">
@@ -177,6 +178,7 @@ export function DailyPage() {
               showAddButtons={true}
               isDraggingTask={isDraggingTask}
               dragOverY={dragOverY}
+              dragDurationMinutes={activeDragData?.estimatedMinutes || 60}
               selectedDate={selectedDate}
               onDateChange={setSelectedDate}
             />

@@ -477,6 +477,12 @@ func (s *Service) CreateTag(ctx context.Context, userID string, input task.Creat
 	if input.Color == "" {
 		input.Color = "#6B7280" // default color
 	}
+	if input.Category == "" {
+		input.Category = "general"
+	}
+	if !task.IsValidTagCategory(input.Category) {
+		return nil, ErrInvalidInput
+	}
 	return s.repo.CreateTag(ctx, userID, input)
 }
 
@@ -488,11 +494,20 @@ func (s *Service) CreateNoteTag(ctx context.Context, userID string, input task.C
 	if input.Color == "" {
 		input.Color = "#6B7280" // default color
 	}
+	if input.Category == "" {
+		input.Category = "general"
+	}
+	if !task.IsValidTagCategory(input.Category) {
+		return nil, ErrInvalidInput
+	}
 	return s.repo.CreateNoteTag(ctx, userID, input)
 }
 
 // UpdateTag updates an existing tag
 func (s *Service) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
+	if input.Category != nil && !task.IsValidTagCategory(*input.Category) {
+		return nil, ErrInvalidInput
+	}
 	existing, err := s.repo.GetTagByID(ctx, userID, tagID)
 	if err != nil {
 		return nil, err
@@ -755,20 +770,20 @@ func (s *Service) ToggleTodoComplete(ctx context.Context, userID, todoID, date s
 	}
 
 	// Check if already completed today
-	completion, err := s.repo.GetTodoCompletion(ctx, todoID, date)
+	completion, err := s.repo.GetTodoCompletion(ctx, userID, todoID, date)
 	if err != nil {
 		return nil, err
 	}
 
 	if completion != nil {
 		// Already completed, uncomplete it
-		err = s.repo.DeleteTodoCompletion(ctx, todoID, date)
+		err = s.repo.DeleteTodoCompletion(ctx, userID, todoID, date)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Not completed, complete it
-		_, err = s.repo.CreateTodoCompletion(ctx, todoID, date)
+		_, err = s.repo.CreateTodoCompletion(ctx, userID, todoID, date)
 		if err != nil {
 			return nil, err
 		}

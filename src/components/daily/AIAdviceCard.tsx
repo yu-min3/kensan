@@ -1,10 +1,15 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
+import { useTimerStore } from '@/stores/useTimerStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { streamAgentChat } from '@/api/services/agent'
+import { getLocalDate, getLocalTime } from '@/lib/timezone'
+import { formatDurationShort } from '@/lib/dateFormat'
+import { calculateMinutesFromDatetimes } from '@/lib/taskUtils'
 import type { AIPlanningResult, ProposedBlock } from '@/types'
 import {
   Sparkles,
@@ -16,9 +21,10 @@ import {
   Calendar,
   AlertTriangle,
   CheckCircle2,
+  BookOpen,
 } from 'lucide-react'
 
-interface AIPlanningCardProps {
+interface AIAdviceCardProps {
   selectedDate: string // YYYY-MM-DD
 }
 
@@ -31,6 +37,8 @@ function parsePlanningFromStream(text: string): AIPlanningResult | null {
     const parsed = JSON.parse(jsonStr) as Record<string, unknown>
 
     return {
+      message: (parsed.message as string) || undefined,
+      yesterdayReview: (parsed.yesterdayReview as AIPlanningResult['yesterdayReview']) || undefined,
       insights: (parsed.insights as AIPlanningResult['insights']) || [],
       proposedBlocks: (parsed.proposedBlocks as AIPlanningResult['proposedBlocks']) || [],
       taskPriorities: (parsed.taskPriorities as AIPlanningResult['taskPriorities']) || [],
@@ -66,8 +74,10 @@ const ACTION_LABELS = {
   split: '分割',
 } as const
 
-export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
-  const { addTimeBlock } = useTimeBlockStore()
+export function AIAdviceCard({ selectedDate }: AIAdviceCardProps) {
+  const { timeBlocks, timeEntries, addTimeBlock } = useTimeBlockStore()
+  const { currentTimer } = useTimerStore()
+  const timezone = useSettingsStore((s) => s.timezone) || 'Asia/Tokyo'
 
   const [planningResult, setPlanningResult] = useState<AIPlanningResult | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -76,6 +86,31 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
   const [isApplying, setIsApplying] = useState(false)
   const [appliedCount, setAppliedCount] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Build context hints for the AI
+  const adviceContext = useMemo(() => {
+    const now = new Date()
+    const todayBlocks = timeBlocks.filter(
+      (b) => getLocalDate(b.startDatetime, timezone) === selectedDate,
+    )
+    const todayEntries = timeEntries.filter(
+      (e) => getLocalDate(e.startDatetime, timezone) === selectedDate,
+    )
+    const completedMinutes = calculateMinutesFromDatetimes(todayEntries)
+
+    const blockDetails = todayBlocks.map((b) => {
+      const start = getLocalTime(b.startDatetime, timezone)
+      const end = getLocalTime(b.endDatetime, timezone)
+      return `${start}〜${end}: ${b.taskName}`
+    }).join(', ')
+
+    return {
+      currentHour: String(now.getHours()),
+      plannedBlocks: `${todayBlocks.length}件${todayBlocks.length > 0 ? ` (${blockDetails})` : ''}`,
+      completedEntries: `${todayEntries.length}件 (${formatDurationShort(completedMinutes)})`,
+      timerActive: String(currentTimer !== null),
+    }
+  }, [timeBlocks, timeEntries, currentTimer, selectedDate, timezone])
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
@@ -89,8 +124,9 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
     try {
       const stream = streamAgentChat(
         {
-          message: '今日の計画を提案して',
-          situation: 'planning',
+          message: '今日のアドバイスをお願いします',
+          situation: 'daily_advice',
+          context: adviceContext,
         },
         abortRef.current.signal,
       )
@@ -119,7 +155,7 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
     } finally {
       setIsGenerating(false)
     }
-  }, [])
+  }, [adviceContext])
 
   const handleToggleBlock = useCallback((index: number) => {
     setSelectedBlockIndices((prev) => {
@@ -155,25 +191,33 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
   }, [planningResult, selectedBlockIndices, selectedDate, addTimeBlock])
 
   return (
-    <Card>
+    <Card className="border-brand/30 bg-gradient-to-br from-brand/[0.03] to-transparent">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base text-brand">
           <Sparkles className="h-5 w-5" />
-          AI計画提案
+          AIアドバイス
           <Badge variant="secondary" className="text-[10px] font-normal">
             AI生成
           </Badge>
         </CardTitle>
-        {planningResult && !isGenerating && (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleGenerate}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            再生成
-          </Button>
-        )}
-        {!planningResult && !isGenerating && !streamText && (
-          <Button size="sm" className="gap-1.5" onClick={handleGenerate}>
-            <Sparkles className="h-3.5 w-3.5" />
-            計画を生成
+        {!isGenerating && (
+          <Button
+            variant={planningResult ? 'outline' : 'default'}
+            size="sm"
+            className={planningResult ? 'gap-1.5' : 'gap-1.5 bg-brand text-brand-foreground hover:bg-brand/90'}
+            onClick={handleGenerate}
+          >
+            {planningResult ? (
+              <>
+                <RefreshCw className="h-3.5 w-3.5" />
+                再生成
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                アドバイスを取得
+              </>
+            )}
           </Button>
         )}
       </CardHeader>
@@ -181,15 +225,15 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
         {/* Generating */}
         {isGenerating && (
           <div className="space-y-4">
-            <div className="rounded-lg border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 p-4">
+            <div className="rounded-lg border-l-4 border-brand bg-brand/5 p-4">
               <div className="flex items-center gap-2 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
-                <span className="font-medium text-indigo-700 dark:text-indigo-300">
-                  計画を生成中...
+                <Loader2 className="h-4 w-4 animate-spin text-brand" />
+                <span className="font-medium text-brand">
+                  アドバイスを生成中...
                 </span>
               </div>
-              <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mt-1">
-                行動パターンを分析し、最適な計画を提案しています
+              <p className="text-xs text-brand/60 mt-1">
+                状況を分析し、最適なアドバイスを作成しています
               </p>
             </div>
             {streamText && (
@@ -203,6 +247,47 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
         {/* Result */}
         {planningResult && !isGenerating && (
           <div className="space-y-5">
+            {/* Warm Message */}
+            {planningResult.message && (
+              <div className="rounded-lg bg-brand/5 border border-brand/20 p-4">
+                <p className="text-sm leading-relaxed text-foreground">
+                  {planningResult.message}
+                </p>
+              </div>
+            )}
+
+            {/* Yesterday Review */}
+            {planningResult.yesterdayReview && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  昨日の振り返り
+                </h4>
+                <div className="rounded-md border p-3 space-y-2">
+                  <p className="text-sm text-foreground">{planningResult.yesterdayReview.summary}</p>
+                  {planningResult.yesterdayReview.highlights.length > 0 && (
+                    <div className="space-y-1">
+                      {planningResult.yesterdayReview.highlights.map((h, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-emerald-500" />
+                          <span>{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {planningResult.yesterdayReview.learningConnections.length > 0 && (
+                    <div className="space-y-1 border-t pt-2">
+                      {planningResult.yesterdayReview.learningConnections.map((lc, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <BookOpen className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-blue-500" />
+                          <span>{lc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Alerts */}
             {planningResult.alerts.length > 0 && (
               <div className="space-y-2">
@@ -331,17 +416,13 @@ export function AIPlanningCard({ selectedDate }: AIPlanningCardProps) {
         {/* Empty state */}
         {!planningResult && !isGenerating && !streamText && (
           <div className="text-center py-8">
-            <Bot className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+            <Bot className="h-10 w-10 mx-auto mb-3 text-brand/30" />
             <p className="text-sm text-muted-foreground mb-1">
-              行動パターンに基づいた計画を提案します
+              状況に応じたアドバイスを提案します
             </p>
-            <p className="text-xs text-muted-foreground mb-4">
-              生産性ピーク時間帯・目標トレンド・繰り越しタスクを分析
+            <p className="text-xs text-muted-foreground">
+              時間帯・進捗に合わせて計画提案・進捗チェック・振り返りを自動で切り替えます
             </p>
-            <Button onClick={handleGenerate} className="gap-1.5">
-              <Sparkles className="h-4 w-4" />
-              計画を生成する
-            </Button>
           </div>
         )}
       </CardContent>

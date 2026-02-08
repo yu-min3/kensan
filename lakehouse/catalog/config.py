@@ -1,5 +1,5 @@
 """
-共通設定: Nessie Catalog接続、S3設定、ロギング
+共通設定: Polaris Catalog接続、S3設定、ロギング
 """
 
 import logging
@@ -30,18 +30,20 @@ def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
 
 
 def get_catalog() -> Catalog:
-    """Nessie Iceberg REST Catalog への接続を返す"""
+    """Polaris Iceberg REST Catalog への接続を返す"""
     return load_catalog(
-        "nessie",
+        "polaris",
         **{
             "type": "rest",
-            "uri": os.environ.get("NESSIE_URI", "http://localhost:19120/iceberg/"),
+            "uri": os.environ.get("POLARIS_URI", "http://localhost:8181/api/catalog"),
+            "credential": os.environ.get("POLARIS_CREDENTIAL", "root:s3cr3t"),
+            "scope": "PRINCIPAL_ROLE:ALL",
+            "warehouse": os.environ.get("POLARIS_WAREHOUSE", "kensan-lakehouse"),
             "s3.endpoint": os.environ.get("S3_ENDPOINT", "http://localhost:9000"),
             "s3.access-key-id": os.environ.get("S3_ACCESS_KEY", "kensan"),
             "s3.secret-access-key": os.environ.get("S3_SECRET_KEY", "kensan-minio"),
             "s3.path-style-access": "true",
             "s3.region": "us-east-1",
-            "warehouse": f"s3://{os.environ.get('S3_BUCKET', 'kensan-lakehouse')}",
         },
     )
 

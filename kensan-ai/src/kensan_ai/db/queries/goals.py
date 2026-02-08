@@ -159,21 +159,26 @@ async def delete_goal(goal_id: UUID, user_id: UUID) -> bool:
 
 async def create_milestone(
     goal_id: UUID,
+    user_id: UUID,
     name: str,
     due_date: date | None = None,
 ) -> dict[str, Any]:
-    """Create a new milestone under a goal."""
+    """Create a new milestone under a goal (validates goal ownership)."""
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO milestones (goal_id, name, target_date)
-            VALUES ($1, $2, $3)
+            SELECT $1, $2, $3
+            FROM goals WHERE id = $1 AND user_id = $4
             RETURNING id, name, target_date, status
             """,
             goal_id,
             name,
             due_date,
+            user_id,
         )
+        if row is None:
+            return {"error": "Goal not found or access denied"}
         return {
             "id": str(row["id"]),
             "name": row["name"],
@@ -184,10 +189,11 @@ async def create_milestone(
 
 async def update_milestone(
     milestone_id: UUID,
+    user_id: UUID,
     name: str | None = None,
     due_date: date | None = None,
 ) -> dict[str, Any] | None:
-    """Update an existing milestone."""
+    """Update an existing milestone (validates goal ownership via user_id)."""
     async with get_connection() as conn:
         updates = []
         params: list[Any] = []
@@ -206,12 +212,13 @@ async def update_milestone(
         if not updates:
             return None
 
-        params.append(milestone_id)
+        params.extend([milestone_id, user_id])
 
         row = await conn.fetchrow(
             f"""
             UPDATE milestones SET {", ".join(updates)}
             WHERE id = ${param_idx}
+              AND goal_id IN (SELECT id FROM goals WHERE user_id = ${param_idx + 1})
             RETURNING id, name, target_date, status
             """,
             *params,
@@ -228,11 +235,16 @@ async def update_milestone(
         }
 
 
-async def delete_milestone(milestone_id: UUID) -> bool:
-    """Delete a milestone. Returns True if deleted."""
+async def delete_milestone(milestone_id: UUID, user_id: UUID) -> bool:
+    """Delete a milestone (validates goal ownership via user_id). Returns True if deleted."""
     async with get_connection() as conn:
         result = await conn.execute(
-            "DELETE FROM milestones WHERE id = $1",
+            """
+            DELETE FROM milestones
+            WHERE id = $1
+              AND goal_id IN (SELECT id FROM goals WHERE user_id = $2)
+            """,
             milestone_id,
+            user_id,
         )
         return result == "DELETE 1"

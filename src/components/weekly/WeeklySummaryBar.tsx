@@ -64,9 +64,20 @@ export function WeeklySummaryBar({ blocksByDate, entriesByDate, weekDates }: Wee
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-medium">週間サマリー</div>
           <div className="text-sm text-muted-foreground">
-            計画: <span className="font-medium text-foreground">{formatDurationShort(totalPlanned)}</span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatDurationShort(totalActual)}</span>
             {' / '}
-            実績: <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatDurationShort(totalActual)}</span>
+            <span className="font-medium text-foreground">{formatDurationShort(totalPlanned)}</span>
+            {totalPlanned > 0 && (
+              <span className={`ml-1.5 font-medium ${
+                totalActual / totalPlanned >= 1
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : totalActual / totalPlanned >= 0.7
+                    ? 'text-foreground'
+                    : 'text-muted-foreground'
+              }`}>
+                ({Math.round((totalActual / totalPlanned) * 100)}%)
+              </span>
+            )}
           </div>
         </div>
 

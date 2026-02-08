@@ -21,12 +21,12 @@ Component → Zustand Store → API Service → HttpClient → Backend
 
 | Prefix | Domain | Example |
 |--------|--------|---------|
-| S | Settings/System | S01_Settings, S02_Dashboard |
+| S | Settings/System | S01_Settings |
 | D | Daily | DailyPage |
+| W | Weekly | W01_WeeklyPlanning |
 | N | Notes | N01_NoteList, N02_NoteEdit |
 | T | Task | T01_TaskManagement |
-| R | Routine | R01_RoutineTaskManagement |
-| A | Analytics/AI | A01_AnalyticsReport, A02_AIReview |
+| A | Analytics/AI | A01_AnalyticsReport, A03_PromptEditor |
 | O | Observability | O01_InteractionExplorer |
 
 ## State Management (Zustand)

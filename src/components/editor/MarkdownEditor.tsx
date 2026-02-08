@@ -24,7 +24,9 @@ import {
   Redo,
   Link as LinkIcon,
   Code2,
+  ChevronRight,
 } from 'lucide-react'
+import { Details, DetailsSummary } from './extensions/details'
 
 interface MarkdownEditorProps {
   value: string
@@ -88,7 +90,11 @@ export function MarkdownEditor({ value, onChange, placeholder, onImageUpload }: 
         inline: false,
         allowBase64: true,
       }),
-      Markdown,
+      Markdown.configure({
+        html: true,
+      }),
+      Details,
+      DetailsSummary,
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -244,6 +250,11 @@ export function MarkdownEditor({ value, onChange, placeholder, onImageUpload }: 
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
           icon={Minus}
           title="水平線"
+        />
+        <ToolbarButton
+          onClick={() => editor.chain().focus().insertDetails().run()}
+          icon={ChevronRight}
+          title="トグル"
         />
         <div className="w-px h-4 bg-border mx-1" />
         <InputPopover
