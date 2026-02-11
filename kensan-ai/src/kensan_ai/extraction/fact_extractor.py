@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-import anthropic
-
 from kensan_ai.config import get_settings
 from kensan_ai.db.connection import get_connection
+from kensan_ai.lib.ai_provider import LLMClient
+from kensan_ai.lib.llm_utils import extract_json_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +57,14 @@ class ExtractedFact:
 
 
 class FactExtractor:
-    """Extracts facts from AI conversations using Claude API."""
+    """Extracts facts from AI conversations using LLM API."""
 
     # Valid fact types
     VALID_TYPES = {"preference", "habit", "skill", "goal", "constraint"}
 
     def __init__(self):
-        """Initialize the fact extractor with Anthropic client."""
-        settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = "claude-sonnet-4-20250514"  # Use faster model for extraction
+        """Initialize the fact extractor with the configured AI provider."""
+        self.llm = LLMClient()
 
     async def extract_facts(
         self,
@@ -88,26 +86,8 @@ class FactExtractor:
         )
 
         try:
-            response = await self.client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse the response
-            content = response.content[0].text if response.content else "[]"
-
-            # Extract JSON from response (handle markdown code blocks)
-            if "```json" in content:
-                start = content.find("```json") + 7
-                end = content.find("```", start)
-                content = content[start:end].strip()
-            elif "```" in content:
-                start = content.find("```") + 3
-                end = content.find("```", start)
-                content = content[start:end].strip()
-
-            facts_data = json.loads(content)
+            content = await self.llm.generate(prompt, max_tokens=1024)
+            facts_data = extract_json_from_response(content or "[]")
 
             # Validate and convert to ExtractedFact objects
             facts = []
@@ -135,14 +115,8 @@ class FactExtractor:
 
             return facts
 
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse extraction response: {e}")
-            return []
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error during extraction: {e}")
-            return []
         except Exception as e:
-            logger.error(f"Unexpected error during extraction: {e}")
+            logger.error(f"Fact extraction failed: {e}")
             return []
 
     async def extract_and_save(

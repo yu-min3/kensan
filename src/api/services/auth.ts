@@ -1,4 +1,7 @@
 // Auth API Service
+// NOTE: Prefer useAuthStore for all auth operations.
+// This module exists only as a thin API helper; token persistence is
+// managed exclusively by Zustand persist (key: 'kensan-auth').
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 
@@ -29,9 +32,7 @@ export const authApi = {
       '/auth/login',
       data
     )
-    // トークンをクライアントに保存
     httpClient.setAuthToken(response.token)
-    localStorage.setItem('kensan_token', response.token)
     return response
   },
 
@@ -42,22 +43,10 @@ export const authApi = {
       data
     )
     httpClient.setAuthToken(response.token)
-    localStorage.setItem('kensan_token', response.token)
     return response
   },
 
   logout() {
     httpClient.setAuthToken(null)
-    localStorage.removeItem('kensan_token')
-  },
-
-  // 保存されたトークンを復元
-  restoreToken(): boolean {
-    const token = localStorage.getItem('kensan_token')
-    if (token) {
-      httpClient.setAuthToken(token)
-      return true
-    }
-    return false
   },
 }

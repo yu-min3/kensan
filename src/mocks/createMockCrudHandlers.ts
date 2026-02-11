@@ -213,12 +213,12 @@ export function createMockCrudHandlers<T extends { id: string }, TResponse exten
  * ```ts
  * const toggleHandler = createToggleHandler({
  *   baseUrl: BASE_URL,
- *   resourcePath: '/routines',
- *   data: routineTasks,
- *   getId: (r) => r.id,
- *   transform: toRoutineResponse,
- *   resourceName: 'Routine task',
- *   toggleField: 'enabled',
+ *   resourcePath: '/tasks',
+ *   data: tasks,
+ *   getId: (t) => t.id,
+ *   transform: toTaskResponse,
+ *   resourceName: 'Task',
+ *   toggleField: 'completed',
  *   toggleEndpoint: 'toggle',
  * })
  * ```

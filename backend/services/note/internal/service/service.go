@@ -20,9 +20,9 @@ import (
 	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
-// Re-export shared errors for backward compatibility with handlers
+// Service-specific errors
 var (
-	ErrNoteNotFound       = sharedErrors.NoteNotFound()
+	ErrNoteNotFound       = sharedErrors.NotFound("note")
 	ErrNoteAlreadyExists  = repository.ErrNoteAlreadyExists
 	ErrTypeRequired       = sharedErrors.Required("type")
 	ErrInvalidType        = errors.New("invalid note type")

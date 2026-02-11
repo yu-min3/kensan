@@ -1,16 +1,26 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react'
+import { useCompositionGuard } from '@/hooks/useCompositionGuard'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { X, Tag as TagIcon, Pin, Plus } from 'lucide-react'
-import type { Tag } from '@/types'
-import { DEFAULT_COLORS } from '@/types'
+import { X, Tag as TagIcon, Pin, Plus, Pencil } from 'lucide-react'
+import { TagDialog, type TagFormData } from '@/components/task/TagDialog'
+import { useDialogState } from '@/hooks/useDialogState'
+import type { Tag, TagCategory } from '@/types'
+
+const CATEGORY_LABELS: Record<TagCategory, string> = {
+  general: '',
+  trait: '🏷️',
+  tech: '💻',
+  project: '📁',
+}
 
 interface TagInputProps {
   tags: Tag[]
   selectedTagIds: string[]
   onChange: (tagIds: string[]) => void
   onCreateTag?: (name: string, color: string) => Promise<Tag>
+  onUpdateTag?: (id: string, data: { name: string; color: string }) => Promise<Tag>
   label?: string
   placeholder?: string
 }
@@ -20,6 +30,7 @@ export function TagInput({
   selectedTagIds,
   onChange,
   onCreateTag,
+  onUpdateTag,
   label = 'タグ',
   placeholder = 'タグを検索または作成...',
 }: TagInputProps) {
@@ -28,6 +39,8 @@ export function TagInput({
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const tagDialog = useDialogState<TagFormData>({ name: '', color: '#6B7280' })
 
   // Filter and sort tags
   const filteredTags = tags
@@ -85,8 +98,7 @@ export function TagInput({
   const handleCreate = async () => {
     if (!canCreate) return
     try {
-      // Pick a random color from defaults
-      const color = DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)]
+      const color = '#6B7280'
       const newTag = await onCreateTag(inputValue.trim(), color)
       onChange([...selectedTagIds, newTag.id])
       setInputValue('')
@@ -96,7 +108,22 @@ export function TagInput({
     }
   }
 
+  const handleEditTag = (e: React.MouseEvent, tag: Tag) => {
+    e.stopPropagation()
+    tagDialog.openEdit(tag.id, { name: tag.name, color: tag.color })
+  }
+
+  const handleTagDialogSave = async (data: TagFormData, editingId: string | null) => {
+    if (!editingId) return
+    if (onUpdateTag) {
+      await onUpdateTag(editingId, { name: data.name, color: data.color })
+    }
+  }
+
+  const { isComposingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard()
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingRef.current) return
     const totalItems = filteredTags.length + (canCreate ? 1 : 0)
 
     switch (e.key) {
@@ -148,13 +175,24 @@ export function TagInput({
           <Badge
             key={tag.id}
             variant="default"
-            className="cursor-pointer"
+            className="cursor-pointer group"
             style={{ backgroundColor: tag.color, borderColor: tag.color }}
-            onClick={() => handleRemove(tag.id)}
           >
             {tag.pinned && <Pin className="h-3 w-3 mr-1" />}
             {tag.name}
-            <X className="h-3 w-3 ml-1" />
+            {onUpdateTag && (
+              <Pencil
+                className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => handleEditTag(e, tag)}
+              />
+            )}
+            <X
+              className="h-3 w-3 ml-1"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleRemove(tag.id)
+              }}
+            />
           </Badge>
         ))}
       </div>
@@ -192,6 +230,8 @@ export function TagInput({
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
           placeholder={placeholder}
           className="w-full"
         />
@@ -211,11 +251,22 @@ export function TagInput({
                   className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: tag.color }}
                 />
-                <span className="flex-1">{tag.name}</span>
+                <span className="flex-1">
+                  {tag.name}
+                  {tag.category && tag.category !== 'general' && (
+                    <span className="ml-1 text-xs">{CATEGORY_LABELS[tag.category]}</span>
+                  )}
+                </span>
                 {tag.pinned && <Pin className="h-3 w-3 text-muted-foreground" />}
                 <span className="text-xs text-muted-foreground">
                   {tag.usageCount}回使用
                 </span>
+                {onUpdateTag && (
+                  <Pencil
+                    className="h-3 w-3 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => handleEditTag(e, tag)}
+                  />
+                )}
               </div>
             ))}
             {canCreate && (
@@ -236,6 +287,11 @@ export function TagInput({
           </div>
         )}
       </div>
+
+      {/* Tag edit dialog */}
+      {onUpdateTag && (
+        <TagDialog dialog={tagDialog} onSave={handleTagDialogSave} />
+      )}
     </div>
   )
 }

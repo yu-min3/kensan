@@ -12,17 +12,60 @@ Kensanアプリケーションのバックエンド共通インフラストラ�
 4. [レイヤードアーキテクチャ](#レイヤードアーキテクチャ)
 5. [データベーススキーマ概要](#データベーススキーマ概要)
 6. [共通パターン](#共通パターン)
-7. [開発コマンド](#開発コマンド)
 
 ---
 
 ## システム概要
 
 ### アーキテクチャスタイル
-- **7つの独立したGoマイクロサービス**（ポート8081-8091）
+
+- **6つの独立したGoマイクロサービス**（ポート8081-8091）
 - 単一のPostgreSQL 16データベース（共有スキーマ）
 - JWT認証（HS256）
 - マルチテナント：全テーブルに`user_id`カラムでデータ分離
+
+```mermaid
+graph TB
+    subgraph Frontend
+        SPA[React SPA :5173]
+    end
+
+    subgraph "Backend Services"
+        US[user-service :8081]
+        TS[task-service :8082]
+        TBS[timeblock-service :8084]
+        AS[analytics-service :8088]
+        MS[memo-service :8090]
+        NS[note-service :8091]
+    end
+
+    subgraph "AI Service"
+        AI[kensan-ai :8089]
+    end
+
+    subgraph Storage
+        PG[(PostgreSQL 16)]
+        MinIO[(MinIO)]
+    end
+
+    SPA -->|Auth, Settings| US
+    SPA -->|Goals, Tasks| TS
+    SPA -->|TimeBlocks, Timer| TBS
+    SPA -->|Summaries| AS
+    SPA -->|Quick Notes| MS
+    SPA -->|Notes| NS
+    SPA -->|Chat, Reviews| AI
+
+    US --> PG
+    TS --> PG
+    TBS --> PG
+    AS --> PG
+    MS --> PG
+    NS --> PG
+    NS --> MinIO
+    AI --> PG
+    AI --> MinIO
+```
 
 ### 技術スタック
 
@@ -36,61 +79,6 @@ Kensanアプリケーションのバックエンド共通インフラストラ�
 | ログ | slog + otelslog | Go標準 + v0.14.0 |
 | UUID | google/uuid | v1.6.0 |
 
-### システムアーキテクチャ図
-
-```mermaid
-graph TB
-    subgraph Frontend
-        SPA[React SPA :5173]
-    end
-
-    subgraph "Backend Services"
-        US[user-service :8081]
-        TS[task-service :8082]
-        TBS[timeblock-service :8084]
-        RS[routine-service :8085]
-        AS[analytics-service :8088]
-        MS[memo-service :8090]
-        NS[note-service :8091]
-    end
-
-    subgraph "AI Service"
-        AI[kensan-ai :8089]
-    end
-
-    subgraph Storage
-        PG[(PostgreSQL 16)]
-        MinIO[(MinIO<br/>オブジェクトストレージ)]
-    end
-
-    subgraph "External APIs"
-        Claude[Anthropic Claude API]
-        OpenAI[OpenAI Embeddings API]
-    end
-
-    SPA -->|Auth, Settings| US
-    SPA -->|Goals, Tasks| TS
-    SPA -->|TimeBlocks, Timer| TBS
-    SPA -->|Routines| RS
-    SPA -->|Summaries| AS
-    SPA -->|Quick Notes| MS
-    SPA -->|Notes| NS
-    SPA -->|Chat, Reviews| AI
-
-    US --> PG
-    TS --> PG
-    TBS --> PG
-    RS --> PG
-    AS --> PG
-    MS --> PG
-    NS --> PG
-    NS --> MinIO
-    AI --> PG
-    AI --> MinIO
-    AI --> Claude
-    AI --> OpenAI
-```
-
 ---
 
 ## サービス一覧
@@ -100,28 +88,26 @@ graph TB
 | user-service | 8081 | 認証、設定 | [services/user/ARCHITECTURE.md](services/user/ARCHITECTURE.md) |
 | task-service | 8082 | 目標、タスク | [services/task/ARCHITECTURE.md](services/task/ARCHITECTURE.md) |
 | timeblock-service | 8084 | 時間管理 | [services/timeblock/ARCHITECTURE.md](services/timeblock/ARCHITECTURE.md) |
-| routine-service | 8085 | ルーティンタスク | [services/routine/ARCHITECTURE.md](services/routine/ARCHITECTURE.md) |
 | analytics-service | 8088 | 分析 | [services/analytics/ARCHITECTURE.md](services/analytics/ARCHITECTURE.md) |
 | memo-service | 8090 | クイックメモ | [services/memo/ARCHITECTURE.md](services/memo/ARCHITECTURE.md) |
 | note-service | 8091 | ノート | [services/note/ARCHITECTURE.md](services/note/ARCHITECTURE.md) |
-| ~~diary-service~~ | - | ~~日記~~ | [DEPRECATED](services/diary/ARCHITECTURE.md)（note-serviceに統合） |
-| ~~record-service~~ | - | ~~学習記録~~ | [DEPRECATED](services/record/ARCHITECTURE.md)（note-serviceに統合） |
 
 ### サービスディレクトリ構成
 
-各サービスは同一の構成に従う：
+各サービスは同一の構成に従う:
 
 ```
 services/<name>/
-├── cmd/main.go                    # エントリポイント、依存性設定
+├── cmd/main.go                    # エントリポイント (bootstrap → RegisterRoutes → Run)
 ├── internal/
 │   ├── model.go                   # ドメイン型とDTO
 │   ├── handler/handler.go         # HTTPハンドラ
-│   ├── service/service.go         # ビジネスロジック
-│   ├── service/interface.go       # サービスインターフェース
-│   ├── service/service_test.go    # ユニットテスト
+│   ├── service/
+│   │   ├── interface.go           # サービスインターフェース (ISP準拠)
+│   │   ├── service.go             # ビジネスロジック実装
+│   │   └── service_test.go        # ユニットテスト
 │   └── repository/
-│       ├── interface.go           # リポジトリ契約
+│       ├── interface.go           # リポジトリインターフェース (ISP準拠)
 │       └── repository.go          # PostgreSQL実装
 ├── Dockerfile
 └── Makefile
@@ -131,313 +117,192 @@ services/<name>/
 
 ## 共通パッケージ
 
-`backend/shared/`に配置：
+`backend/shared/` に配置された共通基盤パッケージ。全サービスがこれらに依存する。
 
-### Bootstrap (`bootstrap/bootstrap.go`)
+### パッケージ依存関係
 
-バッテリー同梱のサービス初期化：
+```mermaid
+graph TB
+    subgraph "サービス (cmd/main.go)"
+        Service["各サービス"]
+    end
 
-```go
-svc := bootstrap.New("user-service")
+    subgraph "shared/"
+        Bootstrap["bootstrap<br/>サービス初期化の一元管理"]
+        Config["config<br/>環境変数読み込み"]
+        Auth["auth<br/>JWT生成・検証"]
+        MW["middleware<br/>HTTP共通処理"]
+        Telemetry["telemetry<br/>OpenTelemetry"]
+        SQLBuilder["sqlbuilder<br/>動的SQL構築"]
+        Errors["errors<br/>エラー型"]
+        Types["types<br/>共通型 (DateOnly)"]
+    end
 
-// 認証必須ルートを登録
-svc.RegisterRoutes(func(r chi.Router) {
-    r.Get("/users/me", handler.GetProfile)
-})
+    Service --> Bootstrap
+    Bootstrap --> Config
+    Bootstrap --> Auth
+    Bootstrap --> MW
+    Bootstrap --> Telemetry
 
-// 公開ルートを登録（認証不要）
-svc.RegisterPublicRoutes(func(r chi.Router) {
-    r.Post("/auth/login", handler.Login)
-})
+    MW --> Auth
+    MW --> Errors
 
-svc.Run()
+    Service -.->|直接利用| SQLBuilder
+    Service -.->|直接利用| Errors
+    Service -.->|直接利用| Types
 ```
 
-**提供機能：**
-- 環境変数からの設定読み込み
-- データベース接続プーリング（pgxpool）
-- JWTマネージャー設定
-- ミドルウェアチェーン（RequestID、OTelTrace、Logger、CORS、Auth）
-- OpenTelemetry自動初期化（`OTEL_ENABLED=true`で有効化）
-- グレースフルシャットダウン（OTelプロバイダー含む）
-- `/health`エンドポイント
+### Bootstrap
 
-### Config (`config/config.go`)
+バッテリー同梱のサービス初期化。`bootstrap.New("service-name")` で以下を自動設定:
 
-環境変数ベースの設定：
+| 提供機能 | 説明 |
+|---------|------|
+| 環境変数読み込み | Config パッケージ経由 |
+| DB接続プーリング | pgxpool + OpenTelemetry計装 (otelpgx) |
+| JWTマネージャー | HS256署名、24時間有効期限 |
+| ミドルウェアチェーン | RequestID → OTelTrace → Metrics → Logger → CORS → Auth |
+| OpenTelemetry | `OTEL_ENABLED=true` で有効化 (トレース + メトリクス + ログ) |
+| グレースフルシャットダウン | OTelプロバイダー含む |
+| ヘルスチェック | `/health` エンドポイント自動登録 |
 
-```go
-type Config struct {
-    Server    ServerConfig    // Host, Port, Env
-    Database  DatabaseConfig  // Host, Port, User, Password, DBName, SSLMode
-    JWT       JWTConfig       // Secret, Issuer, ExpireHour
-    Telemetry TelemetryConfig // Enabled, CollectorURL
-}
+ルート登録は `RegisterRoutes`（認証必須）と `RegisterPublicRoutes`（認証不要）で分離。
+
+### ミドルウェアチェーン
+
+```mermaid
+flowchart LR
+    Req["HTTPリクエスト"] --> RID["RequestID<br/>UUID付与"]
+    RID --> OTel["OTelTrace<br/>スパン生成"]
+    OTel --> Metrics["Metrics<br/>REDメトリクス記録"]
+    Metrics --> Log["Logger<br/>構造化ログ<br/>(trace_id注入)"]
+    Log --> CORS["CORS"]
+    CORS --> AuthMW["Auth<br/>JWT検証<br/>user_id抽出"]
+    AuthMW --> Handler["Handler"]
 ```
 
-| 環境変数 | デフォルト | 説明 |
-|---------|-----------|------|
-| `OTEL_ENABLED` | `false` | OpenTelemetryの有効化 |
-| `OTEL_COLLECTOR_URL` | `localhost:4318` | OTel Collector OTLP HTTPエンドポイント |
+### レスポンスヘルパー
 
-### Auth (`auth/jwt.go`)
+全サービスが共通のレスポンス関数を使用。エンベロープ形式を統一:
 
-JWTトークン管理：
+| 関数 | 用途 |
+|------|------|
+| `middleware.JSON(w, r, status, data)` | 成功レスポンス `{data, meta}` |
+| `middleware.JSONWithPagination(...)` | ページネーション付き `{data, meta, pagination}` |
+| `middleware.Error(w, r, status, code, msg)` | エラーレスポンス `{error, meta}` |
+| `middleware.ValidationError(w, r, details)` | バリデーションエラー |
+| `middleware.HandleServiceError(w, r, err, mappings, defaultMsg)` | サービスエラーのHTTPマッピング |
 
-```go
-jwtManager := auth.NewJWTManager(secret, issuer, expireHours)
+### SQL Builder
 
-// トークン生成
-token, err := jwtManager.GenerateToken(userID, email)
+動的SQLクエリ構築のためのユーティリティ。パラメータ番号($1, $2...)を自動管理:
 
-// トークン検証
-claims, err := jwtManager.ValidateToken(tokenString)
-```
+| ビルダー | 用途 | 使用サービス |
+|---------|------|------------|
+| `NewUpdateBuilder` | UPDATE文の動的構築。ポインタ型nilチェックを統一 | task, memo, timeblock, note |
+| `NewWhereBuilder` | WHERE句の動的構築。条件分岐、IN句、LIKE句対応 | task, memo, timeblock, note |
 
-**クレーム構造：**
-- UserID、Email
-- IssuedAt、ExpiresAt（デフォルト24時間）
-- Issuer: "kensan"
+ジェネリクス `AddField[T any]` により、ポインタ型の「未指定」と「nullに設定」を型安全に区別。
 
-### Middleware (`middleware/`)
+### エラーパッケージ
 
-**リクエスト処理：**
-- `RequestID` - リクエストごとのUUID（またはX-Request-IDヘッダーから取得）
-- `OTelTrace` - OpenTelemetry HTTPスパン計装（otelhttp）
-- `Metrics` - OTel HTTP SemConv準拠のリクエストdurationヒストグラム記録
-- `Logger` - slogによる構造化ログ（otelslogブリッジでtrace_id/span_id自動注入）
-- `Auth` - JWT検証、ユーザーID抽出
+全サービス共通のドメインエラー。型チェック関数（`IsNotFound`, `IsInvalidInput`等）とPostgreSQLエラーヘルパー（`IsUniqueViolation`, `IsForeignKeyViolation`）を提供:
 
-### Telemetry (`telemetry/telemetry.go`)
+| エラー型 | HTTPマッピング | 用途 |
+|---------|--------------|------|
+| `ErrNotFound` | 404 | リソース未検出 |
+| `ErrInvalidInput` | 400 | 入力バリデーション失敗 |
+| `ErrUnauthorized` | 401 | 認証失敗 |
+| `ErrAlreadyExists` | 409 | 重複登録 |
 
-OpenTelemetryプロバイダー初期化：
+各サービスがジェネリックコンストラクタ（`errors.NotFound("task")`等）でローカルエラー変数を定義。
 
-```go
-provider, err := telemetry.Initialize(ctx, telemetry.Config{
-    ServiceName:  "task-service",
-    Environment:  "production",
-    CollectorURL: "otel-collector:4318",
-    Enabled:      true,
-})
-defer provider.Shutdown(ctx)
-```
+### 共通型
 
-**機能：**
-- OTLP HTTPエクスポーター（トレース＋メトリクス＋ログ）
-- W3C TraceContext + Baggageプロパゲーター
-- リソース属性：`service.name`, `service.version`, `deployment.environment`
-- HTTPメトリクス（OTel HTTP SemConv準拠）：`http.server.request.duration`（ヒストグラム、属性: `http.request.method`, `http.route`, `http.response.status_code`）。Rate/Errorはhistogram countとstatus_code属性から導出
-- `Enabled=false`の場合はno-op（パフォーマンス影響なし）
-- pgx DBトレーシング（otelpgx）自動設定
-- Service層カスタムスパン用ヘルパー（`telemetry.ServiceTracer()`, `telemetry.StartSpan()`）
+| 型 | 説明 | 実装インターフェース |
+|----|------|-------------------|
+| `DateOnly` | 時刻なしのPostgreSQL DATE型 | `sql.Scanner`, `driver.Valuer`, `json.Marshaler/Unmarshaler` |
 
-**レスポンスヘルパー：**
-```go
-middleware.JSON(w, r, http.StatusOK, data)
-middleware.JSONWithPagination(w, r, status, data, pagination)
-middleware.Error(w, r, http.StatusNotFound, "NOT_FOUND", "リソースが見つかりません")
-middleware.ValidationError(w, r, []ErrorDetail{{Field: "email", Message: "必須"}})
-middleware.HandleServiceError(w, r, err, errorMappings, defaultMsg)
-```
-
-**レスポンスエンベロープ：**
-```json
-{
-  "data": { ... },
-  "meta": {
-    "requestId": "uuid",
-    "timestamp": "2026-01-23T..."
-  },
-  "pagination": { "page": 1, "perPage": 20, "total": 100 }
-}
-```
-
-### Errors (`errors/errors.go`)
-
-全サービス共通のエラーパッケージ：
-
-```go
-// 基本エラー
-errors.ErrNotFound, ErrInvalidInput, ErrUnauthorized, ErrAlreadyExists
-
-// エンティティ固有のコンストラクタ
-errors.NotFound("task")     // → "task not found"
-errors.Required("email")    // → "email is required"
-
-// 事前定義エンティティエラー（後方互換性）
-errors.ErrTaskNotFound, ErrGoalNotFound, ErrMilestoneNotFound
-errors.ErrDiaryNotFound, ErrTimeBlockNotFound, ErrNoteNotFound
-
-// エンティティ固有のヘルパー関数
-errors.TaskNotFound()       // ErrTaskNotFoundを返す
-errors.GoalNotFound()       // ErrGoalNotFoundを返す
-
-// 型チェック
-if errors.IsNotFound(err) { ... }
-if errors.IsInvalidInput(err) { ... }
-```
-
-**サービスでの使用：**
-```go
-// 標準errorsとの競合を避けるためエイリアスでインポート
-import sharedErrors "github.com/kensan/backend/shared/errors"
-
-// ハンドラの後方互換性のため再エクスポート
-var (
-    ErrDiaryNotFound = sharedErrors.ErrDiaryNotFound
-    ErrTitleRequired = sharedErrors.Required("title")
-)
-```
-
-### Types (`types/date.go`)
-
-**DateOnly** - 時刻なしのPostgreSQL DATE：
-
-```go
-type DateOnly struct {
-    Time  time.Time
-    Valid bool
-}
-
-// 実装: sql.Scanner, driver.Valuer, json.Marshaler/Unmarshaler
-// JSON: "2026-01-23" または null
-```
+JSON表現: `"2026-01-23"` または `null`。
 
 ---
 
 ## レイヤードアーキテクチャ
 
-### フロー
+### リクエスト処理フロー
 
-```
-HTTPリクエスト
-    ↓
-Handler (HTTPレイヤー)
-    - コンテキストからユーザーID抽出
-    - リクエストボディ/パラメータをパース
-    - 入力バリデーション
-    - サービス呼び出し
-    - エラーをHTTPステータスにマッピング
-    - JSONレスポンス返却
-    ↓
-Service (ビジネスロジック)
-    - ドメインバリデーション
-    - ビジネスルール
-    - オーケストレーション
-    - ドメインエラーを返す
-    ↓
-Repository (データアクセス)
-    - SQLクエリ (pgx)
-    - 行スキャン
-    - 存在しない行にはErrNotFoundを返す
-    ↓
-PostgreSQL
-```
+```mermaid
+flowchart TB
+    subgraph "HTTP層 (Handler)"
+        Parse["コンテキストからuser_id抽出<br/>リクエストボディ/パラメータをパース"]
+        Map["サービスエラー → HTTPステータスにマッピング<br/>JSONレスポンス返却"]
+    end
 
-### ハンドラパターン
+    subgraph "ビジネスロジック層 (Service)"
+        Validate["入力バリデーション（必須フィールド等）"]
+        Domain["ドメインバリデーション・ルール"]
+        Orchestrate["オーケストレーション"]
+    end
 
-```go
-func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
-    userID := middleware.GetUserID(r.Context())
-    taskID := chi.URLParam(r, "taskId")
+    subgraph "データアクセス層 (Repository)"
+        SQL["SQLクエリ (pgx)"]
+        Scan["行スキャン"]
+        NotFound["存在しない行 → ErrNotFound"]
+    end
 
-    task, err := h.service.GetByID(r.Context(), userID, taskID)
-    if err != nil {
-        switch {
-        case errors.Is(err, service.ErrTaskNotFound):
-            middleware.Error(w, r, http.StatusNotFound, "NOT_FOUND", "タスクが見つかりません")
-        default:
-            middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL", "...")
-        }
-        return
-    }
+    subgraph "PostgreSQL"
+        DB[("DB")]
+    end
 
-    middleware.JSON(w, r, http.StatusOK, task)
-}
+    Parse --> Validate
+    Validate --> Domain
+    Domain --> Orchestrate
+    Orchestrate --> SQL
+    SQL --> DB
+    DB --> Scan
+    Scan --> NotFound
+    NotFound --> Map
 ```
 
-### サービスインターフェース
+### レイヤー間のルール
 
-各サービスは依存性注入のためインターフェースを定義：
+| レイヤー | 知っていいこと | 知ってはいけないこと |
+|---------|--------------|-----------------|
+| **Handler** | HTTP、JSON、ルーティング | ビジネスルール、SQL |
+| **Service** | ドメインロジック、バリデーション | HTTP、SQL構文 |
+| **Repository** | SQL、行スキャン | ビジネスルール、HTTP |
 
-```go
-// internal/service/interface.go
-type TaskReader interface {
-    GetByID(ctx context.Context, userID, taskID string) (*Task, error)
-    List(ctx context.Context, userID string, filter *Filter) ([]*Task, error)
-}
+### インターフェース分離 (ISP)
 
-type TaskWriter interface {
-    Create(ctx context.Context, userID string, input *CreateInput) (*Task, error)
-    Update(ctx context.Context, userID string, input *UpdateInput) (*Task, error)
-    Delete(ctx context.Context, userID, taskID string) error
-}
+全サービスがReader/Writer分離のインターフェースを定義:
 
-type TaskService interface {
-    TaskReader
-    TaskWriter
-}
+```mermaid
+graph TB
+    subgraph "Service Interface"
+        Reader["TaskReader<br/>GetByID, List"]
+        Writer["TaskWriter<br/>Create, Update, Delete"]
+        Combined["TaskService<br/>= TaskReader + TaskWriter"]
+    end
+
+    subgraph "Repository Interface (task-service)"
+        GoalRepo["GoalRepository"]
+        MilestoneRepo["MilestoneRepository"]
+        TagRepo["TagRepository"]
+        TaskRepo["TaskRepository"]
+        CompositeRepo["Repository<br/>= GoalRepo + MilestoneRepo<br/>+ TagRepo + TaskRepo"]
+    end
+
+    subgraph "Repository Interface (timeblock-service)"
+        TBRepo["TimeBlockRepository"]
+        TERepo["TimeEntryRepository"]
+        TimerRepo["TimerRepository"]
+        TBComposite["Repository<br/>= TimeBlockRepo + TimeEntryRepo<br/>+ TimerRepo"]
+    end
+
+    Combined --> CompositeRepo
 ```
 
-### リポジトリインターフェース（ISP準拠）
-
-インターフェース分離原則に従い、エンティティごとにリポジトリインターフェースを分割：
-
-```go
-// internal/repository/interface.go
-
-// GoalRepository はゴールの永続化を処理
-type GoalRepository interface {
-    GetByID(ctx context.Context, id string) (*Goal, error)
-    List(ctx context.Context, userID string) ([]*Goal, error)
-    Create(ctx context.Context, goal *Goal) error
-    Update(ctx context.Context, goal *Goal) error
-    Delete(ctx context.Context, id string) error
-}
-
-// MilestoneRepository はマイルストーンの永続化を処理
-type MilestoneRepository interface {
-    GetByID(ctx context.Context, id string) (*Milestone, error)
-    ListByGoal(ctx context.Context, goalID string) ([]*Milestone, error)
-    // ...
-}
-
-// 複数リポジトリが必要なサービス用の複合インターフェース
-type Repository interface {
-    GoalRepository
-    MilestoneRepository
-    TagRepository
-    TaskRepository
-}
-```
-
-### リポジトリパターン
-
-```go
-// インターフェース (internal/repository/interface.go)
-type Repository interface {
-    GetByID(ctx context.Context, id string) (*Entity, error)
-    GetByIDAndUserID(ctx context.Context, id, userID string) (*Entity, error)
-    Create(ctx context.Context, entity *Entity) error
-    Update(ctx context.Context, entity *Entity) error
-    Delete(ctx context.Context, id string) error
-    List(ctx context.Context, userID string, filter *Filter) ([]*Entity, error)
-}
-
-// 実装 (internal/repository/repository.go)
-func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*Entity, error) {
-    row := r.pool.QueryRow(ctx, `SELECT ... FROM entities WHERE id = $1 AND user_id = $2`, id, userID)
-
-    var e Entity
-    if err := row.Scan(&e.ID, &e.Name, ...); err != nil {
-        if errors.Is(err, pgx.ErrNoRows) {
-            return nil, ErrNotFound
-        }
-        return nil, err
-    }
-    return &e, nil
-}
-```
+Handler → Service、Service → Repository の依存はすべてインターフェース経由。テストではモック実装を注入。
 
 ---
 
@@ -460,10 +325,14 @@ erDiagram
     users ||--o{ ai_interactions : "has"
     users ||--o| user_memory : "has"
     users ||--o{ user_facts : "has"
-    users ||--o{ documents : "owns (DEPRECATED - removed in migration 037)"
-    users ||--o{ note_content_chunks : "owns (unified search - migration 037)"
+    users ||--o{ note_content_chunks : "owns"
     users ||--o{ ai_review_reports : "has"
+    users ||--o{ ai_contexts : "has (per-user)"
 
+    ai_contexts ||--o{ ai_context_versions : "has versions"
+    ai_contexts ||--o{ prompt_evaluations : "evaluated by"
+    ai_contexts ||--o{ prompt_experiments : "tested in"
+    ai_contexts ||--o{ prompt_comparisons : "compared in"
     note_types ||--o{ notes : "defines type"
     goals ||--o{ milestones : "contains"
     milestones ||--o{ tasks : "contains"
@@ -472,264 +341,121 @@ erDiagram
     notes }o--o{ tags : "note_tags"
 ```
 
+### 主要な設計原則
+
+| 原則 | 詳細 |
+|------|------|
+| **マルチテナント** | 全テーブルに`user_id`カラム。全クエリに`WHERE user_id = $1` |
+| **UUID主キー** | PostgreSQL uuid-ossp拡張の`uuid_generate_v4()` |
+| **UTC保存** | 全日時カラムは`TIMESTAMPTZ`型。フロントで変換 |
+| **タイムスタンプ自動更新** | `update_updated_at()` トリガーによる `updated_at` 自動更新 |
+| **非正規化** | TimeBlock/TimeEntry/Noteにgoal_name, goal_colorを複製（JOIN回避） |
+| **同期トリガー** | Goal/Milestone/Task名・色変更時に非正規化フィールドを自動同期 |
+| **データ駆動タイプ** | `note_types`テーブルでノートタイプを管理（ハードコード不要） |
+| **ベクトル検索** | `note_content_chunks`テーブルにpgvectorでembedding保存 |
+
 ### note_types テーブル（データ駆動ノートタイプ）
 
-ノートタイプをハードコードではなくデータベースで管理。新しいタイプはマイグレーションでシードするだけで追加可能。
+ノートタイプをハードコードではなくデータベースで管理。新タイプはマイグレーションでシードするだけで追加可能。
 
-```sql
-CREATE TABLE note_types (
-    id UUID PRIMARY KEY,
-    slug VARCHAR(50) NOT NULL UNIQUE,          -- 'diary', 'learning', 'general', 'book_review'
-    display_name VARCHAR(100) NOT NULL,        -- 日本語表示名
-    display_name_en VARCHAR(100),              -- 英語表示名
-    description TEXT,
-    icon VARCHAR(50) NOT NULL DEFAULT 'file-text',  -- Lucideアイコン名
-    color VARCHAR(7) DEFAULT '#6B7280',
-    constraints JSONB NOT NULL DEFAULT '{}',   -- {dateRequired, titleRequired, contentRequired, dailyUnique}
-    metadata_schema JSONB NOT NULL DEFAULT '[]', -- [{key, label, labelEn, type, required, constraints}]
-    sort_order INT DEFAULT 0,
-    is_system BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
-```
-
-**制約 (`constraints` JSONB):**
-- `dateRequired` - 日付フィールドの必須化（diary, learning）
-- `titleRequired` - タイトルの必須化
-- `contentRequired` - コンテンツの必須化
-- `dailyUnique` - 1日1件制約（diary, learning）
-
-**メタデータスキーマ (`metadata_schema` JSONB配列):**
-タイプごとに追加フィールドを定義。例: book_reviewの著者、評価、ISBN等。
-
-| key | type | 説明 |
-|-----|------|------|
-| string | テキスト入力 | |
-| integer | 数値入力 | min/max制約可 |
-| float | 小数入力 | min/max制約可 |
-| boolean | チェックボックス | |
-| enum | 選択リスト | values制約で選択肢定義 |
-| date | 日付入力 | |
-| url | URL入力 | |
+| カラム | 説明 |
+|-------|------|
+| `slug` | タイプ識別子（`diary`, `learning`, `general`, `book_review`） |
+| `display_name` | 日本語表示名 |
+| `icon` | Lucideアイコン名 |
+| `constraints` (JSONB) | `dateRequired`, `titleRequired`, `contentRequired`, `dailyUnique` |
+| `metadata_schema` (JSONB) | タイプ固有の追加フィールド定義（著者、評価、ISBN等） |
 
 **初期シードデータ:**
 
-| slug | display_name | icon | dateRequired | dailyUnique | metadata_schema |
-|------|-------------|------|:---:|:---:|---|
-| diary | 日記 | calendar-days | Yes | Yes | [] |
-| learning | 学習記録 | book-open | Yes | Yes | [] |
-| general | 一般ノート | file-text | No | No | [] |
-| book_review | 読書レビュー | book-open-check | No | No | author, rating, isbn, publisher, finished_date, category |
+| slug | 表示名 | dateRequired | dailyUnique | 追加フィールド |
+|------|-------|:---:|:---:|---|
+| diary | 日記 | Yes | Yes | なし |
+| learning | 学習記録 | Yes | Yes | なし |
+| general | 一般ノート | No | No | なし |
+| book_review | 読書レビュー | No | No | author, rating, isbn, publisher, finished_date, category |
 
-**note-service での活用:**
-- 起動時にキャッシュ（`sync.RWMutex`で保護）
-- `validateCreateInput()` で制約をデータ駆動チェック
-- `validateMetadata()` でメタデータスキーマに基づくバリデーション
-- `GET /note-types` エンドポイントでフロントエンドに提供
+### ai_contexts テーブル（Per-user AI コンテキスト）
 
-### note_content_chunks テーブル（統合検索）
+AIエージェントのシステムプロンプトを管理。`user_id = NULL` はシステムテンプレート、ユーザーごとに lazy copy で専用行が作成される。
 
-ノート検索のためのベクトル埋め込みとチャンクを管理。migration 037 で `documents` テーブルを廃止し、note_content_chunks に統合。
+| カラム | 説明 |
+|-------|------|
+| `situation` | 使用場面（`chat`, `persona`, `morning`, `weekly`, etc.） |
+| `system_prompt` | システムプロンプト本文 |
+| `allowed_tools` | 使用可能なツール一覧 (`TEXT[]`) |
+| `user_id` | NULL=システムテンプレート、UUID=ユーザー固有 |
+| `source_template_id` | コピー元テンプレートへの参照 |
+| `is_default` / `is_active` | デフォルト・有効フラグ |
 
-```sql
-CREATE TABLE note_content_chunks (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL,                     -- migration 037で追加
-    note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-    content_type VARCHAR(50),                  -- migration 037で追加 ('note', 'attachment', etc.)
-    chunk_text TEXT NOT NULL,
-    chunk_index INT NOT NULL,
-    embedding VECTOR(1536),                    -- OpenAI text-embedding-3-small
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
-```
-
-**migration 037 の変更点:**
-- `documents` テーブルを削除（note_id, content_type, file_pathなどを持っていた）
-- `note_content_chunks` に `user_id UUID NOT NULL` カラムを追加
-- `note_content_chunks` に `content_type VARCHAR(50)` カラムを追加
-- 検索処理を note_content_chunks のみに統合
-
-### 主要な設計原則
-
-- **マルチテナント**: 全テーブルに`user_id`カラムでデータ完全分離
-- **UUID主キー**: PostgreSQLのuuid-ossp拡張を使用
-- **非正規化**: クエリパフォーマンスのため`project_name`、`goal_tag`を複製
-- **タイムスタンプ自動更新**: トリガーによる`updated_at`自動更新
-
-### インデックスと制約
-
-- 適切な場所で`ON DELETE CASCADE`の外部キー
-- 複合インデックス: `(user_id, date)`, `(user_id, status)`
-- 配列カラム（tag_ids, tags）にGINインデックス
-- 全文検索インデックス: `to_tsvector('simple', title || ' ' || content)`
-- ユニーク制約: `(user_id, email)`, 日記の`(user_id, date)`
-
-### タイムスタンプ自動更新
-
-```sql
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_timestamp
-    BEFORE UPDATE ON <table>
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-```
+関連テーブル: `ai_context_versions`（バージョン履歴）、`prompt_evaluations`（定期評価）、`prompt_experiments`（A/Bテスト実験、レガシー）、`prompt_comparisons`（バージョンベースA/B比較）。いずれも `user_id` カラムを持つ。
 
 ### 非正規化フィールド自動同期トリガー
 
-goals/milestones/tasks の name/color 変更時に、非正規化フィールドを持つテーブルを自動更新するAFTER UPDATEトリガー（`033_denormalized_field_sync_triggers.sql`）。
+```mermaid
+flowchart LR
+    subgraph "トリガー発火"
+        GoalUpdate["goals の name/color 変更"]
+        MSUpdate["milestones の name 変更"]
+        TaskUpdate["tasks の name 変更"]
+    end
 
-| トリガー関数 | 発火条件 | 更新先テーブル | 更新フィールド |
-|-------------|---------|--------------|--------------|
-| `sync_goal_denormalized_fields()` | goals の name または color が変更 | time_blocks, time_entries, running_timers, notes | goal_name, goal_color |
-| `sync_milestone_denormalized_fields()` | milestones の name が変更 | time_blocks, time_entries, running_timers, notes | milestone_name |
-| `sync_task_denormalized_fields()` | tasks の name が変更 | time_blocks, time_entries, running_timers | task_name |
+    subgraph "自動更新先"
+        TB["time_blocks"]
+        TE["time_entries"]
+        RT["running_timers"]
+        Notes["notes"]
+    end
 
-- `IS DISTINCT FROM` で実際に値が変わった時のみ実行（不要なUPDATEを防止）
-- Go/AI両方のDB書き込みを一元的にカバー
+    GoalUpdate -->|goal_name, goal_color| TB
+    GoalUpdate -->|goal_name, goal_color| TE
+    GoalUpdate -->|goal_name, goal_color| RT
+    GoalUpdate -->|goal_name, goal_color| Notes
+    MSUpdate -->|milestone_name| TB
+    MSUpdate -->|milestone_name| TE
+    MSUpdate -->|milestone_name| RT
+    TaskUpdate -->|task_name| TB
+    TaskUpdate -->|task_name| TE
+    TaskUpdate -->|task_name| RT
+```
+
+`IS DISTINCT FROM` で実際に値が変わった時のみ実行（不要なUPDATEを防止）。Go/AI両方のDB書き込みを一元的にカバー。
+
+### インデックス戦略
+
+| インデックス種類 | 対象 | 目的 |
+|----------------|------|------|
+| 複合インデックス | `(user_id, date)`, `(user_id, status)` | 日次・ステータスクエリの高速化 |
+| GINインデックス | 配列カラム (`tag_ids`) | 配列要素の検索 |
+| 全文検索 | `to_tsvector('simple', title \|\| ' ' \|\| content)` | ノート検索 |
+| ベクトル | `embedding vector(1536)` | セマンティック検索 |
+| 外部キー | 各テーブル | `ON DELETE CASCADE` |
 
 ---
 
 ## 共通パターン
 
-### マルチテナント
-
-全クエリに`WHERE user_id = $1`を含める：
-```go
-query := `SELECT * FROM tasks WHERE user_id = $1 AND id = $2`
-```
-
-### 非正規化
-
-TimeBlock、TimeEntry、Noteにゴール/マイルストーン情報を直接保存：
-- `goal_id`, `goal_name`, `goal_color`
-- `milestone_id`, `milestone_name`
-
-**理由:** 一覧クエリでJOINを回避。ゴール/マイルストーン更新後も表示データが残る。
-
 ### オプショナルフィールド更新
 
-「未指定」と「nullに設定」を区別するためポインタを使用：
-```go
-type UpdateInput struct {
-    Name  *string `json:"name,omitempty"`
-    Theme *string `json:"theme,omitempty"`
-}
-
-// サービス内:
-if input.Name != nil {
-    entity.Name = *input.Name
-}
-```
-
-### エラーマッピング
-
-```go
-func handleError(w http.ResponseWriter, r *http.Request, err error) {
-    switch {
-    case errors.Is(err, service.ErrNotFound):
-        middleware.Error(w, r, http.StatusNotFound, "NOT_FOUND", "...")
-    case errors.Is(err, service.ErrInvalidInput):
-        middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "...")
-    default:
-        middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL", "...")
-    }
-}
-```
+「未指定」と「nullに設定」を区別するためポインタ型を使用。`UpdateInput` のフィールドはすべてポインタ型で、`nil` の場合は更新をスキップし、`*string` が空文字の場合はnullに設定する。SQL Builder がこのパターンを統一的に処理。
 
 ### コンテキスト伝播
 
-```go
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    userID := middleware.GetUserID(ctx)
+全メソッドの第1引数に `ctx context.Context` を渡す。リクエストID、タイムアウト、キャンセル、OpenTelemetryスパンがコンテキスト経由で伝播。
 
-    entity, err := h.service.Create(ctx, userID, input)
-    // ctxはリクエストID、タイムアウト、キャンセルを伝播
-}
+### エラーハンドリングフロー
+
+```mermaid
+flowchart LR
+    Repo["Repository<br/>pgx.ErrNoRows<br/>→ ErrNotFound"] --> Service["Service<br/>ドメインエラーを返す"]
+    Service --> Handler["Handler<br/>errors.Is() で判定<br/>→ HTTPステータスにマッピング"]
+    Handler --> Response["レスポンス<br/>{error: {code, message}, meta}"]
 ```
 
----
-
-## 開発コマンド
-
-### ビルドとテスト
-
-```bash
-cd backend
-
-# 全サービスビルド
-make build
-
-# 特定サービス実行
-make run SERVICE=user-service
-
-# テスト実行
-make test
-
-# Lint
-make lint
-
-# フォーマット
-make fmt
-```
-
-### Docker
-
-```bash
-# プロジェクトルートから
-make up          # 全サービス起動
-make down        # 全サービス停止
-make logs        # ログ表示
-make rebuild     # 再ビルドして再起動
-```
-
-### 環境変数
-
-```bash
-SERVER_PORT=8081
-SERVER_ENV=development
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=kensan
-DB_PASSWORD=kensan
-DB_NAME=kensan
-JWT_SECRET=your-secret-key
-```
-
-### 新サービス追加手順
-
-1. `services/<name>/`に標準構成でディレクトリ作成
-2. `internal/model.go`にモデル定義
-3. リポジトリインターフェースとPostgreSQL実装
-4. ビジネスロジックのサービスレイヤー実装
-5. HTTPハンドラ実装
-6. `cmd/main.go`でbootstrapを使用して配線
-7. Dockerfile追加
-8. docker-compose.ymlに追加
-9. 必要に応じてデータベースマイグレーション作成
-
----
-
-## 依存関係
-
-```
-github.com/go-chi/chi/v5                         v5.1.0
-github.com/go-chi/cors                           v1.2.1
-github.com/golang-jwt/jwt/v5                     v5.2.1
-github.com/google/uuid                           v1.6.0
-github.com/jackc/pgx/v5                          v5.7.4
-go.opentelemetry.io/contrib/bridges/otelslog     v0.14.0
-go.opentelemetry.io/otel/sdk/log                 v0.15.0
-go.opentelemetry.io/otel/exporters/otlp/otlplog  v0.15.0
-golang.org/x/crypto                              v0.46.0
-```
+| サービスエラー | HTTP Status | エラーコード |
+|--------------|-------------|------------|
+| `ErrNotFound` | 404 | `NOT_FOUND` |
+| `ErrInvalidInput` | 400 | `INVALID_INPUT` |
+| `ErrUnauthorized` | 401 | `UNAUTHORIZED` |
+| `ErrAlreadyExists` | 409 | `ALREADY_EXISTS` |
+| その他 | 500 | `INTERNAL` |

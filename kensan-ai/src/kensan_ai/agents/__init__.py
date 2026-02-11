@@ -7,15 +7,26 @@ To add a new agent:
 """
 
 from kensan_ai.agents.base import AgentRunner, AgentResult, ToolCall
+from kensan_ai.agents.gemini_runner import GeminiAgentRunner
 from kensan_ai.agents.message_history import MessageHistory
-from kensan_ai.agents import weekly_review
 from kensan_ai.agents import chat
+from kensan_ai.config import get_settings
+
+
+def create_agent_runner(**kwargs) -> AgentRunner | GeminiAgentRunner:
+    """Factory function to create the appropriate agent runner based on ai_provider setting."""
+    settings = get_settings()
+    if settings.ai_provider == "google":
+        return GeminiAgentRunner(**kwargs)
+    return AgentRunner(**kwargs)
+
 
 __all__ = [
     "AgentRunner",
+    "GeminiAgentRunner",
     "AgentResult",
     "ToolCall",
     "MessageHistory",
-    "weekly_review",
+    "create_agent_runner",
     "chat",
 ]

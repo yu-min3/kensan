@@ -6,10 +6,9 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-import anthropic
-
 from kensan_ai.config import get_settings
 from kensan_ai.db.connection import get_connection
+from kensan_ai.lib.ai_provider import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +33,11 @@ SUMMARIZATION_PROMPT = """以下のユーザーに関する事実情報を基に
 
 
 class ProfileSummarizer:
-    """Summarizes user facts into profile summaries using Claude API."""
+    """Summarizes user facts into profile summaries using LLM API."""
 
     def __init__(self):
-        """Initialize the profile summarizer with Anthropic client."""
-        settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = "claude-sonnet-4-20250514"
+        """Initialize the profile summarizer with the configured AI provider."""
+        self.llm = LLMClient()
 
     async def get_users_with_new_facts(
         self,
@@ -149,13 +146,8 @@ class ProfileSummarizer:
             new_facts=facts_text,
         )
 
-        response = await self.client.messages.create(
-            model=self.model,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response.content[0].text.strip() if response.content else ""
+        result = await self.llm.generate(prompt, max_tokens=500)
+        return result.strip()
 
     async def update_user_memory(
         self,

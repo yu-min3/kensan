@@ -20,7 +20,7 @@ import {
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { TaskSelect } from '@/components/common/TaskSelect'
 import { useTimerStore } from '@/stores/useTimerStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 
 interface StartTimerDialogProps {
   open: boolean
@@ -29,7 +29,7 @@ interface StartTimerDialogProps {
 
 export function StartTimerDialog({ open, onOpenChange }: StartTimerDialogProps) {
   const { startTimer, isLoading } = useTimerStore()
-  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskStore()
+  const { tasks, goals, milestones, getMilestoneById, getGoalById } = useTaskManagerStore()
 
   const [inputMode, setInputMode] = useState<'manual' | 'existing'>('existing')
   const [taskName, setTaskName] = useState('')

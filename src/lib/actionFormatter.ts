@@ -68,7 +68,18 @@ const formatters: Record<string, (input: Input) => string> = {
     return name ? `タイムブロックを更新: ${name}` : 'タイムブロックを更新'
   },
 
-  delete_time_block: () => 'タイムブロックを削除',
+  delete_time_block: (input) => {
+    const name = str(input, 'task_name') || str(input, 'name')
+    const startTime = str(input, 'start_time')
+    const endTime = str(input, 'end_time')
+    if (name && startTime && endTime) {
+      return `タイムブロックを削除: ${startTime}-${endTime} ${name}`
+    }
+    if (name) {
+      return `タイムブロックを削除: ${name}`
+    }
+    return 'タイムブロックを削除'
+  },
 
   create_task: (input) => {
     const name = str(input, 'name')
@@ -139,7 +150,7 @@ const formatters: Record<string, (input: Input) => string> = {
     return name ? `マイルストーンを更新: ${name}` : 'マイルストーンを更新'
   },
 
-  generate_weekly_review: () => '週次レビューを生成',
+  generate_review: () => 'レビューを生成',
 
   create_time_entry: (input) => {
     const name = str(input, 'task_name') || str(input, 'name')

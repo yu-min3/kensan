@@ -59,13 +59,22 @@ from kensan_ai.tools.search_tools import (
 from kensan_ai.tools.review_tools import (
     get_reviews,
     get_review,
-    generate_weekly_review,
+    generate_review,
     ALL_REVIEW_TOOLS,
 )
 from kensan_ai.tools.analytics_tools import (
     get_analytics_summary,
     get_daily_summary,
     ALL_ANALYTICS_TOOLS,
+)
+from kensan_ai.tools.web_tools import (
+    web_search,
+    web_fetch,
+    ALL_WEB_TOOLS,
+)
+from kensan_ai.tools.pattern_tools import (
+    get_user_patterns,
+    ALL_PATTERN_TOOLS,
 )
 
 # Aggregate all tools
@@ -75,6 +84,8 @@ ALL_TOOLS = [
     *ALL_SEARCH_TOOLS,
     *ALL_REVIEW_TOOLS,
     *ALL_ANALYTICS_TOOLS,
+    *ALL_PATTERN_TOOLS,
+    *ALL_WEB_TOOLS,
 ]
 
 __all__ = [
@@ -125,12 +136,19 @@ __all__ = [
     # Review Tools
     "get_reviews",
     "get_review",
-    "generate_weekly_review",
+    "generate_review",
     "ALL_REVIEW_TOOLS",
     # Analytics Tools
     "get_analytics_summary",
     "get_daily_summary",
     "ALL_ANALYTICS_TOOLS",
+    # Web Tools
+    "web_search",
+    "web_fetch",
+    "ALL_WEB_TOOLS",
+    # Pattern Tools
+    "get_user_patterns",
+    "ALL_PATTERN_TOOLS",
     # All
     "ALL_TOOLS",
 ]

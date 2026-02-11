@@ -1,6 +1,6 @@
 # Kensan 開発状況
 
-**最終更新: 2026-02-01**
+**最終更新: 2026-02-03**
 
 ---
 
@@ -36,14 +36,15 @@ Kensanは、エンジニアの自己研鑽を支援する統合プラットフ�
 | chi | v5 | HTTPルーター |
 | PostgreSQL | 16 | データベース（+ pgvector） |
 | pgx | v5 | DBドライバ |
-| zerolog | - | ロギング |
+| slog + otelslog | Go標準 + v0.14.0 | 構造化ログ（OpenTelemetry連携） |
 
 ### AIサービス (Python)
 | 技術 | 用途 |
 |------|------|
 | Python + FastAPI | AI APIサーバー |
 | asyncpg | DB直接接続 |
-| Claude API | AI推論 |
+| Claude API / Gemini API | AI推論（`AI_PROVIDER`設定で切替） |
+| OpenAI API | テキスト埋め込み |
 | pgvector | ベクトル検索 |
 
 ### インフラ / Observability
@@ -67,7 +68,7 @@ kensan-mockup/
 │   ├── api/                      # APIクライアント層
 │   │   ├── config.ts             # 環境変数設定
 │   │   ├── client.ts             # HTTPクライアント（JWT認証対応）
-│   │   └── services/             # 10個のAPIサービス
+│   │   └── services/             # 12個のAPIサービス
 │   ├── mocks/                    # MSWモック（オプトイン）
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui コンポーネント
@@ -77,28 +78,27 @@ kensan-mockup/
 │   │   ├── task/                 # タスク管理コンポーネント
 │   │   ├── editor/               # エディタ（Markdown, Drawio）
 │   │   └── note/                 # ノートコンポーネント
-│   ├── pages/                    # 8画面
-│   ├── stores/                   # 15個のZustandストア
+│   ├── pages/                    # 10ページ
+│   ├── stores/                   # 18個のZustandストア
 │   ├── hooks/                    # カスタムフック
 │   ├── lib/                      # ユーティリティ（timezone等）
 │   └── types/                    # 型定義
 ├── backend/                      # バックエンド (Go)
-│   ├── services/                 # 7つのGoマイクロサービス
+│   ├── services/                 # 6つのGoマイクロサービス
 │   │   ├── user/                 # 認証・設定 (:8081)
 │   │   ├── task/                 # 目標・タスク管理 (:8082)
 │   │   ├── timeblock/            # タイムブロック・タイマー (:8084)
 │   │   ├── analytics/            # 分析・レポート (:8088)
 │   │   ├── memo/                 # クイックメモ (:8090)
 │   │   ├── note/                 # 統合ノート (:8091)
-│   │   └── routine/              # 定期タスク（docker-compose未登録）
-│   ├── shared/                   # 共有パッケージ（auth, config, database, middleware, errors, logging）
-│   ├── migrations/               # DBマイグレーション（36ファイル）
+│   ├── shared/                   # 共有パッケージ（auth, bootstrap, config, database, middleware, errors, telemetry, types）
+│   ├── migrations/               # DBマイグレーション（61ファイル）
 │   └── Makefile
 ├── kensan-ai/                    # AIサービス (Python/FastAPI)
 │   └── src/kensan_ai/
 │       ├── agents/               # AgentRunner
 │       ├── api/                  # FastAPIエンドポイント
-│       ├── tools/                # Direct Tools（18個）
+│       ├── tools/                # Direct Tools（39個）
 │       ├── context/              # コンテキスト管理
 │       ├── extraction/           # ファクト抽出
 │       ├── embeddings/           # ベクトル埋め込み
@@ -116,10 +116,12 @@ kensan-mockup/
 | - | ログイン | `/login` | メール・パスワード認証 |
 | S01 | 設定 | `/settings` | ユーザー設定（初期設定も兼用） |
 | - | デイリー（ホーム） | `/` | 朝の計画・夜の振り返り・タイムライン |
+| W01 | 週間計画 | `/weekly` | 週間カレンダー・DnD対応 |
 | T01 | タスク管理 | `/tasks` | 目標・マイルストーン・タスク・ガントチャート |
 | N01 | ノート一覧 | `/notes` | 日記・学習記録の一覧・検索 |
 | N02 | ノート編集 | `/notes/:id` | Markdown/Drawioエディタ |
 | A01 | 分析レポート | `/analytics` | 時間分析・週次/月次サマリー |
+| A03 | プロンプト管理 | `/prompts` | AIコンテキスト編集・バージョン管理 |
 | O01 | インタラクション探索 | `/interactions` | AI対話履歴の探索 |
 
 ---
@@ -137,13 +139,11 @@ kensan-mockup/
 | memo-service | 8090 | ✅ | クイックメモ |
 | note-service | 8091 | ✅ | 統合ノート・NoteContent・ファイルストレージ |
 
-> **Note**: `routine/`ディレクトリは存在するがdocker-compose.ymlには未登録。定期タスク機能はtask-serviceのTodo（frequency）で代替。
-
 ### Python AIサービス
 
 | サービス | ポート | 状態 | 概要 |
 |----------|--------|------|------|
-| kensan-ai | 8089 | ✅ | AIエージェント（ストリーミング対話）、Direct Tools（18個）、ファクト抽出、ベクトル検索 |
+| kensan-ai | 8089 | ✅ | AIエージェント（ストリーミング対話）、Direct Tools（39個）、ファクト抽出、ベクトル検索、Web検索 |
 
 ### インフラサービス
 
@@ -161,7 +161,7 @@ kensan-mockup/
 
 ## フロントエンド詳細
 
-### Zustandストア（15個）
+### Zustandストア（18個）
 
 | ストア | 役割 |
 |--------|------|
@@ -170,6 +170,7 @@ kensan-mockup/
 | `useGoalStore` | 目標CRUD |
 | `useMilestoneStore` | マイルストーンCRUD |
 | `useTagStore` | タグCRUD |
+| `useNoteTagStore` | ノートタグ（タスクタグと分離） |
 | `useTaskStore` | タスクCRUD |
 | `useTaskManagerStore` | 上記4ストアの統合フック |
 | `useTimeBlockStore` | タイムブロック・時間記録 |
@@ -179,11 +180,13 @@ kensan-mockup/
 | `useMemoStore` | メモ |
 | `useAnalyticsStore` | 分析データ |
 | `useChatStore` | AIチャット |
+| `usePromptStore` | AIコンテキスト・バージョン管理 |
+| `useChallengeStore` | チャレンジ（プロンプト最適化） |
 | `createCrudStore` | ストアファクトリ |
 
-### APIサービス（10個）
+### APIサービス（12個）
 
-`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, observability
+`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, prompts, challenges, observability
 
 ---
 

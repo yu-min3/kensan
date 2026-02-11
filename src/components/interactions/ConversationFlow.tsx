@@ -85,50 +85,137 @@ function ExpandableContent({
   )
 }
 
+const CATEGORIES = [
+  {
+    id: 'instructions',
+    label: 'ルール・指示',
+    bar: 'bg-blue-400 dark:bg-blue-600',
+    dot: 'bg-blue-400 dark:bg-blue-600',
+    keywords: ['ルール', '指示', '出力', '思考', 'プロセス', 'モード', '手順', 'トーン', '役割', 'スタイル', 'ガイド', 'フォーマット', 'ツール連携'],
+  },
+  {
+    id: 'context',
+    label: 'コンテキスト',
+    bar: 'bg-emerald-400 dark:bg-emerald-600',
+    dot: 'bg-emerald-400 dark:bg-emerald-600',
+    keywords: ['タスク', 'スケジュール', '予定', '計画', '実績', '目標', '進捗', 'サマリー', 'やりとり', 'データ', '日時', '定期'],
+  },
+  {
+    id: 'profile',
+    label: 'ユーザープロファイル',
+    bar: 'bg-amber-400 dark:bg-amber-600',
+    dot: 'bg-amber-400 dark:bg-amber-600',
+    keywords: ['ユーザー', '行動', '感情', '関心', '特性'],
+  },
+  {
+    id: 'other',
+    label: 'その他',
+    bar: 'bg-slate-400 dark:bg-slate-600',
+    dot: 'bg-slate-400 dark:bg-slate-600',
+    keywords: [],
+  },
+] as const
+
+type CategoryId = (typeof CATEGORIES)[number]['id']
+
+function categorize(sectionName: string): CategoryId {
+  const name = sectionName.toLowerCase()
+  for (const cat of CATEGORIES) {
+    if (cat.id === 'other') continue
+    if (cat.keywords.some((kw) => name.includes(kw.toLowerCase()))) return cat.id
+  }
+  return 'other'
+}
+
 /** Horizontal bar showing section sizes proportionally */
 function SectionBreakdown({ sections }: { sections: Record<string, number> }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const entries = Object.entries(sections).sort(([, a], [, b]) => b - a)
   const total = entries.reduce((sum, [, v]) => sum + v, 0)
   if (total === 0) return null
 
-  const colors = [
-    'bg-blue-400 dark:bg-blue-600',
-    'bg-emerald-400 dark:bg-emerald-600',
-    'bg-amber-400 dark:bg-amber-600',
-    'bg-purple-400 dark:bg-purple-600',
-    'bg-rose-400 dark:bg-rose-600',
-    'bg-cyan-400 dark:bg-cyan-600',
-    'bg-orange-400 dark:bg-orange-600',
-    'bg-indigo-400 dark:bg-indigo-600',
-  ]
+  // Group entries by category
+  const grouped = new Map<CategoryId, { total: number; items: [string, number][] }>()
+  for (const cat of CATEGORIES) {
+    grouped.set(cat.id, { total: 0, items: [] })
+  }
+  for (const [name, size] of entries) {
+    const catId = categorize(name)
+    const group = grouped.get(catId)!
+    group.total += size
+    group.items.push([name, size])
+  }
+
+  // Sorted categories by total descending, omit empty
+  const sortedCategories = CATEGORIES
+    .filter((cat) => grouped.get(cat.id)!.total > 0)
+    .sort((a, b) => grouped.get(b.id)!.total - grouped.get(a.id)!.total)
+
+  const catMap = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]))
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <div className="space-y-1.5">
-      {/* Stacked bar */}
+      {/* Stacked bar — category level */}
       <div className="flex h-3 rounded-full overflow-hidden bg-muted">
-        {entries.map(([name, size], i) => {
-          const pct = (size / total) * 100
+        {sortedCategories.map((cat) => {
+          const pct = (grouped.get(cat.id)!.total / total) * 100
           if (pct < 1) return null
           return (
             <div
-              key={name}
-              className={cn('h-full', colors[i % colors.length])}
+              key={cat.id}
+              className={cn('h-full', cat.bar)}
               style={{ width: `${pct}%` }}
-              title={`${name}: ${size.toLocaleString()} chars (${pct.toFixed(1)}%)`}
+              title={`${cat.label}: ${grouped.get(cat.id)!.total.toLocaleString()} chars (${pct.toFixed(1)}%)`}
             />
           )
         })}
       </div>
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {entries.map(([name, size], i) => {
-          const pct = (size / total) * 100
+      {/* Legend — collapsible categories */}
+      <div className="space-y-0.5">
+        {sortedCategories.map((cat) => {
+          const group = grouped.get(cat.id)!
+          const pct = (group.total / total) * 100
+          const isOpen = expanded.has(cat.id)
           return (
-            <div key={name} className="flex items-center gap-1 text-xs">
-              <div className={cn('w-2 h-2 rounded-sm', colors[i % colors.length])} />
-              <span className="text-muted-foreground">{name}</span>
-              <span className="tabular-nums font-medium">{size.toLocaleString()}</span>
-              <span className="text-muted-foreground">({pct.toFixed(0)}%)</span>
+            <div key={cat.id}>
+              <button
+                type="button"
+                onClick={() => toggleExpanded(cat.id)}
+                className="flex items-center gap-1 text-xs w-full hover:bg-muted/50 rounded px-0.5 -mx-0.5"
+              >
+                {isOpen ? (
+                  <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                )}
+                <div className={cn('w-2 h-2 rounded-sm shrink-0', catMap[cat.id].dot)} />
+                <span className="text-muted-foreground">{cat.label}</span>
+                <span className="tabular-nums font-medium">{group.total.toLocaleString()}</span>
+                <span className="text-muted-foreground">({pct.toFixed(0)}%)</span>
+              </button>
+              {isOpen && (
+                <div className="ml-5 space-y-0.5 mt-0.5">
+                  {group.items.map(([name, size]) => {
+                    const itemPct = (size / total) * 100
+                    return (
+                      <div key={name} className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span>{name}</span>
+                        <span className="tabular-nums font-medium text-foreground">{size.toLocaleString()}</span>
+                        <span>({itemPct.toFixed(0)}%)</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )
         })}
@@ -275,7 +362,7 @@ function SystemPromptEntry({ promptEvent, systemPromptEvent }: { promptEvent: Ai
               )}
             </button>
             {showFull && (
-              <pre className="mt-2 text-xs bg-muted/50 rounded p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+              <pre className="mt-2 text-xs bg-muted/50 rounded p-3 overflow-x-auto whitespace-pre-wrap break-words">
                 {systemPromptEvent.system_prompt}
               </pre>
             )}
@@ -398,13 +485,13 @@ function ToolCallEntry({ event }: { event: AiToolCallEvent }) {
           <div className="mt-2 space-y-2">
             <div>
               <div className="text-xs text-muted-foreground mb-0.5">Input:</div>
-              <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+              <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
                 {event.tool_input}
               </pre>
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-0.5">Output:</div>
-              <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+              <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
                 {event.tool_output || (event.error ? `Error: ${event.error}` : '(empty)')}
               </pre>
             </div>

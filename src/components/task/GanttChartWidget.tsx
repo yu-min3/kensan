@@ -8,6 +8,7 @@ interface GanttChartWidgetProps {
   goals: Goal[]
   milestones: Milestone[]
   tasks: Task[]
+  hideCompleted?: boolean
   className?: string
 }
 
@@ -18,7 +19,7 @@ interface MilestoneWithProgress extends Milestone {
   completedTasks: number
 }
 
-export function GanttChartWidget({ goals, milestones, tasks, className }: GanttChartWidgetProps) {
+export function GanttChartWidget({ goals, milestones, tasks, hideCompleted = false, className }: GanttChartWidgetProps) {
   // 表示期間を計算（今日から3ヶ月）
   const today = new Date()
   const startDate = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -57,7 +58,12 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
   // マイルストーンを目標ごとにグループ化し、進捗を計算
   const milestonesWithProgress = useMemo(() => {
     return milestones
-      .filter(m => m.status !== 'archived' && (m.targetDate || m.startDate))
+      .filter(m => {
+        if (m.status === 'archived') return false
+        if (hideCompleted && m.status === 'completed') return false
+        if (!m.targetDate && !m.startDate) return false
+        return true
+      })
       .map(m => {
         const goal = goals.find(g => g.id === m.goalId)
         if (!goal) return null
@@ -83,7 +89,7 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
         }
         return (a.targetDate || '').localeCompare(b.targetDate || '')
       })
-  }, [goals, milestones, tasks])
+  }, [goals, milestones, tasks, hideCompleted])
 
   // 日付をX座標（パーセント）に変換
   const dateToPercent = (dateStr: string) => {
@@ -167,14 +173,26 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
                   const endPercent = milestone.targetDate ? dateToPercent(milestone.targetDate) : todayPercent
                   const isPast = milestone.targetDate ? new Date(milestone.targetDate) < today : false
                   const isCompleted = milestone.status === 'completed'
+                  const isInProgress = !isCompleted && !isPast && milestone.startDate != null && new Date(milestone.startDate) <= today
+
+                  // startDateなし = 締切のみ表示（進行中判定しない）
+                  const hasStartDate = milestone.startDate != null
 
                   return (
-                    <div key={milestone.id} className="flex items-center h-7 group">
+                    <div
+                      key={milestone.id}
+                      className={cn(
+                        "flex items-center h-7 group",
+                        isInProgress && "border-l-[3px] border-sky-300"
+                      )}
+                      data-testid={isInProgress ? 'milestone-in-progress' : isCompleted ? 'milestone-completed' : undefined}
+                    >
                       {/* マイルストーン名 + 進捗 */}
                       <div className="w-48 flex-shrink-0 pr-2 flex items-center gap-1">
                         <span className={cn(
-                          "text-xs truncate pl-4 flex-1",
-                          isCompleted && "line-through text-muted-foreground"
+                          "text-xs truncate flex-1 pl-4",
+                          isCompleted && "line-through text-muted-foreground",
+                          isInProgress && "font-semibold text-sky-700 dark:text-sky-300"
                         )}>
                           {milestone.name}
                         </span>
@@ -201,53 +219,70 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
                           style={{ left: `${todayPercent}%` }}
                         />
 
-                        {/* 進捗バー（開始日〜今日または期限まで） */}
-                        <div
-                          className={cn(
-                            "absolute top-1 bottom-1 rounded transition-all",
-                            isCompleted
-                              ? "bg-green-500/70"
-                              : isPast
-                                ? "bg-red-400/70"
-                                : "bg-primary/70"
-                          )}
-                          style={{
-                            left: `${startPercent}%`,
-                            width: `${Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
-                          }}
-                        />
+                        {hasStartDate ? (
+                          <>
+                            {/* 進捗バー（開始日〜今日または期限まで） */}
+                            <div
+                              className={cn(
+                                "absolute top-1 bottom-1 rounded transition-all",
+                                isCompleted
+                                  ? "bg-green-500/70"
+                                  : isPast
+                                    ? "bg-red-400/70"
+                                    : "bg-primary/70"
+                              )}
+                              style={{
+                                left: `${startPercent}%`,
+                                width: `${Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
+                              }}
+                            />
 
-                        {/* 残りのバー（予定） */}
-                        <div
-                          className={cn(
-                            "absolute top-1 bottom-1 rounded-r transition-all",
-                            isCompleted
-                              ? "bg-green-200/50"
-                              : isPast
-                                ? "bg-red-200/50"
-                                : "bg-primary/20"
-                          )}
-                          style={{
-                            left: `${startPercent + Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
-                            width: `${Math.max(0, endPercent - startPercent - Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100))}%`,
-                          }}
-                        />
+                            {/* 残りのバー（予定） */}
+                            <div
+                              className={cn(
+                                "absolute top-1 bottom-1 rounded-r transition-all",
+                                isCompleted
+                                  ? "bg-green-200/50"
+                                  : isPast
+                                    ? "bg-red-200/50"
+                                    : "bg-primary/20"
+                              )}
+                              style={{
+                                left: `${startPercent + Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100)}%`,
+                                width: `${Math.max(0, endPercent - startPercent - Math.max(0, Math.min(endPercent, todayPercent) - startPercent) * (milestone.progress / 100))}%`,
+                              }}
+                            />
 
-                        {/* 開始日マーカー（startDateがある場合） */}
-                        {milestone.startDate && (
-                          <div
-                            className={cn(
-                              "absolute top-0 bottom-0 w-1 rounded-full opacity-50",
-                              isCompleted
-                                ? "bg-green-600"
-                                : "bg-primary"
-                            )}
-                            style={{ left: `calc(${startPercent}% - 2px)` }}
-                          />
+                            {/* 開始日マーカー */}
+                            <div
+                              className={cn(
+                                "absolute top-0 bottom-0 w-1 rounded-full opacity-50",
+                                isCompleted
+                                  ? "bg-green-600"
+                                  : "bg-primary"
+                              )}
+                              style={{ left: `calc(${startPercent}% - 2px)` }}
+                            />
+                          </>
+                        ) : (
+                          /* startDateなし: 締切位置に小さなダイヤマーカーのみ */
+                          milestone.targetDate && (
+                            <div
+                              className={cn(
+                                "absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rotate-45",
+                                isCompleted
+                                  ? "bg-green-500"
+                                  : isPast
+                                    ? "bg-red-400"
+                                    : "bg-muted-foreground/50"
+                              )}
+                              style={{ left: `calc(${endPercent}% - 5px)` }}
+                            />
+                          )
                         )}
 
-                        {/* 期限マーカー（targetDateがある場合） */}
-                        {milestone.targetDate && (
+                        {/* 期限マーカー（startDateがある場合のみバーの終端として表示） */}
+                        {milestone.targetDate && hasStartDate && (
                           <div
                             className={cn(
                               "absolute top-0 bottom-0 w-1 rounded-full",
@@ -271,6 +306,10 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
             {/* 凡例 */}
             <div className="flex items-center gap-4 mt-4 pt-2 border-t text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
+                <div className="w-3 h-0.5 border-l-[3px] border-sky-300" />
+                <span className="text-sky-700 dark:text-sky-300 font-semibold">進行中</span>
+              </div>
+              <div className="flex items-center gap-1">
                 <div className="w-3 h-3 bg-primary/70 rounded" />
                 <span>予定通り</span>
               </div>
@@ -281,6 +320,10 @@ export function GanttChartWidget({ goals, milestones, tasks, className }: GanttC
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 bg-green-500/70 rounded" />
                 <span>完了</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rotate-45 bg-muted-foreground/50" />
+                <span>締切のみ</span>
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-0.5 h-3 bg-red-400" />

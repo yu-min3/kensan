@@ -3,9 +3,6 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { formatDurationShort, formatMonthDay } from '@/lib/dateFormat'
 import { useAnalyticsStore } from '@/stores/useAnalyticsStore'
@@ -16,7 +13,6 @@ import {
   Clock,
   Target,
   TrendingUp,
-  Calendar as CalendarIcon,
   Loader2,
   BookOpen,
   ArrowRight,
@@ -36,56 +32,17 @@ import {
 } from 'recharts'
 import type { ContentType } from 'recharts/types/component/Tooltip'
 import { AIReviewSection } from '@/components/analytics/AIReviewSection'
+import {
+  AnalyticsPeriodSelector,
+  formatLocalDate,
+  formatDateRange,
+  getDateRangeForPeriod,
+} from '@/components/analytics/AnalyticsPeriodSelector'
+import type { PeriodType } from '@/components/analytics/AnalyticsPeriodSelector'
 import { cn } from '@/lib/utils'
 import type { DateRange } from 'react-day-picker'
-
-type PeriodType = 'today' | 'week' | 'month' | 'custom'
-
-// Format Date as yyyy-MM-dd in local timezone (avoids UTC shift from toISOString)
-function formatLocalDate(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-// Helper to get date range for each period
-function getDateRangeForPeriod(period: PeriodType, customRange?: DateRange): { start: Date; end: Date } {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  switch (period) {
-    case 'today':
-      return { start: today, end: today }
-    case 'week': {
-      const dayOfWeek = today.getDay()
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-      const monday = new Date(today)
-      monday.setDate(today.getDate() + mondayOffset)
-      const sunday = new Date(monday)
-      sunday.setDate(monday.getDate() + 6)
-      return { start: monday, end: sunday }
-    }
-    case 'month': {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-      return { start: firstDay, end: lastDay }
-    }
-    case 'custom':
-      if (customRange?.from && customRange?.to) {
-        return { start: customRange.from, end: customRange.to }
-      }
-      return { start: today, end: today }
-  }
-}
-
-// Format date range for display
-function formatDateRange(start: Date, end: Date): string {
-  const startStr = `${start.getMonth() + 1}/${start.getDate()}`
-  const endStr = `${end.getMonth() + 1}/${end.getDate()}`
-  if (startStr === endStr) return startStr
-  return `${startStr} - ${endStr}`
-}
+import { Calendar as CalendarIcon } from 'lucide-react'
+import { PageGuide } from '@/components/guide/PageGuide'
 
 // Custom tooltip for stacked bar chart
 function createStackedBarTooltip(
@@ -101,7 +58,12 @@ function createStackedBarTooltip(
 
     return (
       <div className="rounded-lg border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md">
-        <p className="font-medium mb-1">{label}</p>
+        <p className="font-medium mb-1">
+          {label}
+          {payload[0]?.payload?.day && label !== payload[0].payload.day && (
+            <span className="text-muted-foreground ml-1">({payload[0].payload.day})</span>
+          )}
+        </p>
         {nonZeroItems.map((item) => {
           const goal = goalList.find((g) => g.id === item.dataKey)
           return (
@@ -129,7 +91,6 @@ function createStackedBarTooltip(
 export function A01AnalyticsReport() {
   const [period, setPeriod] = useState<PeriodType>('week')
   const [customRange, setCustomRange] = useState<DateRange | undefined>()
-  const [calendarOpen, setCalendarOpen] = useState(false)
 
   const { weeklySummary, dailyStudyHours, isLoading, error, fetchDashboardData } = useAnalyticsStore()
   const { getByType } = useNoteStore()
@@ -222,23 +183,6 @@ export function A01AnalyticsReport() {
     return `${avg}h`
   }, [dailyStudyHours])
 
-  // Handle period change
-  const handlePeriodChange = (value: string) => {
-    const newPeriod = value as PeriodType
-    setPeriod(newPeriod)
-    if (newPeriod === 'custom' && !customRange) {
-      setCalendarOpen(true)
-    }
-  }
-
-  // Handle custom date range selection
-  const handleCustomRangeSelect = (range: DateRange | undefined) => {
-    setCustomRange(range)
-    if (range?.from && range?.to) {
-      setCalendarOpen(false)
-    }
-  }
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -263,6 +207,8 @@ export function A01AnalyticsReport() {
 
   return (
     <div className="space-y-6">
+      <PageGuide pageId="analytics" />
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -270,38 +216,12 @@ export function A01AnalyticsReport() {
           <h1 className="text-2xl font-bold">分析・レポート</h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Tabs value={period} onValueChange={handlePeriodChange}>
-            <TabsList>
-              <TabsTrigger value="today">今日</TabsTrigger>
-              <TabsTrigger value="week">今週</TabsTrigger>
-              <TabsTrigger value="month">今月</TabsTrigger>
-              <TabsTrigger value="custom">カスタム</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {period === 'custom' && (
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  {customRange?.from && customRange?.to
-                    ? formatDateRange(customRange.from, customRange.to)
-                    : '期間を選択'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="range"
-                  selected={customRange}
-                  onSelect={handleCustomRangeSelect}
-                  numberOfMonths={2}
-                  defaultMonth={new Date()}
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
+        <AnalyticsPeriodSelector
+          period={period}
+          onPeriodChange={setPeriod}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+        />
       </div>
 
       {/* Period indicator */}
@@ -310,7 +230,7 @@ export function A01AnalyticsReport() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div data-guide="analytics-summary" className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -478,7 +398,11 @@ export function A01AnalyticsReport() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={stackedChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" fontSize={12} />
+              <XAxis
+                dataKey={period === 'month' || period === 'custom' ? 'date' : 'day'}
+                fontSize={12}
+                interval={period === 'month' ? 2 : 0}
+              />
               <YAxis domain={[0, 'auto']} allowDataOverflow fontSize={12} unit="h" />
               <Tooltip
                 content={createStackedBarTooltip(goalList)}
@@ -564,10 +488,12 @@ export function A01AnalyticsReport() {
       </Card>
 
       {/* AI Review Section */}
+      <div data-guide="analytics-ai-review">
       <AIReviewSection
         startDate={formatLocalDate(dateRange.start)}
         endDate={formatLocalDate(dateRange.end)}
       />
+      </div>
     </div>
   )
 }

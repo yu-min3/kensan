@@ -17,11 +17,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { TimeRangeInput } from '@/components/ui/time-range-input'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { DateTimeRangePicker } from '@/components/common/DateTimeRangePicker'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import type { TaskInputMode } from '@/hooks/useTimeBlockDialog'
 import type { Goal, Milestone } from '@/types'
-import { AlertTriangle, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 interface TimeBlockDialogProps {
   open: boolean
@@ -33,28 +33,26 @@ interface TimeBlockDialogProps {
 
   // Form state
   taskName: string
-  startTime: string
-  endTime: string
+  startDatetime: string  // YYYY-MM-DDTHH:mm (local)
+  endDatetime: string    // YYYY-MM-DDTHH:mm (local)
   taskId: string | undefined
   milestoneId: string | undefined
   taskInputMode: TaskInputMode
   selectedGoal: Goal | undefined
 
   // Entry-specific state
-  date?: string
   description?: string
 
   // Callbacks
   onTaskNameChange: (value: string) => void
-  onStartTimeChange: (value: string) => void
-  onEndTimeChange: (value: string) => void
+  onStartDatetimeChange: (value: string) => void
+  onEndDatetimeChange: (value: string) => void
   onTaskIdChange: (value: string | undefined) => void
   onMilestoneIdChange: (value: string | undefined) => void
   onTaskInputModeChange: (mode: TaskInputMode) => void
   onSave: () => void
 
   // Entry-specific callbacks
-  onDateChange?: (value: string) => void
   onDescriptionChange?: (value: string) => void
 
   // Options
@@ -69,28 +67,25 @@ export function TimeBlockDialog({
   title,
   mode = 'plan',
   taskName,
-  startTime,
-  endTime,
+  startDatetime,
+  endDatetime,
   taskId,
-  milestoneId,
   taskInputMode,
   selectedGoal,
-  date,
   description,
   onTaskNameChange,
-  onStartTimeChange,
-  onEndTimeChange,
+  onStartDatetimeChange,
+  onEndDatetimeChange,
   onTaskIdChange,
   onMilestoneIdChange,
   onTaskInputModeChange,
   onSave,
-  onDateChange,
   onDescriptionChange,
   showTaskInputModeToggle = true,
   isEditMode = false,
   isSubmitting = false,
 }: TimeBlockDialogProps) {
-  const { tasks, goals, milestones, addTask } = useTaskStore()
+  const { tasks, goals, milestones, addTask } = useTaskManagerStore()
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMilestoneId, setNewTaskMilestoneId] = useState<string | undefined>(undefined)
@@ -120,28 +115,9 @@ export function TimeBlockDialog({
     setIsAddingTask(false)
   }
 
-  // 目標がないかどうか（警告表示用）
-  const showNoGoalWarning = taskInputMode === 'manual' && !milestoneId && taskName.length > 0
-
-  // 所要時間計算
-  const calculateDuration = () => {
-    if (!startTime || !endTime) return null
-    const [sh, sm] = startTime.split(':').map(Number)
-    const [eh, em] = endTime.split(':').map(Number)
-    const startMinutes = sh * 60 + sm
-    const endMinutes = eh * 60 + em
-    const durationMinutes = endMinutes - startMinutes
-    if (durationMinutes <= 0) return null
-    const hours = Math.floor(durationMinutes / 60)
-    const minutes = durationMinutes % 60
-    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
-  }
-
-  const duration = calculateDuration()
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -179,7 +155,7 @@ export function TimeBlockDialog({
                     onTaskIdChange(undefined)
                   }}
                 >
-                  タスク名を入力
+                  予定を入力
                 </button>
               </div>
             </div>
@@ -199,6 +175,12 @@ export function TimeBlockDialog({
                       onTaskNameChange(task.name)
                       if (task.milestoneId) {
                         onMilestoneIdChange(task.milestoneId)
+                      }
+                      if (task.estimatedMinutes && startDatetime) {
+                        const start = new Date(startDatetime)
+                        start.setMinutes(start.getMinutes() + task.estimatedMinutes)
+                        const end = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
+                        onEndDatetimeChange(end)
                       }
                     }
                   }}
@@ -313,70 +295,31 @@ export function TimeBlockDialog({
             </div>
           )}
 
-          {/* Manual input mode */}
+          {/* Manual input mode (予定を入力) */}
           {(taskInputMode === 'manual' || !showTaskInputModeToggle) && (
             <>
               <div>
-                <Label htmlFor="blockTaskName">タスク名</Label>
+                <Label htmlFor="blockTaskName">予定名</Label>
                 <Input
                   id="blockTaskName"
                   value={taskName}
                   onChange={(e) => onTaskNameChange(e.target.value)}
-                  placeholder="例: MTG、休憩など"
+                  placeholder="例: MTG、休憩、作業など"
                   className="mt-1"
                 />
               </div>
-
-              <MilestoneSelector
-                milestoneId={milestoneId}
-                onMilestoneIdChange={onMilestoneIdChange}
-                goals={goals}
-                milestones={milestones}
-                selectedGoal={selectedGoal}
-              />
-
-              {/* 目標未設定の警告 */}
-              {showNoGoalWarning && (
-                <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs">
-                    マイルストーンが未設定のため、目標別の達成率には含まれません。
-                  </p>
-                </div>
-              )}
             </>
           )}
 
-          {/* 日付 (実績モードのみ) */}
-          {mode === 'entry' && onDateChange && (
-            <div>
-              <Label htmlFor="entryDate">日付</Label>
-              <Input
-                id="entryDate"
-                type="date"
-                value={date || ''}
-                onChange={(e) => onDateChange(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-          )}
-
-          {/* Time range */}
+          {/* 日時 */}
           <div>
-            <Label>時間</Label>
-            <div className="mt-1">
-              <TimeRangeInput
-                startTime={startTime}
-                endTime={endTime}
-                onStartTimeChange={onStartTimeChange}
-                onEndTimeChange={onEndTimeChange}
-              />
-            </div>
-            {duration && (
-              <p className="text-xs text-muted-foreground mt-1">
-                所要時間: {duration}
-              </p>
-            )}
+            <Label className="text-xs text-muted-foreground mb-2 block">日時</Label>
+            <DateTimeRangePicker
+              startDatetime={startDatetime}
+              endDatetime={endDatetime}
+              onStartChange={onStartDatetimeChange}
+              onEndChange={onEndDatetimeChange}
+            />
           </div>
 
           {/* 説明 (実績モードのみ) */}
@@ -408,6 +351,12 @@ export function TimeBlockDialog({
                     if (task.milestoneId) {
                       onMilestoneIdChange(task.milestoneId)
                     }
+                    if (task.estimatedMinutes && startDatetime) {
+                      const start = new Date(startDatetime)
+                      start.setMinutes(start.getMinutes() + task.estimatedMinutes)
+                      const end = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
+                      onEndDatetimeChange(end)
+                    }
                   }
                 }}
               >
@@ -436,73 +385,6 @@ export function TimeBlockDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// Extracted milestone selector component
-interface MilestoneSelectorProps {
-  milestoneId: string | undefined
-  onMilestoneIdChange: (value: string | undefined) => void
-  goals: Goal[]
-  milestones: Milestone[]
-  selectedGoal: Goal | undefined
-}
-
-function MilestoneSelector({
-  milestoneId,
-  onMilestoneIdChange,
-  goals,
-  milestones,
-  selectedGoal,
-}: MilestoneSelectorProps) {
-  return (
-    <div>
-      <Label>マイルストーン（任意）</Label>
-      <Select
-        value={milestoneId || ''}
-        onValueChange={(v) => onMilestoneIdChange(v || undefined)}
-      >
-        <SelectTrigger className="mt-1">
-          <SelectValue placeholder="マイルストーンを選択" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="">なし</SelectItem>
-          {goals
-            .filter(g => g.status !== 'archived')
-            .map(goal => {
-              const goalMilestones = milestones.filter(
-                m => m.goalId === goal.id && m.status === 'active'
-              )
-              if (goalMilestones.length === 0) return null
-              return (
-                <div key={goal.id}>
-                  <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: goal.color }}
-                    />
-                    {goal.name}
-                  </div>
-                  {goalMilestones.map(milestone => (
-                    <SelectItem key={milestone.id} value={milestone.id} label={milestone.name}>
-                      {milestone.name}
-                    </SelectItem>
-                  ))}
-                </div>
-              )
-            })}
-        </SelectContent>
-      </Select>
-      {selectedGoal && (
-        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: selectedGoal.color }}
-          />
-          {selectedGoal.name}
-        </p>
-      )}
-    </div>
   )
 }
 

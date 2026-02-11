@@ -11,9 +11,18 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { WidgetError } from '@/components/common/WidgetError'
 import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
 import { useDraggable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
+import {
+  getDaysUntil,
+  isScheduledForToday,
+  getTaskFrequencyLabel,
+  getUrgencyLevel,
+  formatDaysUntil,
+  type UrgencyLevel,
+} from '@/lib/taskUtils'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Target,
   GripVertical,
@@ -27,6 +36,7 @@ export interface TaskDragData {
   type: 'task'
   taskId: string
   taskName: string
+  estimatedMinutes?: number
   milestoneId?: string
   milestoneName?: string
   goalId?: string
@@ -34,74 +44,6 @@ export interface TaskDragData {
   goalColor?: string
 }
 
-// 期限までの日数を計算
-function getDaysUntil(targetDate: string | undefined): number | null {
-  if (!targetDate) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(targetDate)
-  target.setHours(0, 0, 0, 0)
-  const diffTime = target.getTime() - today.getTime()
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-}
-
-// タスクが今日やるべきかどうかを判定（frequency設定に基づく）
-function isScheduledForToday(task: Task): boolean {
-  if (!task.frequency) return false
-
-  const today = new Date()
-  const dayOfWeek = today.getDay() // 0=日, 1=月, ..., 6=土
-
-  switch (task.frequency) {
-    case 'daily':
-      return true
-    case 'weekly':
-      // 平日のみ（月〜金 = 1〜5）
-      return dayOfWeek >= 1 && dayOfWeek <= 5
-    case 'custom':
-      return task.daysOfWeek?.includes(dayOfWeek) ?? false
-    default:
-      return false
-  }
-}
-
-// 繰り返し設定のラベル
-function getFrequencyLabel(task: Task): string | null {
-  if (!task.frequency) return null
-
-  switch (task.frequency) {
-    case 'daily':
-      return '毎日'
-    case 'weekly':
-      return '平日'
-    case 'custom': {
-      const days = ['日', '月', '火', '水', '木', '金', '土']
-      const selectedDays = (task.daysOfWeek ?? []).map(d => days[d]).join('')
-      return selectedDays || null
-    }
-    default:
-      return null
-  }
-}
-
-// 緊急度を判定
-type UrgencyLevel = 'danger' | 'warning' | 'normal' | 'no-deadline'
-
-function getUrgencyLevel(daysUntil: number | null): UrgencyLevel {
-  if (daysUntil === null) return 'no-deadline'
-  if (daysUntil <= 3) return 'danger'
-  if (daysUntil <= 7) return 'warning'
-  return 'normal'
-}
-
-// 残り日数のテキスト
-function formatDaysUntil(days: number | null): string {
-  if (days === null) return '期限なし'
-  if (days < 0) return `${Math.abs(days)}日超過`
-  if (days === 0) return '今日'
-  if (days === 1) return '明日'
-  return `残り${days}日`
-}
 
 // カードの背景色
 function getCardBgColor(level: UrgencyLevel): string {
@@ -117,20 +59,6 @@ function getCardBgColor(level: UrgencyLevel): string {
   }
 }
 
-// 緊急度インジケーター
-function UrgencyIndicator({ level }: { level: UrgencyLevel }) {
-  return (
-    <span
-      className={cn('w-2 h-2 rounded-full inline-block flex-shrink-0 mt-1', {
-        'bg-red-500': level === 'danger',
-        'bg-yellow-500': level === 'warning',
-        'bg-green-500': level === 'normal',
-        'bg-muted-foreground/50': level === 'no-deadline',
-      })}
-    />
-  )
-}
-
 // ドラッグ可能なタスクカード
 interface DraggableTaskCardProps {
   task: Task
@@ -139,13 +67,16 @@ interface DraggableTaskCardProps {
   daysUntil: number | null
   isScheduledToday: boolean
   frequencyLabel: string | null
+  onTaskClick?: (taskId: string) => void
+  onToggleComplete?: (taskId: string) => void
 }
 
-function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday, frequencyLabel, onTaskClick, onToggleComplete }: DraggableTaskCardProps) {
   const dragData: TaskDragData = {
     type: 'task',
     taskId: task.id,
     taskName: task.name,
+    estimatedMinutes: task.estimatedMinutes,
     milestoneId: milestone?.id,
     milestoneName: milestone?.name,
     goalId: goal?.id,
@@ -178,15 +109,27 @@ function DraggableTaskCard({ task, goal, milestone, daysUntil, isScheduledToday,
       )}
       {...listeners}
       {...attributes}
+      role="listitem"
     >
-      {/* 1行目: インジケーター + タスク名 + 定期バッジ */}
+      {/* 1行目: チェックボックス + タスク名 + 定期バッジ */}
       <div className="flex items-start gap-2">
-        {isScheduledToday ? (
-          <RefreshCw className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-        ) : (
-          <UrgencyIndicator level={level} />
-        )}
-        <span className="text-sm font-medium flex-1 leading-tight">{task.name}</span>
+        <Checkbox
+          checked={false}
+          onCheckedChange={() => onToggleComplete?.(task.id)}
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          className="flex-shrink-0 mt-0.5"
+          aria-label={`Complete ${task.name}`}
+        />
+        <span
+          className="text-sm font-medium flex-1 leading-tight cursor-pointer hover:text-primary"
+          onClick={e => {
+            e.stopPropagation()
+            onTaskClick?.(task.id)
+          }}
+        >
+          {task.name}
+        </span>
         <EntityMemoPopover entityType="task" entityId={task.id} />
         {frequencyLabel && (
           <span className={cn(
@@ -237,8 +180,12 @@ interface TaskWithMeta {
   frequencyLabel: string | null
 }
 
-export function TaskListWidget() {
-  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal } = useTaskStore()
+interface TaskListWidgetProps {
+  onTaskClick?: (taskId: string) => void
+}
+
+export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
+  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal, getStandaloneTasks, toggleTaskComplete } = useTaskManagerStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
   const taskData = useMemo(() => {
@@ -261,10 +208,23 @@ export function TaskListWidget() {
             milestone,
             daysUntil,
             isScheduledToday: isScheduledForToday(task),
-            frequencyLabel: getFrequencyLabel(task),
+            frequencyLabel: getTaskFrequencyLabel(task),
           })
         }
       }
+    }
+
+    // 目標なしタスク（期限はタスク自体の dueDate を使用）
+    const standalone = getStandaloneTasks().filter(t => !t.parentTaskId && !t.completed)
+    for (const task of standalone) {
+      data.push({
+        task,
+        goal: undefined,
+        milestone: undefined,
+        daysUntil: getDaysUntil(task.dueDate),
+        isScheduledToday: isScheduledForToday(task),
+        frequencyLabel: getTaskFrequencyLabel(task),
+      })
     }
 
     // ソート:
@@ -313,7 +273,7 @@ export function TaskListWidget() {
           </div>
         ) : (
         <ScrollArea className="h-full">
-          <div className="p-2 space-y-2">
+          <div role="list" className="p-2 space-y-2">
             {taskData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">
                 <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -329,6 +289,8 @@ export function TaskListWidget() {
                   daysUntil={daysUntil}
                   isScheduledToday={isScheduledToday}
                   frequencyLabel={frequencyLabel}
+                  onTaskClick={onTaskClick}
+                  onToggleComplete={toggleTaskComplete}
                 />
               ))
             )}

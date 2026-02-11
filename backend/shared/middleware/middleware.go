@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kensan/backend/shared/auth"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type contextKey string
@@ -71,23 +72,26 @@ func Auth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authorization header required")
+				Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Authorization header required")
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid authorization header format")
+				Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid authorization header format")
 				return
 			}
 
 			claims, err := jwtManager.ValidateToken(parts[1])
 			if err != nil {
-				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired token")
+				Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired token")
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+			if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+				span.SetAttributes(attribute.String("user.id", claims.UserID))
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -105,16 +109,3 @@ func GetRequestID(ctx context.Context) string {
 	return requestID
 }
 
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    code,
-			"message": message,
-		},
-		"meta": map[string]interface{}{
-			"timestamp": time.Now().Format(time.RFC3339),
-		},
-	})
-}

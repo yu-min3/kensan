@@ -5,130 +5,62 @@ import (
 	"testing"
 )
 
-// Test entity-specific "not found" error helpers
-func TestEntityNotFoundHelpers(t *testing.T) {
-	tests := []struct {
-		name     string
-		errFunc  func() error
-		wantBase error
-	}{
-		{"TaskNotFound", TaskNotFound, ErrNotFound},
-		{"GoalNotFound", GoalNotFound, ErrNotFound},
-		{"MilestoneNotFound", MilestoneNotFound, ErrNotFound},
-		{"TagNotFound", TagNotFound, ErrNotFound},
-		{"TimeBlockNotFound", TimeBlockNotFound, ErrNotFound},
-		{"TimeEntryNotFound", TimeEntryNotFound, ErrNotFound},
-		{"UserNotFound", UserNotFound, ErrNotFound},
-		{"NoteNotFound", NoteNotFound, ErrNotFound},
-		{"MemoNotFound", MemoNotFound, ErrNotFound},
-		{"DiaryNotFound", DiaryNotFound, ErrNotFound},
-		{"RecordNotFound", RecordNotFound, ErrNotFound},
-		{"RoutineNotFound", RoutineNotFound, ErrNotFound},
-		{"TodoNotFound", TodoNotFound, ErrNotFound},
-		{"EntityMemoNotFound", EntityMemoNotFound, ErrNotFound},
-		{"TimerNotFound", TimerNotFound, ErrNotFound},
-	}
+// Test generic NotFound constructor
+func TestNotFoundConstructor(t *testing.T) {
+	entities := []string{"task", "goal", "user", "note", "memo"}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.errFunc()
-			if !errors.Is(err, tt.wantBase) {
-				t.Errorf("%s() error = %v, want error wrapping %v", tt.name, err, tt.wantBase)
+	for _, entity := range entities {
+		t.Run(entity, func(t *testing.T) {
+			err := NotFound(entity)
+			if !errors.Is(err, ErrNotFound) {
+				t.Errorf("NotFound(%q) error = %v, want error wrapping %v", entity, err, ErrNotFound)
 			}
 			if !IsNotFound(err) {
-				t.Errorf("IsNotFound(%s()) = false, want true", tt.name)
+				t.Errorf("IsNotFound(NotFound(%q)) = false, want true", entity)
 			}
 		})
 	}
 }
 
-// Test validation error helpers
-func TestValidationErrorHelpers(t *testing.T) {
-	t.Run("InvalidStatus", func(t *testing.T) {
-		err := InvalidStatus("task")
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("InvalidStatus() error = %v, want error wrapping %v", err, ErrInvalidInput)
-		}
-		if !IsInvalidInput(err) {
-			t.Errorf("IsInvalidInput(InvalidStatus()) = false, want true")
-		}
-	})
+// Test generic AlreadyExists constructor
+func TestAlreadyExistsConstructor(t *testing.T) {
+	entities := []string{"user", "tag", "note"}
 
-	t.Run("InvalidDate", func(t *testing.T) {
-		err := InvalidDate()
-		if !errors.Is(err, ErrInvalidFormat) {
-			t.Errorf("InvalidDate() error = %v, want error wrapping %v", err, ErrInvalidFormat)
-		}
-	})
-
-	t.Run("InvalidFrequency", func(t *testing.T) {
-		err := InvalidFrequency()
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("InvalidFrequency() error = %v, want error wrapping %v", err, ErrInvalidInput)
-		}
-	})
-
-	t.Run("InvalidEntityType", func(t *testing.T) {
-		err := InvalidEntityType()
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("InvalidEntityType() error = %v, want error wrapping %v", err, ErrInvalidInput)
-		}
-	})
-
-	t.Run("InvalidTime", func(t *testing.T) {
-		err := InvalidTime()
-		if !errors.Is(err, ErrInvalidFormat) {
-			t.Errorf("InvalidTime() error = %v, want error wrapping %v", err, ErrInvalidFormat)
-		}
-	})
-
-	t.Run("InvalidInput", func(t *testing.T) {
-		err := InvalidInput()
-		if err != ErrInvalidInput {
-			t.Errorf("InvalidInput() error = %v, want %v", err, ErrInvalidInput)
-		}
-	})
-
-	t.Run("RequiredField", func(t *testing.T) {
-		err := RequiredField("name")
-		if !errors.Is(err, ErrRequired) {
-			t.Errorf("RequiredField() error = %v, want error wrapping %v", err, ErrRequired)
-		}
-		if !IsRequired(err) {
-			t.Errorf("IsRequired(RequiredField()) = false, want true")
-		}
-	})
+	for _, entity := range entities {
+		t.Run(entity, func(t *testing.T) {
+			err := AlreadyExists(entity)
+			if !errors.Is(err, ErrAlreadyExists) {
+				t.Errorf("AlreadyExists(%q) error = %v, want error wrapping %v", entity, err, ErrAlreadyExists)
+			}
+			if !IsAlreadyExists(err) {
+				t.Errorf("IsAlreadyExists(AlreadyExists(%q)) = false, want true", entity)
+			}
+		})
+	}
 }
 
-// Test existing helper functions
-func TestExistingHelperFunctions(t *testing.T) {
-	t.Run("NotFound", func(t *testing.T) {
-		err := NotFound("custom entity")
-		if !errors.Is(err, ErrNotFound) {
-			t.Errorf("NotFound() error = %v, want error wrapping %v", err, ErrNotFound)
-		}
-		if !IsNotFound(err) {
-			t.Errorf("IsNotFound(NotFound()) = false, want true")
+// Test InvalidStatus helper
+func TestInvalidStatus(t *testing.T) {
+	err := InvalidStatus("task")
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("InvalidStatus() error = %v, want error wrapping %v", err, ErrInvalidInput)
+	}
+	if !IsInvalidInput(err) {
+		t.Errorf("IsInvalidInput(InvalidStatus()) = false, want true")
+	}
+}
+
+// Test validation format errors
+func TestValidationFormatErrors(t *testing.T) {
+	t.Run("ErrInvalidDate", func(t *testing.T) {
+		if !errors.Is(ErrInvalidDate, ErrInvalidFormat) {
+			t.Errorf("ErrInvalidDate should wrap ErrInvalidFormat")
 		}
 	})
 
-	t.Run("AlreadyExists", func(t *testing.T) {
-		err := AlreadyExists("user")
-		if !errors.Is(err, ErrAlreadyExists) {
-			t.Errorf("AlreadyExists() error = %v, want error wrapping %v", err, ErrAlreadyExists)
-		}
-		if !IsAlreadyExists(err) {
-			t.Errorf("IsAlreadyExists(AlreadyExists()) = false, want true")
-		}
-	})
-
-	t.Run("Required", func(t *testing.T) {
-		err := Required("email")
-		if !errors.Is(err, ErrRequired) {
-			t.Errorf("Required() error = %v, want error wrapping %v", err, ErrRequired)
-		}
-		if !IsRequired(err) {
-			t.Errorf("IsRequired(Required()) = false, want true")
+	t.Run("ErrInvalidTime", func(t *testing.T) {
+		if !errors.Is(ErrInvalidTime, ErrInvalidFormat) {
+			t.Errorf("ErrInvalidTime should wrap ErrInvalidFormat")
 		}
 	})
 
@@ -141,6 +73,17 @@ func TestExistingHelperFunctions(t *testing.T) {
 			t.Errorf("IsInvalidFormat(InvalidFormat()) = false, want true")
 		}
 	})
+}
+
+// Test Required constructor
+func TestRequired(t *testing.T) {
+	err := Required("email")
+	if !errors.Is(err, ErrRequired) {
+		t.Errorf("Required() error = %v, want error wrapping %v", err, ErrRequired)
+	}
+	if !IsRequired(err) {
+		t.Errorf("IsRequired(Required()) = false, want true")
+	}
 }
 
 // Test EntityError type

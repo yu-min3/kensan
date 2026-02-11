@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useCompositionGuard } from '@/hooks/useCompositionGuard'
 import {
   Popover,
   PopoverContent,
@@ -52,7 +53,10 @@ export function InputPopover({
     }
   }
 
+  const { isComposingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard()
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isComposingRef.current) return
     if (e.key === 'Enter') {
       e.preventDefault()
       handleConfirm()
@@ -81,6 +85,8 @@ export function InputPopover({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
             placeholder={placeholder}
             className="h-9"
           />

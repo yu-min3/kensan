@@ -1,10 +1,18 @@
 # Dependencies
 node_modules/
-backend/vendor/
+
+# Directories not needed for frontend build
+backend/
+kensan-ai/
+lakehouse/
+observability/
+docs/
+scripts/
+e2e/
+backups/
 
 # Build outputs
 dist/
-backend/bin/
 *.exe
 *.dll
 *.so

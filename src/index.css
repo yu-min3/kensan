@@ -52,9 +52,6 @@
   /* Actual: Darker/solid (確定済み) */
   --timeblock-actual-bg: #e2e8f0;
   --timeblock-actual-border: #64748b;
-  /* Routine: Same as plan */
-  --timeblock-routine-bg: #f8fafc;
-  --timeblock-routine-border: #e2e8f0;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
   --popover: 0 0% 100%;
@@ -94,8 +91,6 @@
   --timeblock-plan-border: #475569;
   --timeblock-actual-bg: #334155;
   --timeblock-actual-border: #94a3b8;
-  --timeblock-routine-bg: #1e293b;
-  --timeblock-routine-border: #475569;
 
   /* Card: Slightly lighter than background for elevation */
   --card: 222 47% 13%;
@@ -300,4 +295,30 @@ body {
   height: auto;
   border-radius: 0.5rem;
   margin: 0.75rem 0;
+}
+
+/* Details/Toggle Styles */
+.tiptap-editor details {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor details summary {
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0.5rem;
+  list-style: revert;
+}
+
+.tiptap-editor details summary::marker {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Spotlight Tour Highlight Animation */
+@keyframes spotlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px hsl(var(--brand)), 0 0 20px 4px hsl(var(--brand) / 0.3); }
+  50% { box-shadow: 0 0 0 3px hsl(var(--brand)), 0 0 30px 8px hsl(var(--brand) / 0.5); }
 }

@@ -37,6 +37,31 @@ export const authHandlers = [
     })
   }),
 
+  // POST /auth/demo-login
+  http.post(`${BASE_URL}/auth/demo-login`, async ({ request }) => {
+    const body = await request.json() as { persona: string }
+
+    const personaNames: Record<string, string> = {
+      tanaka: '田中翔太',
+      misaki: '鈴木美咲',
+      takuya: '山田拓也',
+      aya: '高橋彩',
+    }
+
+    const name = personaNames[body.persona] || body.persona
+
+    return HttpResponse.json({
+      data: {
+        token: MOCK_TOKEN,
+        user: {
+          ...mockUser,
+          email: `${body.persona}@kensan.dev`,
+          name,
+        },
+      },
+    })
+  }),
+
   // POST /auth/register
   http.post(`${BASE_URL}/auth/register`, async ({ request }) => {
     const body = await request.json() as { email: string; password: string; name: string }
@@ -68,7 +93,7 @@ export const authHandlers = [
         timezone: userSettings.timezone,
         theme: userSettings.theme,
         isConfigured: true,
-        aiEnabled: false,
+        aiEnabled: true,
         aiConsentGiven: true,
       },
     })
@@ -85,7 +110,7 @@ export const authHandlers = [
         timezone: userSettings.timezone,
         theme: userSettings.theme,
         isConfigured: true,
-        aiEnabled: false,
+        aiEnabled: true,
         aiConsentGiven: true,
       },
     })

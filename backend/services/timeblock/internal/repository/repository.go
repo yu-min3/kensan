@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/timeblock/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
+	"github.com/kensan/backend/shared/sqlbuilder"
 )
 
 // Repository-level errors
@@ -22,60 +22,6 @@ var (
 // PostgresRepository handles database operations for time blocks and time entries
 type PostgresRepository struct {
 	pool *pgxpool.Pool
-}
-
-// UpdateBuilder helps build dynamic UPDATE queries with optional fields
-type UpdateBuilder struct {
-	setClauses []string
-	args       []interface{}
-	argCount   int
-}
-
-// NewUpdateBuilder creates a new UpdateBuilder
-func NewUpdateBuilder() *UpdateBuilder {
-	return &UpdateBuilder{
-		setClauses: []string{},
-		args:       []interface{}{},
-		argCount:   0,
-	}
-}
-
-// AddField adds a field to the SET clause if the pointer is not nil
-func AddField[T any](b *UpdateBuilder, fieldName string, ptr *T) {
-	if ptr != nil {
-		b.argCount++
-		b.setClauses = append(b.setClauses, fmt.Sprintf("%s = $%d", fieldName, b.argCount))
-		b.args = append(b.args, *ptr)
-	}
-}
-
-// AddFieldValue adds a field with a direct value (not pointer) to the SET clause
-func (b *UpdateBuilder) AddFieldValue(fieldName string, value interface{}) {
-	b.argCount++
-	b.setClauses = append(b.setClauses, fmt.Sprintf("%s = $%d", fieldName, b.argCount))
-	b.args = append(b.args, value)
-}
-
-// AddArg adds an argument without a SET clause (for WHERE conditions)
-func (b *UpdateBuilder) AddArg(value interface{}) int {
-	b.argCount++
-	b.args = append(b.args, value)
-	return b.argCount
-}
-
-// HasUpdates returns true if any fields were added
-func (b *UpdateBuilder) HasUpdates() bool {
-	return len(b.setClauses) > 0
-}
-
-// SetClause returns the SET clause string
-func (b *UpdateBuilder) SetClause() string {
-	return strings.Join(b.setClauses, ", ")
-}
-
-// Args returns all arguments
-func (b *UpdateBuilder) Args() []interface{} {
-	return b.args
 }
 
 // Ensure PostgresRepository implements Repository interface
@@ -90,43 +36,21 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 
 // ListTimeBlocks returns all time blocks for a user with optional filters
 func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, filter timeblock.TimeBlockFilter) ([]timeblock.TimeBlock, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilterWithCast(w, "start_datetime", ">=", "::timestamptz", filter.StartDatetime)
+	sqlbuilder.AddFilterWithCast(w, "start_datetime", "<", "::timestamptz", filter.EndDatetime)
+	sqlbuilder.AddFilter(w, "goal_id", filter.GoalID)
+	sqlbuilder.AddFilter(w, "milestone_id", filter.MilestoneID)
+
+	query := fmt.Sprintf(`
 		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		       tag_ids, is_routine, routine_task_id, created_at, updated_at
+		       tag_ids, created_at, updated_at
 		FROM time_blocks
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+		%s ORDER BY start_datetime ASC
+	`, w.WhereClause())
 
-	if filter.StartDatetime != nil {
-		argCount++
-		query += fmt.Sprintf(" AND start_datetime >= $%d::timestamptz", argCount)
-		args = append(args, *filter.StartDatetime)
-	}
-
-	if filter.EndDatetime != nil {
-		argCount++
-		query += fmt.Sprintf(" AND start_datetime < $%d::timestamptz", argCount)
-		args = append(args, *filter.EndDatetime)
-	}
-
-	if filter.GoalID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND goal_id = $%d", argCount)
-		args = append(args, *filter.GoalID)
-	}
-
-	if filter.MilestoneID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND milestone_id = $%d", argCount)
-		args = append(args, *filter.MilestoneID)
-	}
-
-	query += " ORDER BY start_datetime ASC"
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query time blocks: %w", err)
 	}
@@ -149,8 +73,6 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 			&tb.GoalName,
 			&tb.GoalColor,
 			&tagIDs,
-			&tb.IsRoutine,
-			&tb.RoutineTaskID,
 			&tb.CreatedAt,
 			&tb.UpdatedAt,
 		)
@@ -173,7 +95,7 @@ func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeB
 	query := `
 		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		       tag_ids, is_routine, routine_task_id, created_at, updated_at
+		       tag_ids, created_at, updated_at
 		FROM time_blocks
 		WHERE id = $1 AND user_id = $2
 	`
@@ -193,8 +115,6 @@ func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeB
 		&tb.GoalName,
 		&tb.GoalColor,
 		&tagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)
@@ -234,11 +154,11 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime, task_id, task_name,
 		                         milestone_id, milestone_name,
 		                         goal_id, goal_name, goal_color, tag_ids,
-		                         is_routine, routine_task_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		                         created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		          tag_ids, is_routine, routine_task_id, created_at, updated_at
+		          tag_ids, created_at, updated_at
 	`
 
 	var tb timeblock.TimeBlock
@@ -256,8 +176,6 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		input.GoalName,
 		input.GoalColor,
 		tagIDs,
-		input.IsRoutine,
-		input.RoutineTaskID,
 		now,
 		now,
 	).Scan(
@@ -273,8 +191,6 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		&tb.GoalName,
 		&tb.GoalColor,
 		&returnedTagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)
@@ -289,7 +205,7 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 
 // UpdateTimeBlock updates an existing time block
 func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBlockID string, input timeblock.UpdateTimeBlockInput) (*timeblock.TimeBlock, error) {
-	b := NewUpdateBuilder()
+	b := sqlbuilder.NewUpdateBuilder()
 
 	// For datetime fields, parse string to time.Time before adding
 	if input.StartDatetime != nil {
@@ -306,18 +222,16 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		}
 		b.AddFieldValue("end_datetime", endDt)
 	}
-	AddField(b, "task_id", input.TaskID)
-	AddField(b, "task_name", input.TaskName)
-	AddField(b, "milestone_id", input.MilestoneID)
-	AddField(b, "milestone_name", input.MilestoneName)
-	AddField(b, "goal_id", input.GoalID)
-	AddField(b, "goal_name", input.GoalName)
-	AddField(b, "goal_color", input.GoalColor)
+	sqlbuilder.AddField(b, "task_id", input.TaskID)
+	sqlbuilder.AddField(b, "task_name", input.TaskName)
+	sqlbuilder.AddField(b, "milestone_id", input.MilestoneID)
+	sqlbuilder.AddField(b, "milestone_name", input.MilestoneName)
+	sqlbuilder.AddField(b, "goal_id", input.GoalID)
+	sqlbuilder.AddField(b, "goal_name", input.GoalName)
+	sqlbuilder.AddField(b, "goal_color", input.GoalColor)
 	if input.TagIDs != nil {
 		b.AddFieldValue("tag_ids", input.TagIDs)
 	}
-	AddField(b, "is_routine", input.IsRoutine)
-	AddField(b, "routine_task_id", input.RoutineTaskID)
 
 	if !b.HasUpdates() {
 		return r.GetTimeBlockByID(ctx, userID, timeBlockID)
@@ -333,7 +247,7 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		          tag_ids, is_routine, routine_task_id, created_at, updated_at
+		          tag_ids, created_at, updated_at
 	`, b.SetClause(), idArg, userArg)
 
 	var tb timeblock.TimeBlock
@@ -351,8 +265,6 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		&tb.GoalName,
 		&tb.GoalColor,
 		&tagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)
@@ -405,43 +317,21 @@ func (r *PostgresRepository) CreateTimeBlockBatch(ctx context.Context, userID st
 
 // ListTimeEntries returns all time entries for a user with optional filters
 func (r *PostgresRepository) ListTimeEntries(ctx context.Context, userID string, filter timeblock.TimeEntryFilter) ([]timeblock.TimeEntry, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilterWithCast(w, "start_datetime", ">=", "::timestamptz", filter.StartDatetime)
+	sqlbuilder.AddFilterWithCast(w, "start_datetime", "<", "::timestamptz", filter.EndDatetime)
+	sqlbuilder.AddFilter(w, "goal_id", filter.GoalID)
+	sqlbuilder.AddFilter(w, "milestone_id", filter.MilestoneID)
+
+	query := fmt.Sprintf(`
 		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
 		       tag_ids, description, created_at, updated_at
 		FROM time_entries
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+		%s ORDER BY start_datetime ASC
+	`, w.WhereClause())
 
-	if filter.StartDatetime != nil {
-		argCount++
-		query += fmt.Sprintf(" AND start_datetime >= $%d::timestamptz", argCount)
-		args = append(args, *filter.StartDatetime)
-	}
-
-	if filter.EndDatetime != nil {
-		argCount++
-		query += fmt.Sprintf(" AND start_datetime < $%d::timestamptz", argCount)
-		args = append(args, *filter.EndDatetime)
-	}
-
-	if filter.GoalID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND goal_id = $%d", argCount)
-		args = append(args, *filter.GoalID)
-	}
-
-	if filter.MilestoneID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND milestone_id = $%d", argCount)
-		args = append(args, *filter.MilestoneID)
-	}
-
-	query += " ORDER BY start_datetime ASC"
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query time entries: %w", err)
 	}
@@ -599,7 +489,7 @@ func (r *PostgresRepository) CreateTimeEntry(ctx context.Context, userID string,
 
 // UpdateTimeEntry updates an existing time entry
 func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEntryID string, input timeblock.UpdateTimeEntryInput) (*timeblock.TimeEntry, error) {
-	b := NewUpdateBuilder()
+	b := sqlbuilder.NewUpdateBuilder()
 
 	// For datetime fields, parse string to time.Time before adding
 	if input.StartDatetime != nil {
@@ -616,17 +506,17 @@ func (r *PostgresRepository) UpdateTimeEntry(ctx context.Context, userID, timeEn
 		}
 		b.AddFieldValue("end_datetime", endDt)
 	}
-	AddField(b, "task_id", input.TaskID)
-	AddField(b, "task_name", input.TaskName)
-	AddField(b, "milestone_id", input.MilestoneID)
-	AddField(b, "milestone_name", input.MilestoneName)
-	AddField(b, "goal_id", input.GoalID)
-	AddField(b, "goal_name", input.GoalName)
-	AddField(b, "goal_color", input.GoalColor)
+	sqlbuilder.AddField(b, "task_id", input.TaskID)
+	sqlbuilder.AddField(b, "task_name", input.TaskName)
+	sqlbuilder.AddField(b, "milestone_id", input.MilestoneID)
+	sqlbuilder.AddField(b, "milestone_name", input.MilestoneName)
+	sqlbuilder.AddField(b, "goal_id", input.GoalID)
+	sqlbuilder.AddField(b, "goal_name", input.GoalName)
+	sqlbuilder.AddField(b, "goal_color", input.GoalColor)
 	if input.TagIDs != nil {
 		b.AddFieldValue("tag_ids", input.TagIDs)
 	}
-	AddField(b, "description", input.Description)
+	sqlbuilder.AddField(b, "description", input.Description)
 
 	if !b.HasUpdates() {
 		return r.GetTimeEntryByID(ctx, userID, timeEntryID)

@@ -18,12 +18,12 @@ test.describe('AIチャット', () => {
     await expect(chatPanelPage.headerTitle).not.toBeVisible()
   })
 
-  test('パネルに空状態メッセージ表示', async ({ chatPanelPage, page }) => {
+  test('パネルにウェルカムメッセージ表示', async ({ chatPanelPage, page }) => {
     await page.goto('/')
 
     await chatPanelPage.open()
+    // WelcomeMessage shows greeting + tasks/schedules summary + briefing link
     await expect(chatPanelPage.emptyState).toBeVisible()
-    await expect(page.getByText('例：「今日の予定立てて」「タスク見せて」')).toBeVisible()
   })
 
   test('閉じるボタン', async ({ chatPanelPage, page }) => {

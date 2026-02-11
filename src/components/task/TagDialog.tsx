@@ -3,13 +3,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import type { DialogState } from '@/hooks/useDialogState'
-import { DEFAULT_COLORS } from '@/types'
+import { DEFAULT_COLORS, type TagCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
 export interface TagFormData {
   name: string
   color: string
+  category?: TagCategory
 }
+
+const CATEGORIES: { value: TagCategory; label: string; icon: string }[] = [
+  { value: 'general', label: '一般', icon: '' },
+  { value: 'trait', label: '性質', icon: '🏷️' },
+  { value: 'tech', label: '技術', icon: '💻' },
+  { value: 'project', label: 'プロジェクト', icon: '📁' },
+]
 
 interface TagDialogProps {
   dialog: DialogState<TagFormData>
@@ -70,6 +78,28 @@ export function TagDialog({ dialog, onSave }: TagDialogProps) {
                   )}
                   style={{ backgroundColor: color }}
                 />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label>カテゴリ</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.value}
+                  type="button"
+                  onClick={() => dialog.setField('category', cat.value)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm border transition-all',
+                    (dialog.data.category || 'general') === cat.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-accent border-border'
+                  )}
+                >
+                  {cat.icon && <span className="mr-1">{cat.icon}</span>}
+                  {cat.label}
+                </button>
               ))}
             </div>
           </div>

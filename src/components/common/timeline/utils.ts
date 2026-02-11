@@ -143,7 +143,7 @@ export function calculateOverlapLayout(
 }
 
 /**
- * Calculate time from Y position
+ * Calculate time from Y position (default 1 hour duration)
  */
 export function calculateTimeFromY(
   clientY: number,
@@ -152,18 +152,75 @@ export function calculateTimeFromY(
   endHour: number,
   interval: number = 15
 ): { startTime: string; endTime: string } {
+  return calculateTimeFromYWithDuration(clientY, containerRect, startHour, endHour, 60, interval)
+}
+
+/**
+ * Calculate time from Y position with custom duration
+ */
+export function calculateTimeFromYWithDuration(
+  clientY: number,
+  containerRect: DOMRect,
+  startHour: number,
+  endHour: number,
+  durationMinutes: number,
+  interval: number = 15
+): { startTime: string; endTime: string } {
   const totalMinutes = (endHour - startHour) * 60
   const relativeY = Math.max(0, Math.min(clientY - containerRect.top, containerRect.height))
   const percentage = relativeY / containerRect.height
   const rawMinutes = percentage * totalMinutes + startHour * 60
   const snappedMinutes = Math.round(rawMinutes / interval) * interval
-  const clampedMinutes = Math.max(startHour * 60, Math.min(endHour * 60 - 60, snappedMinutes))
+  const clampedStartMinutes = Math.max(startHour * 60, Math.min(endHour * 60 - durationMinutes, snappedMinutes))
 
-  const startTimeMinutes = clampedMinutes
-  const endTimeMinutes = Math.min(clampedMinutes + 60, endHour * 60)
+  const endMinutes = Math.min(clampedStartMinutes + durationMinutes, endHour * 60)
 
   return {
-    startTime: minutesToTimeString(startTimeMinutes),
-    endTime: minutesToTimeString(endTimeMinutes),
+    startTime: minutesToTimeString(clampedStartMinutes),
+    endTime: minutesToTimeString(endMinutes),
   }
+}
+
+/**
+ * Convert Y position to minutes (for drag/resize operations)
+ */
+export function yToMinutes(
+  clientY: number,
+  containerRect: DOMRect,
+  startHour: number,
+  endHour: number,
+  interval: number = 15
+): number {
+  const totalMinutes = (endHour - startHour) * 60
+  const relativeY = clientY - containerRect.top
+  const percentage = relativeY / containerRect.height
+  const minutes = percentage * totalMinutes + startHour * 60
+  return snapToInterval(Math.max(startHour * 60, Math.min(endHour * 60, minutes)), interval)
+}
+
+/**
+ * Calculate top position in pixels (for fixed pixel-based layouts like Weekly)
+ */
+export function calculateTopPx(time: string, startHour: number, hourHeight: number): number {
+  const [h, m] = time.split(':').map(Number)
+  const hours = h + m / 60
+  const clamped = Math.max(startHour, hours)
+  return (clamped - startHour) * hourHeight
+}
+
+/**
+ * Calculate height in pixels (for fixed pixel-based layouts like Weekly)
+ */
+export function calculateHeightPx(
+  startTime: string,
+  endTime: string,
+  startHour: number,
+  endHour: number,
+  hourHeight: number
+): number {
+  const [sh, sm] = startTime.split(':').map(Number)
+  const [eh, em] = endTime.split(':').map(Number)
+  const startHours = Math.max(startHour, sh + sm / 60)
+  const endHours = Math.min(endHour, eh + em / 60)
+  return Math.max(hourHeight / 2, (endHours - startHours) * hourHeight)
 }

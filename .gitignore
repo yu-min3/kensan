@@ -24,7 +24,7 @@ build/
 Thumbs.db
 
 # Claude
-.claude
+.claude/settings.local.json
 
 # Logs
 *.log
@@ -53,6 +53,9 @@ backend/*-service
 backend/tmp/
 backend/vendor/
 
+# Database backups
+backups/
+
 # kensan-ai Python
 kensan-ai/.venv/
 kensan-ai/__pycache__/
@@ -63,3 +66,5 @@ kensan-ai/.ruff_cache/
 kensan-ai/.mypy_cache/
 kensan-ai/*.egg-info/
 
+# privatedocs
+docs/*

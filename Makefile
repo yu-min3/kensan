@@ -1,4 +1,5 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore \
+       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down
 
 # Default target
 .DEFAULT_GOAL := help
@@ -9,7 +10,7 @@
 
 ## Start all services (frontend + backend + database + storage)
 up:
-	docker compose up -d
+	docker compose up -d --remove-orphans
 	@echo ""
 	@echo "🚀 Kensan is starting..."
 	@echo ""
@@ -107,6 +108,38 @@ dev-backend: db backend
 	@echo "Backend services started. Now run 'npm run dev' for frontend."
 
 # =============================================================================
+# Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
+# =============================================================================
+
+## Start lakehouse base (Nessie + Dagster)
+lakehouse:
+	$(MAKE) -C lakehouse up
+
+## Start lakehouse + Dremio
+lakehouse-dremio:
+	$(MAKE) -C lakehouse dremio-up
+
+## Start lakehouse + Trino + Superset
+lakehouse-trino:
+	$(MAKE) -C lakehouse trino-up
+
+## Start lakehouse + all query engines
+lakehouse-all:
+	$(MAKE) -C lakehouse all-up
+
+## Stop all lakehouse services
+lakehouse-down:
+	$(MAKE) -C lakehouse all-down
+
+## Start OpenMetadata
+openmetadata:
+	$(MAKE) -C lakehouse openmetadata-up
+
+## Stop OpenMetadata
+openmetadata-down:
+	$(MAKE) -C lakehouse openmetadata-down
+
+# =============================================================================
 # Health Check
 # =============================================================================
 
@@ -147,6 +180,47 @@ e2e-headed:
 	npx playwright test --config=e2e/playwright.config.ts --headed
 
 # =============================================================================
+# Demo Data
+# =============================================================================
+
+## Apply demo seed data (Tanaka Shota persona)
+demo-seed:
+	@bash scripts/demo-seed/apply.sh
+
+## Remove demo seed data only
+demo-clean:
+	@echo "Removing demo user data..."
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < scripts/demo-seed/000_cleanup.sql
+	@echo "Demo data removed."
+
+# =============================================================================
+# Database Backup / Restore
+# =============================================================================
+
+BACKUP_DIR := backups
+BACKUP_FILE := $(BACKUP_DIR)/kensan_$(shell date +%Y%m%d_%H%M%S).sql
+
+## Backup database to backups/ directory
+db-backup:
+	@mkdir -p $(BACKUP_DIR)
+	@echo "Backing up database..."
+	@docker exec kensan-postgres pg_dump -U kensan -d kensan --clean --if-exists > $(BACKUP_FILE)
+	@echo "Saved to $(BACKUP_FILE) ($$(du -h $(BACKUP_FILE) | cut -f1))"
+
+## Restore database from backup (usage: make db-restore FILE=backups/kensan_xxx.sql)
+db-restore:
+ifndef FILE
+	@echo "Usage: make db-restore FILE=backups/kensan_20260203_120000.sql"
+	@echo ""
+	@echo "Available backups:"
+	@ls -1t $(BACKUP_DIR)/*.sql 2>/dev/null || echo "  (none)"
+	@exit 1
+endif
+	@echo "Restoring from $(FILE)..."
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < $(FILE)
+	@echo "Restore complete."
+
+# =============================================================================
 # Help
 # =============================================================================
 
@@ -180,6 +254,23 @@ help:
 	@echo "  e2e          Run E2E tests"
 	@echo "  e2e-ui       Run E2E tests in UI mode"
 	@echo "  e2e-headed   Run E2E tests headed (visible browser)"
+	@echo ""
+	@echo "Demo Data:"
+	@echo "  demo-seed   Apply demo seed data (Tanaka Shota persona)"
+	@echo "  demo-clean  Remove demo seed data only"
+	@echo ""
+	@echo "Database:"
+	@echo "  db-backup              Backup database to backups/"
+	@echo "  db-restore FILE=x.sql  Restore database from backup"
+	@echo ""
+	@echo "Lakehouse:"
+	@echo "  lakehouse         Base stack (Nessie + Dagster)"
+	@echo "  lakehouse-dremio  Base + Dremio"
+	@echo "  lakehouse-trino   Base + Trino + Superset"
+	@echo "  lakehouse-all     Base + all query engines"
+	@echo "  lakehouse-down    Stop all lakehouse services"
+	@echo "  openmetadata      OpenMetadata + Airflow"
+	@echo "  openmetadata-down Stop OpenMetadata"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

@@ -33,43 +33,52 @@ Kensan のオブザーバビリティ基盤のアーキテクチャドキュメ�
 
 ### 設計原則
 
-1. **OpenTelemetry ネイティブ**: すべてのサービスが OTel SDK で計装。ベンダーロックインを避け、標準仕様（[Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/)）に準拠する。
-2. **RED メソッド**: ダッシュボードは **Rate（リクエストレート）**, **Errors（エラー率）**, **Duration（レイテンシ）** を基本指標とする。サービスの健全性をひと目で判断できる。
-3. **低カーディナリティ**: ラベル数を最小限に抑え、ストレージ効率とクエリ性能を維持する。Loki では `job`, `level`, `instance`, `exporter` のみをインデックスラベルとする。
-4. **Traces ↔ Logs 相互リンク**: トレース ID をキーにトレースとログを双方向にジャンプできる。障害調査のコンテキストスイッチを最小化する。
-5. **ノイズ除去**: SSE ストリーミングの `http send` スパンなど、有用でない高頻度データは OTel Collector レベルで除外する。
+| 原則 | 内容 |
+|------|------|
+| **OpenTelemetry ネイティブ** | すべてのサービスが OTel SDK で計装。ベンダーロックインを避け、[Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/) に準拠 |
+| **RED メソッド** | ダッシュボードは Rate / Errors / Duration を基本指標とし、サービスの健全性をひと目で判断 |
+| **低カーディナリティ** | ラベル数を最小限に抑え、ストレージ効率とクエリ性能を維持。Loki では `job`, `level`, `instance`, `exporter` のみ |
+| **Traces ↔ Logs 相互リンク** | トレース ID をキーにトレースとログを双方向にジャンプ。障害調査のコンテキストスイッチを最小化 |
+| **ノイズ除去** | SSE ストリーミングの `http send` スパンなど、有用でない高頻度データは Collector レベルで除外 |
 
 ---
 
 ## 2. スタック構成
 
-```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  Go Services │  │  kensan-ai   │  │  Frontend    │
-│  (chi/otel)  │  │  (FastAPI)   │  │  (React)     │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │ OTLP HTTP       │ OTLP HTTP       │ Loki API
-       ▼                 ▼                 │
-┌──────────────────────────────┐           │
-│  OpenTelemetry Collector     │           │
-│  (otel-collector-contrib)    │           │
-│  Port 4317(gRPC) / 4318(HTTP)│          │
-└──┬──────────┬──────────┬─────┘           │
-   │          │          │                 │
-   ▼          ▼          ▼                 │
-┌──────┐ ┌────────┐ ┌──────┐              │
-│Tempo │ │Prometh-│ │ Loki │◄─────────────┘
-│:3200 │ │eus:9090│ │:3100 │
-└──┬───┘ └───┬────┘ └──┬───┘
-   │         │         │
-   ▼         ▼         ▼
-┌──────────────────────────────┐
-│         Grafana :3000        │
-│  ┌─────────┐ ┌────────────┐ │
-│  │Service  │ │ Request    │ │
-│  │Overview │ │ Explorer   │ │
-│  └─────────┘ └────────────┘ │
-└──────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Sources["データソース"]
+        Go["Go Services<br/>(chi/otel)"]
+        AI["kensan-ai<br/>(FastAPI)"]
+        FE["Frontend<br/>(React)"]
+    end
+
+    subgraph Collector["OpenTelemetry Collector"]
+        OTLP["OTLP Receiver<br/>:4317(gRPC) / :4318(HTTP)"]
+        Filter["filter/drop-http-send"]
+        Batch["batch processor"]
+    end
+
+    subgraph Backends["バックエンドストレージ"]
+        Tempo["Tempo :3200<br/>分散トレーシング"]
+        Prom["Prometheus :9090<br/>メトリクス"]
+        Loki["Loki :3100<br/>ログ集約"]
+    end
+
+    Grafana["Grafana :3000<br/>可視化・ダッシュボード"]
+
+    Go -->|OTLP HTTP| OTLP
+    AI -->|OTLP HTTP| OTLP
+    FE -->|OTLP HTTP<br/>/otlp proxy| OTLP
+    OTLP --> Filter --> Batch
+    Batch -->|traces| Tempo
+    Batch -->|metrics| Prom
+    Batch -->|logs| Loki
+    FE -->|Loki API 直接| Loki
+
+    Tempo --> Grafana
+    Prom --> Grafana
+    Loki --> Grafana
 ```
 
 ### コンポーネント一覧
@@ -86,33 +95,41 @@ Kensan のオブザーバビリティ基盤のアーキテクチャドキュメ�
 
 ## 3. データフロー
 
-### 3.1 トレース
+### 3.1 パイプライン全体像
 
+```mermaid
+flowchart LR
+    subgraph Pipeline["OTel Collector パイプライン"]
+        direction TB
+        R["receivers:<br/>otlp"]
+        P_T["processors:<br/>filter/drop-http-send → batch"]
+        P_M["processors:<br/>batch"]
+        P_L["processors:<br/>batch"]
+        E_T["exporters:<br/>otlp/tempo"]
+        E_M["exporters:<br/>prometheusremotewrite"]
+        E_L["exporters:<br/>loki"]
+    end
+
+    R -->|traces| P_T --> E_T
+    R -->|metrics| P_M --> E_M
+    R -->|logs| P_L --> E_L
 ```
-Service → OTLP HTTP/gRPC → Collector → filter/drop-http-send → batch → Tempo
-```
+
+### 3.2 トレース
 
 - W3C TraceContext ヘッダーでサービス間のコンテキストを伝播
-- OTel Collector で SSE ストリーミングのノイズスパンを除外
-- Tempo の metrics_generator が受信トレースから RED メトリクスを自動生成
+- OTel Collector で SSE ストリーミングのノイズスパン（`http send`）を除外
+- Tempo の `metrics_generator` が受信トレースから RED メトリクスを自動生成
 
-### 3.2 メトリクス
-
-```
-Service → OTLP HTTP → Collector → batch → Prometheus Remote Write
-```
+### 3.3 メトリクス
 
 - 各サービスの OTel SDK が `http.server.request.duration` ヒストグラムを記録
 - Collector が Prometheus Remote Write で Prometheus に送信
 - Prometheus 側では OTel Collector 自身のメトリクス（`otel-collector:8888`）もスクレイプ
 
-### 3.3 ログ
+### 3.4 ログ
 
-```
-Service → OTLP HTTP → Collector → batch → Loki
-```
-
-- Go サービス: zerolog → OTel ログエクスポーター（trace_id/span_id 自動注入）
+- Go サービス: slog → OTel ログエクスポーター（trace_id/span_id 自動注入）
 - Python (kensan-ai): Python logging → OTel LoggingHandler → Loki
 - フロントエンドは Loki API に直接クエリして AI イベントを取得
 
@@ -124,38 +141,34 @@ Service → OTLP HTTP → Collector → batch → Loki
 
 すべてのサービスが共通の `bootstrap` パッケージでミドルウェアチェーンを構成する。
 
-**ミドルウェア適用順序:**
-
-```
-RequestID → OTelTrace → Metrics → Logger → CORS → Auth → Handler
+```mermaid
+flowchart LR
+    Req[Request] --> RID[RequestID]
+    RID --> OTel[OTelTrace]
+    OTel --> Met[Metrics]
+    Met --> Log[Logger]
+    Log --> CORS
+    CORS --> Auth
+    Auth --> Handler
 ```
 
 | ミドルウェア | パッケージ | 役割 |
 |-------------|-----------|------|
 | `OTelTrace` | `otelhttp.NewHandler` | HTTP スパンの自動生成（メソッド、ルート、ステータス、レイテンシ） |
 | `Metrics` | `shared/middleware/metrics.go` | `http.server.request.duration` ヒストグラムの記録 |
-| `Logger` | zerolog | 構造化ログに trace_id / span_id を自動注入 |
+| `Logger` | slog | 構造化ログに trace_id / span_id を自動注入 |
+
+**スパン属性:**
+- `Auth` ミドルウェアで JWT 認証後に `user.id` 属性をスパンに自動付与。全認証済みリクエストのトレースからユーザーを特定可能。
 
 **ビジネスロジック層のトレーシング:**
+`shared/telemetry/tracing.go` の `StartSpan` ヘルパーでサービス層のオペレーションをスパン化。属性として task ID やプロジェクト ID を付与できる。
 
-`shared/telemetry/tracing.go` の `StartSpan` ヘルパーでサービス層のオペレーションをスパン化する。
+**アウトバウンド HTTP:**
+- `shared/telemetry/transport.go` の `InstrumentedTransport` で `otelhttp.NewTransport` をラップ。note-service の MinIO クライアントに適用し、ストレージアクセスにトレース伝搬。
 
-```go
-tracer := telemetry.ServiceTracer("task-service")
-
-func (s *Service) CreateTask(ctx context.Context, task *Task) error {
-    ctx, end := telemetry.StartSpan(ctx, tracer, "CreateTask",
-        attribute.String("task.project_id", task.ProjectID),
-    )
-    defer end(err)
-    // ビジネスロジック
-}
-```
-
-**環境変数:**
-
-| 変数 | デフォルト | 説明 |
-|------|-----------|------|
+| 環境変数 | デフォルト | 説明 |
+|---------|-----------|------|
 | `OTEL_ENABLED` | `false` | テレメトリの有効化 |
 | `OTEL_COLLECTOR_URL` | `localhost:4318` | OTel Collector の OTLP HTTP エンドポイント |
 
@@ -165,15 +178,13 @@ func (s *Service) CreateTask(ctx context.Context, task *Task) error {
 
 **自動計装:**
 
-| ライブラリ | 関数 | 計装内容 |
-|-----------|------|---------|
-| FastAPI | `instrument_fastapi(app)` | HTTP リクエストスパン（`/health` 除外） |
-| asyncpg | `instrument_asyncpg()` | DB クエリスパン |
-| httpx | `instrument_httpx()` | 外部 HTTP リクエストスパン |
+| ライブラリ | 計装内容 |
+|-----------|---------|
+| FastAPI | HTTP リクエストスパン（`/health` 除外） |
+| asyncpg | DB クエリスパン |
+| httpx | 外部 HTTP リクエストスパン |
 
-**GenAI カスタムメトリクス:**
-
-`get_genai_metrics()` で遅延初期化される 3 つのメトリクス:
+**GenAI カスタムメトリクス** (`get_genai_metrics()` で遅延初期化):
 
 | メトリクス名 | 種別 | 単位 | 説明 |
 |-------------|------|------|------|
@@ -181,21 +192,47 @@ func (s *Service) CreateTask(ctx context.Context, task *Task) error {
 | `gen_ai.client.operation.duration` | Histogram | `s` | エージェントインタラクションの所要時間 |
 | `gen_ai.client.operation.count` | Counter | `{operation}` | エージェント実行回数 |
 
-**Python ログ → OTel ログブリッジ:**
+**ログブリッジ:**
 
-```
-Python logging (kensan_ai logger)
-  → OTel LoggingHandler
-    → BatchLogRecordProcessor
-      → OTLP HTTP Exporter
-        → Collector → Loki
+```mermaid
+flowchart LR
+    PL["Python logging<br/>(kensan_ai logger)"]
+    OH["OTel LoggingHandler"]
+    BP["BatchLogRecordProcessor"]
+    EX["OTLP HTTP Exporter"]
+    CO["Collector"]
+    LK["Loki"]
+
+    PL --> OH --> BP --> EX --> CO --> LK
 ```
 
-トレースコンテキスト（trace_id, span_id）が自動でログに付与されるため、Loki のログから Tempo のトレースへジャンプ可能。
+トレースコンテキスト（trace_id, span_id）が自動でログに付与されるため、Loki → Tempo へのジャンプが可能。
+
+**InteractionLogger:**
+`InteractionLogger.log()` は DB 保存後に `kensan_ai.interaction` ロガーで構造化 JSON を出力。OTel LoggingHandler 経由で trace_id 付きで Loki に送信され、DB ログと OTel ログの両系統でインタラクションを追跡可能。
 
 ### 4.3 フロントエンド
 
-フロントエンド自体は OTel 計装していない。代わりに `src/api/services/observability.ts` で Loki API に直接クエリし、AI インタラクションの詳細を取得・表示する。
+`src/api/telemetry.ts` で OTel SDK (WebTracerProvider) を初期化し、HTTP リクエストごとにスパンを生成する。
+
+**SDK 構成:**
+
+| コンポーネント | 実装 |
+|---------------|------|
+| Provider | `WebTracerProvider` |
+| Exporter | `OTLPTraceExporter` (`/otlp/v1/traces` → Vite プロキシ → Collector:4318) |
+| Processor | `BatchSpanProcessor` |
+| Propagation | W3C TraceContext（`propagation.inject()` で traceparent ヘッダー自動注入） |
+
+**計装ポイント:**
+
+| 箇所 | 方法 |
+|------|------|
+| `HttpClient.request()` | `tracer.startActiveSpan('HTTP ${method}')` でスパン作成。`http.method`, `http.url`, `http.status_code` 属性付与 |
+| `streamAgentChat()` | `injectTraceHeaders()` で SSE リクエストにトレースヘッダー注入 |
+| `streamApproveActions()` | `injectTraceHeaders()` で SSE リクエストにトレースヘッダー注入 |
+
+`src/api/services/observability.ts` で kensan-ai API (`/explorer/interactions`) を介して Lakehouse Silver テーブルから AI インタラクションの詳細を取得・表示する。データは Loki → Dagster 5分バッチ → Bronze → Silver の経路で蓄積される。
 
 **取得可能な AI イベントタイプ:**
 
@@ -213,34 +250,36 @@ Python logging (kensan_ai logger)
 
 ### 5.1 HTTP サーバーメトリクス
 
-本プロジェクトで使用するメトリクスは [OTel HTTP Semantic Conventions v1.26.0](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) に準拠している。
+[OTel HTTP Semantic Conventions v1.26.0](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) に準拠。
 
 **`http.server.request.duration` (Histogram, 単位: 秒)**
 
 | 属性 | 説明 | 例 |
 |------|------|-----|
-| `http.request.method` | HTTP メソッド | `GET`, `POST`, `PUT`, `DELETE` |
+| `http.request.method` | HTTP メソッド | `GET`, `POST` |
 | `http.route` | リクエストパス | `/api/v1/tasks` |
-| `http.response.status_code` | レスポンスステータスコード | `200`, `404`, `500` |
+| `http.response.status_code` | レスポンスステータスコード | `200`, `500` |
 | `server.address` | Host ヘッダー値 | `localhost:8082` |
 
-このヒストグラムひとつから以下の RED メトリクスをすべて導出できる:
+このヒストグラムひとつから RED メトリクスをすべて導出:
 
-| 指標 | PromQL |
-|------|--------|
-| **Rate** (リクエスト/秒) | `sum(rate(http_server_request_duration_seconds_count{job=~"$service"}[5m]))` |
-| **Error Rate** (5xx 率) | `sum(rate(...{http_response_status_code=~"5.."}[5m])) / sum(rate(...[5m]))` |
-| **p50 Latency** | `histogram_quantile(0.50, sum by (le)(rate(..._bucket{job=~"$service"}[5m])))` |
-| **p95 Latency** | `histogram_quantile(0.95, ...)` |
-| **p99 Latency** | `histogram_quantile(0.99, ...)` |
+```mermaid
+graph LR
+    H["http.server.request.duration<br/>(Histogram)"]
+    H --> Rate["Rate<br/>_count の rate()"]
+    H --> Err["Error Rate<br/>status_code=~5xx の割合"]
+    H --> P50["p50 Latency<br/>histogram_quantile(0.50)"]
+    H --> P95["p95 Latency<br/>histogram_quantile(0.95)"]
+    H --> P99["p99 Latency<br/>histogram_quantile(0.99)"]
+```
 
 ### 5.2 GenAI メトリクス
 
-| メトリクス | PromQL (例) |
-|-----------|-------------|
-| トークン消費レート | `rate(gen_ai_client_token_usage_total[5m])` |
-| エージェント実行レート | `rate(gen_ai_client_operation_count_total[5m])` |
-| エージェント処理時間 p95 | `histogram_quantile(0.95, rate(gen_ai_client_operation_duration_seconds_bucket[5m]))` |
+| メトリクス | 用途 |
+|-----------|------|
+| `gen_ai_client_token_usage_total` | トークン消費レートの監視 |
+| `gen_ai_client_operation_count_total` | エージェント実行頻度の監視 |
+| `gen_ai_client_operation_duration_seconds` | エージェント処理時間のパーセンタイル分析 |
 
 ---
 
@@ -249,112 +288,77 @@ Python logging (kensan_ai logger)
 ### 6.1 Kensan - Service Overview
 
 **ファイル:** `grafana/dashboards/kensan-service-overview.json`
-
 **目的:** 全サービスの RED メトリクスを一覧し、システム全体の健全性をひと目で判断する。SRE の「最初に開くダッシュボード」。
 
-**変数:**
-- `service`: サービス名フィルター（複数選択可、デフォルト: 全サービス）
+```mermaid
+graph TB
+    subgraph Stats["ヘッダー統計 (Stat)"]
+        S1["Request Rate<br/>全サービス合計 req/s"]
+        S2["Error Rate 5xx<br/><1%緑 1-5%黄 >5%赤"]
+        S3["p95 Latency<br/><500ms緑 <1s黄 >1s赤"]
+        S4["Active Services<br/>送信中サービス数"]
+    end
 
-**パネル構成:**
+    subgraph TimeSeries["時系列パネル"]
+        T1["Request Rate<br/>per Service"]
+        T2["Error Rate 5xx<br/>per Service"]
+        T3["Latency p95<br/>per Service"]
+    end
 
-| # | パネル名 | 種別 | 説明 |
-|---|---------|------|------|
-| 1 | Request Rate | Stat | 全サービス合計のリクエスト/秒 |
-| 2 | Error Rate 5xx | Stat | 5xx エラーの割合。閾値: <1% 緑, 1-5% 黄, >5% 赤 |
-| 3 | p95 Latency | Stat | 95パーセンタイルレイテンシ。閾値: <500ms 緑, <1s 黄, >1s 赤 |
-| 4 | Active Services | Stat | テレメトリを送信中のサービス数 |
-| 5 | Request Rate per Service | Time series | サービスごとのリクエストレート推移 |
-| 6 | Error Rate 5xx per Service | Time series | サービスごとのエラー率推移（閾値ライン付き） |
-| 7 | Latency p95 per Service | Time series | サービスごとの p95 レイテンシ推移 |
-| 8 | Request Rate by Status Code | Stacked bar | ステータスコード別リクエスト数（2xx 緑, 4xx 黄, 5xx 赤） |
-| 9 | Latency Comparison | Time series | p50, p95, p99 パーセンタイルの比較 |
-| 10 | Error Budget | Gauge | SLO 99% に対する成功率ゲージ。99%以上 緑, 95-99% 黄, <95% 赤 |
-| 11 | Service Map | Node Graph | Tempo ベースのサービス間トポロジー可視化 |
-| 12 | Recent Errors | Logs | Loki からの直近エラーログ（level=error or status≥500） |
+    subgraph Detail["詳細パネル"]
+        D1["Request Rate<br/>by Status Code<br/>(Stacked bar)"]
+        D2["Latency Comparison<br/>p50/p95/p99"]
+        D3["Error Budget<br/>SLO 99% Gauge"]
+    end
 
-**活用シーン:**
-- デプロイ後の健全性確認（Error Rate, Latency の急変がないか）
-- 障害検知の第一画面（Error Budget が減っていないか）
-- サービス間依存関係の把握（Service Map）
+    subgraph Context["コンテキストパネル"]
+        C1["Service Map<br/>Tempo Node Graph"]
+        C2["Recent Errors<br/>Loki ログ"]
+    end
+```
+
+**変数:** `service`（サービス名フィルター、複数選択可、デフォルト: 全サービス）
 
 ### 6.2 Kensan - Request Explorer
 
 **ファイル:** `grafana/dashboards/kensan-request-explorer.json`
-
 **目的:** 特定エンドポイントのパフォーマンス分析、スロークエリ調査、リクエスト単位のトレース探索。Service Overview で異常を発見した後のドリルダウン用。
-
-**変数:**
-- `service`: サービス名フィルター（デフォルト: 全サービス）
-- `method`: HTTP メソッドフィルター（複数選択可、デフォルト: 全メソッド）
-
-**パネル構成:**
 
 | # | パネル名 | 種別 | データソース | 説明 |
 |---|---------|------|-------------|------|
 | 1 | Endpoint Latency Heatmap | Heatmap | Prometheus | レイテンシ分布をバケットごとに可視化。外れ値を発見しやすい |
-| 2 | Top Endpoints by Request Count | Table | Prometheus | エンドポイント別のリクエスト数、p95 レイテンシ、エラー率（上位15件） |
-| 3 | Slow DB Queries | Table | Tempo | 100ms 超の DB クエリをトレースから抽出（TraceQL: `name =~ "SELECT\|INSERT\|UPDATE\|DELETE" && duration > 100ms`） |
+| 2 | Top Endpoints by Request Count | Table | Prometheus | エンドポイント別のリクエスト数、p95、エラー率（上位15件） |
+| 3 | Slow DB Queries | Table | Tempo | 100ms 超の DB クエリをトレースから抽出 |
 | 4 | Errors by Endpoint | Stacked bar | Prometheus | エンドポイント×ステータスコード別のエラー数 |
 | 5 | Trace Search | Table | Tempo | 選択サービスのトレース一覧（最新30件） |
-| 6 | Request Logs with Trace Correlation | Logs | Loki | 選択サービスのログ（JSON パース済み、トレース ID 付き） |
+| 6 | Request Logs | Logs | Loki | 選択サービスのログ（JSON パース済み、トレース ID 付き） |
 
-**活用シーン:**
-- 「どのエンドポイントが遅い？」→ Endpoint Latency Heatmap + Top Endpoints
-- 「DB がボトルネック？」→ Slow DB Queries でスロークエリを特定
-- 「特定リクエストの詳細を追いたい」→ Trace Search でトレースを選択 → Tempo で全スパンを確認
-- 「エラーの詳細を見たい」→ Logs パネルでトレース ID をクリック → Tempo にジャンプ
+**変数:** `service`, `method`（HTTP メソッド、複数選択可）
 
 ---
 
 ## 7. データソース連携
 
-### 7.1 Traces → Logs（Tempo → Loki）
+Tempo / Loki / Prometheus 間のクロスリンクにより、ダッシュボード上でシームレスに行き来できる。
 
-Tempo の `tracesToLogsV2` 設定により、トレース詳細画面からワンクリックで関連ログを表示できる。
+```mermaid
+graph LR
+    Tempo["Tempo<br/>(トレース)"]
+    Loki["Loki<br/>(ログ)"]
+    Prom["Prometheus<br/>(メトリクス)"]
 
-```yaml
-# datasources.yaml
-tracesToLogsV2:
-  datasourceUid: loki
-  filterByTraceID: true
-  customQuery: true
-  query: '{service_name=~".+"} | json | trace_id="${__trace.traceId}"'
+    Tempo -->|"tracesToLogsV2<br/>trace_id でフィルター"| Loki
+    Loki -->|"derivedFields<br/>trace_id → View Trace リンク"| Tempo
+    Tempo -->|"serviceMap<br/>トポロジー自動生成"| Prom
 ```
 
-**フロー:**
-1. Grafana の Tempo パネルでトレースを選択
-2. 「Logs for this span」リンクをクリック
-3. Loki にトレース ID でフィルターされたクエリが実行される
+| 連携 | 設定 | フロー |
+|------|------|--------|
+| **Traces → Logs** | `tracesToLogsV2` | Tempo でトレース選択 → 「Logs for this span」→ Loki に trace_id フィルター |
+| **Logs → Traces** | `derivedFields` | Loki でログ表示 → TraceID の「View Trace」リンク → Tempo に遷移 |
+| **Service Map** | `serviceMap` | トレースデータからサービス間トポロジーを Node Graph で表示 |
 
-### 7.2 Logs → Traces（Loki → Tempo）
-
-Loki の `derivedFields` 設定により、ログ内のトレース ID がクリック可能なリンクになる。
-
-```yaml
-# datasources.yaml
-derivedFields:
-  - datasourceUid: tempo
-    matcherRegex: '"trace_id":"(\w+)"'
-    name: TraceID
-    url: "${__value.raw}"
-    urlDisplayLabel: "View Trace"
-```
-
-**フロー:**
-1. Grafana の Loki パネルでログを表示
-2. ログ行の `TraceID` フィールドに「View Trace」リンクが表示される
-3. クリックすると Tempo のトレース詳細画面に遷移
-
-### 7.3 Service Map（Tempo → Prometheus）
-
-Tempo の `serviceMap` 設定により、トレースデータからサービス間のトポロジーを自動生成する。
-
-```yaml
-serviceMap:
-  datasourceUid: prometheus
-```
-
-Service Overview ダッシュボードの Node Graph パネルで表示される。
+設定の詳細は `grafana/provisioning/datasources/datasources.yaml` を参照。
 
 ---
 
@@ -362,149 +366,60 @@ Service Overview ダッシュボードの Node Graph パネルで表示される
 
 | ファイル | 説明 |
 |---------|------|
-| `otel-collector-config.yaml` | OTel Collector のレシーバー・プロセッサー・エクスポーター設定 |
+| `otel-collector-config.yaml` | Collector のレシーバー・プロセッサー・エクスポーター設定 |
 | `prometheus.yml` | Prometheus のスクレイプ設定 |
 | `loki.yaml` | Loki のストレージ・スキーマ・リテンション設定 |
 | `tempo.yaml` | Tempo のストレージ・コンパクション・メトリクスジェネレーター設定 |
-| `grafana/provisioning/datasources/datasources.yaml` | Grafana データソース定義（Tempo, Loki, Prometheus） |
-| `grafana/provisioning/dashboards/dashboards.yaml` | Grafana ダッシュボードプロビジョニング |
+| `grafana/provisioning/datasources/datasources.yaml` | データソース定義（Tempo↔Loki↔Prometheus クロスリンク含む） |
+| `grafana/provisioning/dashboards/dashboards.yaml` | ダッシュボードプロビジョニング |
 | `grafana/dashboards/kensan-service-overview.json` | Service Overview ダッシュボード定義 |
 | `grafana/dashboards/kensan-request-explorer.json` | Request Explorer ダッシュボード定義 |
 
-### OTel Collector パイプライン構成
-
-```yaml
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [filter/drop-http-send, batch]
-      exporters: [otlp/tempo]
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [prometheusremotewrite]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [loki]
-```
-
-**`filter/drop-http-send` プロセッサー:**
-
-FastAPI の自動計装が SSE ストリーミング時に yield ごとに `http send` スパンを生成する。μs 単位で有用な情報がなくトレースビューのノイズになるため、Collector レベルで除外する。
-
-```yaml
-filter/drop-http-send:
-  traces:
-    span:
-      - 'name == "POST /api/v1/agent/stream http send"'
-      - 'name == "GET /api/v1/agent/stream http send"'
-```
+**ノイズ除去フィルター:** OTel Collector の `filter/drop-http-send` プロセッサーで、FastAPI SSE ストリーミング時の `http send` スパン（yield ごとに μs 単位で生成、情報価値なし）を除外している。設定は `otel-collector-config.yaml` を参照。
 
 ---
 
 ## 9. 運用ガイド
 
-### 9.1 ローカル開発での起動
+### 9.1 障害調査フロー
 
-```bash
-# 全スタック起動（アプリ + observability）
-make up
+```mermaid
+flowchart TD
+    Start["異常を検知/報告"]
+    SO["1. Service Overview を開く<br/>Error Rate / Latency に異常?"]
+    Filter["2. サービスを特定<br/>service 変数で絞り込み"]
+    RE["3. Request Explorer にドリルダウン"]
 
-# Grafana にアクセス
-open http://localhost:3000
+    subgraph Explorer["Request Explorer での調査"]
+        EP["Top Endpoints で<br/>問題エンドポイント特定"]
+        DB["Slow DB Queries で<br/>DB ボトルネック確認"]
+        TR["Trace Search で<br/>個別トレース調査"]
+        LG["Logs パネルで<br/>エラー詳細確認"]
+    end
+
+    Resolve["原因特定・修正"]
+
+    Start --> SO --> Filter --> RE --> Explorer
+    EP --> TR
+    DB --> TR
+    TR --> LG --> Resolve
 ```
 
-Grafana は匿名アクセスが有効（admin ロール）のため、ログイン不要。
+### 9.2 新しいサービスの追加
 
-### 9.2 障害調査フロー
+1. `bootstrap` パッケージで初期化（Go の場合）→ `OTelTrace`, `Metrics`, `Logger` ミドルウェアが自動適用
+2. Docker Compose で `OTEL_ENABLED=true`, `OTEL_COLLECTOR_URL=otel-collector:4318` を設定
+3. Grafana ダッシュボードは `job` ラベルで動的検出するため、ダッシュボード側の変更は不要
 
-```
-1. Service Overview を開く
-   → Error Rate や Latency に異常がないか確認
-
-2. 異常があるサービスを特定
-   → Service 変数で絞り込み
-
-3. Request Explorer にドリルダウン
-   → Top Endpoints でどのエンドポイントが問題か特定
-   → Slow DB Queries で DB ボトルネックをチェック
-
-4. Trace Search で個別トレースを調査
-   → スパンの階層構造でボトルネックの箇所を特定
-
-5. Logs パネルでエラー詳細を確認
-   → トレース ID でフィルターして前後のコンテキストを把握
-```
-
-### 9.3 Grafana で使える主要クエリ
-
-**PromQL（メトリクス）:**
-
-```promql
-# 特定サービスのリクエストレート
-sum(rate(http_server_request_duration_seconds_count{job="task-service"}[5m]))
-
-# 全サービスの 5xx エラー率
-sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
-/ sum(rate(http_server_request_duration_seconds_count[5m]))
-
-# エンドポイント別 p95 レイテンシ
-histogram_quantile(0.95,
-  sum by (le, http_route)(
-    rate(http_server_request_duration_seconds_bucket{job="task-service"}[5m])
-  )
-)
-```
-
-**TraceQL（トレース）:**
-
-```
-# 特定サービスの全トレース
-{resource.service.name = "task-service"}
-
-# 500ms 超のリクエスト
-{resource.service.name = "task-service" && duration > 500ms}
-
-# スロー DB クエリ
-{resource.service.name =~ ".*" && name =~ "SELECT|INSERT|UPDATE|DELETE" && duration > 100ms}
-```
-
-**LogQL（ログ）:**
-
-```logql
-# 特定サービスのエラーログ
-{job="task-service"} | json | level = "error"
-
-# トレース ID でフィルター
-{job="kensan-ai"} | json | trace_id = "abc123..."
-
-# 5xx レスポンスのログ
-{job=~".+"} | json | status >= 500
-```
-
-### 9.4 新しいサービスを追加する場合
-
-1. `bootstrap` パッケージを使ってサービスを初期化する（Go の場合）
-   - `OTelTrace`, `Metrics`, `Logger` ミドルウェアが自動適用される
-2. Docker Compose で環境変数を設定:
-   ```yaml
-   environment:
-     OTEL_ENABLED: "true"
-     OTEL_COLLECTOR_URL: "otel-collector:4318"
-   ```
-3. Grafana ダッシュボードは `job` ラベルで動的にサービスを検出するため、ダッシュボード側の変更は不要
-
-### 9.5 Kubernetes 環境
+### 9.3 Kubernetes 環境
 
 `k8s/observability/otel-collector.yaml` に DaemonSet 構成が用意されている。
 
-- 各ノードに OTel Collector が配置される
-- `k8sattributes` プロセッサーで Pod 名、Namespace、Deployment 名が自動付与される
-- Exporter は クラスタ内の `tempo`, `prometheus`, `loki` サービスに向ける
+- 各ノードに OTel Collector を配置
+- `k8sattributes` プロセッサーで Pod 名、Namespace、Deployment 名を自動付与
+- Exporter はクラスタ内の `tempo`, `prometheus`, `loki` サービスに向ける
 
-### 9.6 リテンション設定
+### 9.4 リテンション設定
 
 | コンポーネント | 保持期間 | 設定場所 |
 |---------------|---------|---------|

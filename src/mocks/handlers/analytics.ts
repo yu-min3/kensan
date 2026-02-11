@@ -29,9 +29,9 @@ function generateDailyHoursForRange(startDate: string, endDate: string) {
       hours: baseHours,
       day: dayNames[day.getDay()],
       byGoal: [
-        { id: 'goal-gk', name: 'Golden Kubestronaut', color: '#0EA5E9', minutes: gkMinutes },
-        { id: 'goal-oss', name: 'OSS活動', color: '#10B981', minutes: ossMinutes },
-        { id: 'goal-output', name: 'アウトプット', color: '#F59E0B', minutes: outputMinutes },
+        { id: 'goal-cert', name: 'GCPスキルアップ', color: '#0EA5E9', minutes: gkMinutes },
+        { id: 'goal-product', name: '個人開発プロダクト', color: '#10B981', minutes: ossMinutes },
+        { id: 'goal-output', name: '技術アウトプット', color: '#F59E0B', minutes: outputMinutes },
       ],
     }
   })

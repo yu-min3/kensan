@@ -42,7 +42,7 @@ export function GoalDialog({ dialog, onSave }: GoalDialogProps) {
               id="goalName"
               value={dialog.data.name}
               onChange={(e) => dialog.setField('name', e.target.value)}
-              placeholder="例: Golden Kubestronaut"
+              placeholder="例: GCPスキルアップ"
               className="mt-1"
             />
           </div>
@@ -53,7 +53,7 @@ export function GoalDialog({ dialog, onSave }: GoalDialogProps) {
               id="goalDescription"
               value={dialog.data.description}
               onChange={(e) => dialog.setField('description', e.target.value)}
-              placeholder="例: CNCF認定資格を全て取得する"
+              placeholder="例: GCP認定資格を取得する"
               className="mt-1"
             />
           </div>

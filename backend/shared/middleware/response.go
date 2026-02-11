@@ -2,12 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kensan/backend/shared/errors"
 )
 
 // Response is the standard API response format
@@ -195,31 +193,3 @@ func ValidateRequired(w http.ResponseWriter, r *http.Request, fields map[string]
 	return true
 }
 
-// HandleError maps common errors to HTTP responses automatically.
-// It checks the error against known error types and writes the appropriate response.
-// Unknown errors are logged and returned as 500 Internal Server Error.
-//
-// Usage:
-//
-//	if err := h.service.DoSomething(...); err != nil {
-//	    middleware.HandleError(w, r, err, log)
-//	    return
-//	}
-func HandleError(w http.ResponseWriter, r *http.Request, err error, logger *slog.Logger) {
-	switch {
-	case errors.IsNotFound(err):
-		Error(w, r, http.StatusNotFound, "NOT_FOUND", err.Error())
-	case errors.IsInvalidInput(err):
-		Error(w, r, http.StatusBadRequest, "INVALID_INPUT", err.Error())
-	case errors.IsAlreadyExists(err):
-		Error(w, r, http.StatusConflict, "ALREADY_EXISTS", err.Error())
-	case errors.IsUnauthorized(err):
-		Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", err.Error())
-	case errors.IsDatabaseSchema(err):
-		logger.ErrorContext(r.Context(), "Database schema error", "error", err, "request_id", GetRequestID(r.Context()))
-		Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
-	default:
-		logger.ErrorContext(r.Context(), "Unhandled error", "error", err, "request_id", GetRequestID(r.Context()))
-		Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-	}
-}

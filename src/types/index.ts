@@ -35,12 +35,14 @@ export interface Milestone {
 // Tag (タグ) - 集計用の自由タグ
 // ============================================
 export type TagType = 'task' | 'note'
+export type TagCategory = 'general' | 'trait' | 'tech' | 'project'
 
 export interface Tag {
   id: string
   name: string
   color: string // Hex color
   type: TagType
+  category: TagCategory
   pinned: boolean
   usageCount: number
   createdAt: Date
@@ -193,7 +195,7 @@ export interface NoteMetadataItem {
 }
 
 // コンテンツタイプ（複数コンテンツ対応）
-export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code'
+export type ContentType = 'markdown' | 'drawio' | 'image' | 'pdf' | 'code' | 'mindmap'
 export type StorageProvider = 'minio' | 'r2' | 's3' | 'local'
 export type IndexStatus = 'pending' | 'processing' | 'indexed' | 'failed'
 
@@ -345,21 +347,49 @@ export interface TimeEvaluation {
   goalName: string
   goalColor?: string
   actualMinutes: number
-  targetMinutes: number
+  targetMinutes?: number
   comment: string
+}
+
+export interface LearningTopic {
+  topic: string
+  goalName?: string
+  goalColor?: string
+  depth: 'deep' | 'moderate' | 'light'
+  insight: string
+}
+
+export interface LearningSummaryData {
+  overview: string
+  topics: LearningTopic[]
+  weeklyPattern?: string
+  goalConnection?: string
+}
+
+export interface SuggestedAction {
+  label: string
+  description: string
+  type: 'chat'
+  prompt: string
 }
 
 export interface AIReviewReport {
   id: string
-  weekStart: string
-  weekEnd: string
+  periodStart: string
+  periodEnd: string
   // 4セクション構造
   taskEvaluations: TaskEvaluation[]
+  taskSummary?: string
   timeEvaluations: TimeEvaluation[]
-  learningSummary: string
+  learningSummary?: string
+  learningSummaryData?: LearningSummaryData
   goodPoints: string[]
   improvementPoints: string[]
   advice: string[]
+  // おまけ: 日記へのひとこと
+  diaryFeedback?: string
+  // アクション提案
+  suggestedActions?: SuggestedAction[]
   // 後方互換
   summary: string
   createdAt: Date
@@ -379,6 +409,53 @@ export interface EntityMemo {
   pinned: boolean
   createdAt: Date
   updatedAt: Date
+}
+
+// ============================================
+// AI Planning (AI計画提案)
+// ============================================
+export interface PlanningInsight {
+  category: 'productivity' | 'goal' | 'planning' | 'alert'
+  title: string
+  description: string
+}
+
+export interface ProposedBlock {
+  taskId: string | null
+  taskName: string
+  goalId: string | null
+  goalName: string
+  goalColor: string
+  startTime: string // HH:mm
+  endTime: string // HH:mm
+  reason: string
+}
+
+export interface TaskPrioritySuggestion {
+  taskId: string
+  taskName: string
+  suggestedAction: 'today' | 'defer' | 'split'
+  reason: string
+}
+
+export interface PlanningAlert {
+  type: 'goal_stalled' | 'overdue' | 'overcommit'
+  message: string
+}
+
+export interface YesterdayReview {
+  summary: string
+  highlights: string[]
+  learningConnections: string[]
+}
+
+export interface AIPlanningResult {
+  message?: string
+  yesterdayReview?: YesterdayReview
+  insights: PlanningInsight[]
+  proposedBlocks: ProposedBlock[]
+  taskPriorities: TaskPrioritySuggestion[]
+  alerts: PlanningAlert[]
 }
 
 // ============================================

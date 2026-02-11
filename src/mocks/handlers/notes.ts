@@ -5,6 +5,23 @@ import type { Note, NoteType } from '@/types'
 
 const BASE_URL = 'http://localhost:8091/api/v1'
 
+// In-memory storage for note contents (keyed by noteId)
+const noteContentsStore: Record<string, Array<{
+  id: string
+  noteId: string
+  contentType: string
+  content?: string
+  storageProvider?: string
+  storageKey?: string
+  fileName?: string
+  mimeType?: string
+  fileSizeBytes?: number
+  sortOrder: number
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}>> = {}
+
 // Transform to API response format (with content)
 const toNoteResponse = (n: Note) => ({
   id: n.id,
@@ -356,9 +373,25 @@ export const noteHandlers = [
     })
   }),
 
+  // GET /notes/:id/contents - List note contents
+  http.get(`${BASE_URL}/notes/:id/contents`, ({ params }) => {
+    const noteId = params.id as string
+    const note = notes.find((n) => n.id === noteId)
+    if (!note) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Note not found' },
+        { status: 404 }
+      )
+    }
+
+    const contents = noteContentsStore[noteId] ?? []
+    return HttpResponse.json(contents.sort((a, b) => a.sortOrder - b.sortOrder))
+  }),
+
   // POST /notes/:id/contents - Create note content
   http.post(`${BASE_URL}/notes/:id/contents`, async ({ params, request }) => {
-    const note = notes.find((n) => n.id === params.id)
+    const noteId = params.id as string
+    const note = notes.find((n) => n.id === noteId)
     if (!note) {
       return HttpResponse.json(
         { code: 'NOT_FOUND', message: 'Note not found' },
@@ -370,20 +403,84 @@ export const noteHandlers = [
     const now = new Date().toISOString()
     const contentId = (body.contentId as string) || generateId('content')
 
-    return HttpResponse.json({
+    const newContent = {
       id: contentId,
-      noteId: params.id,
-      contentType: body.contentType || 'image',
-      storageProvider: body.storageProvider || 'minio',
-      storageKey: body.storageKey,
-      fileName: body.fileName,
-      mimeType: body.mimeType,
-      fileSizeBytes: body.fileSizeBytes,
-      sortOrder: body.sortOrder || 0,
-      metadata: body.metadata || {},
+      noteId,
+      contentType: (body.contentType as string) || 'image',
+      content: body.content as string | undefined,
+      storageProvider: body.storageProvider as string | undefined,
+      storageKey: body.storageKey as string | undefined,
+      fileName: body.fileName as string | undefined,
+      mimeType: body.mimeType as string | undefined,
+      fileSizeBytes: body.fileSizeBytes as number | undefined,
+      sortOrder: (body.sortOrder as number) || 0,
+      metadata: (body.metadata as Record<string, unknown>) || {},
       createdAt: now,
       updatedAt: now,
-    }, { status: 201 })
+    }
+
+    if (!noteContentsStore[noteId]) {
+      noteContentsStore[noteId] = []
+    }
+    noteContentsStore[noteId].push(newContent)
+
+    return HttpResponse.json(newContent, { status: 201 })
+  }),
+
+  // PUT /notes/:id/contents/:contentId - Update note content
+  http.put(`${BASE_URL}/notes/:id/contents/:contentId`, async ({ params, request }) => {
+    const noteId = params.id as string
+    const contentId = params.contentId as string
+    const contents = noteContentsStore[noteId]
+    if (!contents) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Content not found' },
+        { status: 404 }
+      )
+    }
+
+    const index = contents.findIndex((c) => c.id === contentId)
+    if (index === -1) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Content not found' },
+        { status: 404 }
+      )
+    }
+
+    const body = (await request.json()) as Record<string, unknown>
+    contents[index] = {
+      ...contents[index],
+      ...(body.content !== undefined ? { content: body.content as string } : {}),
+      ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder as number } : {}),
+      ...(body.metadata !== undefined ? { metadata: body.metadata as Record<string, unknown> } : {}),
+      updatedAt: new Date().toISOString(),
+    }
+
+    return HttpResponse.json(contents[index])
+  }),
+
+  // DELETE /notes/:id/contents/:contentId - Delete note content
+  http.delete(`${BASE_URL}/notes/:id/contents/:contentId`, ({ params }) => {
+    const noteId = params.id as string
+    const contentId = params.contentId as string
+    const contents = noteContentsStore[noteId]
+    if (!contents) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Content not found' },
+        { status: 404 }
+      )
+    }
+
+    const index = contents.findIndex((c) => c.id === contentId)
+    if (index === -1) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Content not found' },
+        { status: 404 }
+      )
+    }
+
+    contents.splice(index, 1)
+    return new HttpResponse(null, { status: 204 })
   }),
 
   // GET /notes/:id/contents/:contentId/download-url - Get download URL

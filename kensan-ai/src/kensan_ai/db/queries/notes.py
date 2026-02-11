@@ -81,9 +81,19 @@ async def backfill_embeddings(user_id: UUID, batch_size: int = 20) -> int:
 async def get_notes(
     user_id: UUID,
     note_type: str | None = None,
+    start_date: "date | None" = None,
+    end_date: "date | None" = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Get notes for a user with optional type filter."""
+    """Get notes for a user with optional type and date filters.
+
+    Args:
+        user_id: The user ID.
+        note_type: Filter by note type (e.g., 'diary', 'learning').
+        start_date: Filter notes with date >= start_date (uses note's date column).
+        end_date: Filter notes with date <= end_date (uses note's date column).
+        limit: Max number of notes to return.
+    """
     async with get_connection() as conn:
         conditions = ["user_id = $1"]
         params: list[Any] = [user_id]
@@ -94,15 +104,26 @@ async def get_notes(
             params.append(note_type)
             param_idx += 1
 
+        if start_date is not None:
+            conditions.append(f"COALESCE(date, created_at::date) >= ${param_idx}")
+            params.append(start_date)
+            param_idx += 1
+
+        if end_date is not None:
+            conditions.append(f"COALESCE(date, created_at::date) <= ${param_idx}")
+            params.append(end_date)
+            param_idx += 1
+
         params.append(limit)
         where_clause = " AND ".join(conditions)
 
+        # Sort by note date when available, fall back to created_at
         rows = await conn.fetch(
             f"""
-            SELECT id, title, type, content, created_at, updated_at
+            SELECT id, title, type, content, date, created_at, updated_at
             FROM notes
             WHERE {where_clause}
-            ORDER BY created_at DESC
+            ORDER BY COALESCE(date, created_at::date) DESC, created_at DESC
             LIMIT ${param_idx}
             """,
             *params,
@@ -114,6 +135,7 @@ async def get_notes(
                 "title": row["title"],
                 "type": row["type"],
                 "content": row["content"],
+                "date": row["date"].isoformat() if row["date"] else None,
                 "createdAt": row["created_at"].isoformat(),
                 "updatedAt": row["updated_at"].isoformat() if row["updated_at"] else None,
             }

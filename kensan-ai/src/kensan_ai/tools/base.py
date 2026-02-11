@@ -17,6 +17,7 @@ class ToolDefinition:
     input_schema: dict[str, Any]
     handler: Callable[[dict[str, Any]], Awaitable[Any]]
     readonly: bool = True
+    category: str = "other"
 
     def to_api_schema(self) -> dict[str, Any]:
         """Convert to Anthropic API tool schema format."""
@@ -40,6 +41,7 @@ def tool(
     description: str,
     input_schema: dict[str, Any] | None = None,
     readonly: bool = True,
+    category: str = "other",
 ) -> Callable:
     """Decorator to register a function as a tool.
 
@@ -64,6 +66,7 @@ def tool(
             input_schema=input_schema or {"properties": {}, "required": []},
             handler=wrapper,
             readonly=readonly,
+            category=category,
         )
         _tool_registry[name] = tool_def
 
@@ -110,11 +113,11 @@ def is_readonly_tool(name: str) -> bool:
         name: The tool name
 
     Returns:
-        True if readonly, False if write tool. Defaults to True for unknown tools.
+        True if readonly, False if write tool. Defaults to False for unknown tools.
     """
     tool_def = get_tool(name)
     if tool_def is None:
-        return True
+        return False
     return tool_def.readonly
 
 

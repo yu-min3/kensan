@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kensan/backend/shared/telemetry"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -31,8 +32,9 @@ type Client struct {
 // NewClient creates a new storage client and ensures the bucket exists
 func NewClient(cfg Config) (*Client, error) {
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-		Secure: cfg.UseSSL,
+		Creds:     credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure:    cfg.UseSSL,
+		Transport: telemetry.InstrumentedTransport(nil),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)

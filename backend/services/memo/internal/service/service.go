@@ -8,9 +8,9 @@ import (
 	"github.com/kensan/backend/shared/errors"
 )
 
-// Re-export shared errors for backward compatibility with handlers
+// Service-specific errors
 var (
-	ErrMemoNotFound = errors.ErrMemoNotFound
+	ErrMemoNotFound = errors.NotFound("memo")
 	ErrInvalidInput = errors.ErrInvalidInput
 )
 

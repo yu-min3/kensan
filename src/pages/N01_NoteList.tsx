@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { GoalBadge } from '@/components/common/GoalBadge'
 import { Badge } from '@/components/ui/badge'
 import { useNoteStore } from '@/stores/useNoteStore'
 import { useNoteTypeStore } from '@/stores/useNoteTypeStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useTaskManagerStore } from '@/stores/useTaskManagerStore'
+import { useNoteTagStore } from '@/stores/useNoteTagStore'
 import { getNoteTypeIcon } from '@/lib/noteTypeIcons'
 import { formatDateIso } from '@/lib/dateFormat'
 import type { NoteType } from '@/types'
@@ -20,27 +22,34 @@ import {
   Search,
   StickyNote,
   Archive,
+  Tag,
 } from 'lucide-react'
+import { PageGuide } from '@/components/guide/PageGuide'
 
 export function N01NoteList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { items, isLoading, fetchNotes, search, searchResults, clearSearchResults } = useNoteStore()
   const { types } = useNoteTypeStore()
-  const { goals, tags } = useTaskStore()
+  const { goals } = useTaskManagerStore()
+  const tags = useNoteTagStore((s) => s.items)
 
   // Get initial filter from URL
   const initialType = searchParams.get('type') as NoteType | null
   const initialGoalId = searchParams.get('goalId')
   const initialArchived = searchParams.get('archived') === 'true'
 
+  const initialTagIds = searchParams.get('tagIds')?.split(',').filter(Boolean) || []
+
   const [typeFilter, setTypeFilter] = useState<NoteType | 'all'>(initialType || 'all')
   const [goalFilter, setGoalFilter] = useState<string>(initialGoalId || 'all')
+  const [tagFilter, setTagFilter] = useState<string[]>(initialTagIds)
   const [searchQuery, setSearchQuery] = useState('')
+  const [tagSearchQuery, setTagSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(initialArchived)
 
   // Fetch notes on mount and when filters change
   useEffect(() => {
-    const filter: { types?: NoteType[]; goalId?: string; archived?: boolean } = {}
+    const filter: { types?: NoteType[]; goalId?: string; tagIds?: string[]; archived?: boolean } = {}
 
     if (typeFilter !== 'all') {
       filter.types = [typeFilter]
@@ -48,11 +57,14 @@ export function N01NoteList() {
     if (goalFilter !== 'all') {
       filter.goalId = goalFilter
     }
+    if (tagFilter.length > 0) {
+      filter.tagIds = tagFilter
+    }
     filter.archived = showArchived
 
     fetchNotes(filter)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter, goalFilter, showArchived])
+  }, [typeFilter, goalFilter, tagFilter, showArchived])
 
   // Handle search
   useEffect(() => {
@@ -73,14 +85,31 @@ export function N01NoteList() {
     const params = new URLSearchParams()
     if (typeFilter !== 'all') params.set('type', typeFilter)
     if (goalFilter !== 'all') params.set('goalId', goalFilter)
+    if (tagFilter.length > 0) params.set('tagIds', tagFilter.join(','))
     if (showArchived) params.set('archived', 'true')
     setSearchParams(params, { replace: true })
-  }, [typeFilter, goalFilter, showArchived, setSearchParams])
+  }, [typeFilter, goalFilter, tagFilter, showArchived, setSearchParams])
 
-  // Display search results if searching, otherwise show filtered items
-  const displayItems = searchQuery.trim()
-    ? searchResults.map((r) => r.note)
-    : items
+  // Types that should sort by date instead of createdAt
+  const dateOrderTypes: NoteType[] = ['diary', 'learning']
+  const useDateSort = typeFilter !== 'all' && dateOrderTypes.includes(typeFilter as NoteType)
+
+  // Display search results if searching, otherwise show filtered items with sort
+  const displayItems = useMemo(() => {
+    const raw = searchQuery.trim()
+      ? searchResults.map((r) => r.note)
+      : items
+
+    if (!useDateSort || searchQuery.trim()) return raw
+
+    return [...raw].sort((a, b) => {
+      // Sort by date desc for diary/learning
+      if (a.date && b.date) return b.date.localeCompare(a.date)
+      if (a.date) return -1
+      if (b.date) return 1
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
+  }, [searchQuery, searchResults, items, useDateSort])
 
   const getCreateLink = () => {
     if (typeFilter === 'all') return '/notes/new'
@@ -100,6 +129,8 @@ export function N01NoteList() {
 
   return (
     <div className="space-y-6">
+      <PageGuide pageId="notes" />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -162,6 +193,102 @@ export function N01NoteList() {
               ))}
           </SelectContent>
         </Select>
+        {/* Tag filter */}
+        <Popover onOpenChange={(open) => { if (!open) setTagSearchQuery('') }}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Tag className="h-4 w-4" />
+              タグ
+              {tagFilter.length > 0 && (
+                <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                  {tagFilter.length}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-0" align="start">
+            <div className="p-2 border-b">
+              <Input
+                placeholder="タグを検索..."
+                value={tagSearchQuery}
+                onChange={(e) => setTagSearchQuery(e.target.value)}
+                className="h-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1">
+              {(() => {
+                const q = tagSearchQuery.toLowerCase()
+                const unselected = tags.filter(
+                  (t) => !tagFilter.includes(t.id) && (!q || t.name.toLowerCase().includes(q))
+                )
+                const selected = tags.filter((t) => tagFilter.includes(t.id))
+
+                if (tags.length === 0) {
+                  return <p className="text-sm text-muted-foreground p-2">タグがありません</p>
+                }
+
+                return (
+                  <>
+                    {/* Selected tags first */}
+                    {selected.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className="flex items-center gap-2 w-full text-left rounded px-2 py-1.5 hover:bg-accent"
+                        onClick={() => setTagFilter((prev) => prev.filter((id) => id !== tag.id))}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-primary"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span className="text-sm truncate flex-1">{tag.name}</span>
+                        <span className="text-xs text-muted-foreground">✓</span>
+                      </button>
+                    ))}
+                    {selected.length > 0 && unselected.length > 0 && (
+                      <div className="border-t my-1" />
+                    )}
+                    {/* Unselected tags matching search */}
+                    {unselected.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className="flex items-center gap-2 w-full text-left rounded px-2 py-1.5 hover:bg-accent"
+                        onClick={() => {
+                          setTagFilter((prev) => [...prev, tag.id])
+                          setTagSearchQuery('')
+                        }}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span className="text-sm truncate">{tag.name}</span>
+                      </button>
+                    ))}
+                    {q && unselected.length === 0 && (
+                      <p className="text-xs text-muted-foreground p-2">該当するタグがありません</p>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+            {tagFilter.length > 0 && (
+              <div className="border-t p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs"
+                  onClick={() => setTagFilter([])}
+                >
+                  すべて解除
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
         <Button
           variant={showArchived ? 'default' : 'outline'}
           size="sm"
@@ -172,6 +299,28 @@ export function N01NoteList() {
           {showArchived ? 'アーカイブ済み' : 'アーカイブ'}
         </Button>
       </div>
+
+      {/* Active tag filter badges */}
+      {tagFilter.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">タグ絞り込み:</span>
+          {tagFilter.map((tagId) => {
+            const tag = tags.find((t) => t.id === tagId)
+            if (!tag) return null
+            return (
+              <Badge
+                key={tagId}
+                variant="outline"
+                className="text-xs cursor-pointer gap-1"
+                style={{ borderColor: tag.color, color: tag.color }}
+                onClick={() => setTagFilter((prev) => prev.filter((id) => id !== tagId))}
+              >
+                {tag.name} ×
+              </Badge>
+            )
+          })}
+        </div>
+      )}
 
       {/* Loading state */}
       {isLoading && (

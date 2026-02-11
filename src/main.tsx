@@ -5,6 +5,10 @@ import './index.css'
 import App from './App.tsx'
 import { httpClient } from './api/client'
 import { useAuthStore } from './stores/useAuthStore'
+import { initTelemetry } from './api/telemetry'
+
+// Initialize OpenTelemetry tracing
+initTelemetry()
 
 // 401エラー時にログアウト処理を実行
 httpClient.setOnUnauthorized(() => {
@@ -25,7 +29,7 @@ enableMocking().then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
-      <Toaster richColors position="top-right" theme="dark" />
+      <Toaster richColors position="top-right" theme={document.documentElement.classList.contains('dark') ? 'dark' : 'light'} />
     </StrictMode>,
   )
 })

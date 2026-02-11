@@ -1,4 +1,4 @@
-import type { TimeBlock, TimeEntry } from '@/types'
+import type { TimeEntry } from '@/types'
 
 /**
  * Shared types for timeline components
@@ -47,26 +47,6 @@ export interface DisplayTimes {
   endTime: string
 }
 
-// Props for TimeBlockItem component
-export interface TimeBlockItemProps {
-  block: TimeBlock
-  displayTimes: DisplayTimes
-  isActive: boolean
-  isDragging: boolean
-  showComparison: boolean
-  isTimerRunning: boolean
-  overlapColumn?: number
-  overlapTotalColumns?: number
-  onBlockClick?: (block: TimeBlock) => void
-  onBlockDelete?: (blockId: string) => void
-  onBlockResize?: (blockId: string, startTime: string, endTime: string) => void
-  onBlockStartTimer?: (block: TimeBlock) => void
-  onDragStart: (e: React.MouseEvent, block: TimeBlock) => void
-  onResizeStart: (e: React.MouseEvent, block: TimeBlock, edge: ResizeEdge) => void
-  getTopPosition: (time: string) => number
-  getHeight: (start: string, end: string) => number
-}
-
 // Props for TimeEntryItem component
 export interface TimeEntryItemProps {
   entry: TimeEntry
@@ -89,4 +69,17 @@ export interface RunningTimerItemProps {
 export interface TimeBlockTimelineGridProps {
   hours: number[]
   hourHeight: number
+}
+
+// Generic drag/resize state (for Weekly calendar etc.)
+export interface GenericDragResizeState {
+  blockId: string
+  type: 'drag' | 'resize'
+  edge?: ResizeEdge
+  initialY: number
+  initialStartTime: string
+  initialEndTime: string
+  duration: number // in minutes
+  // Optional: date context for multi-day views
+  dateStr?: string
 }

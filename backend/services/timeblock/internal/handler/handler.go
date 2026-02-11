@@ -27,7 +27,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/timeblocks", func(r chi.Router) {
 		r.Get("/", h.ListTimeBlocks)
 		r.Post("/", h.CreateTimeBlock)
-		r.Post("/generate-from-routines", h.GenerateFromRoutines)
 		r.Put("/{timeBlockId}", h.UpdateTimeBlock)
 		r.Delete("/{timeBlockId}", h.DeleteTimeBlock)
 	})
@@ -165,35 +164,6 @@ func (h *Handler) DeleteTimeBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// GenerateFromRoutines handles POST /timeblocks/generate-from-routines
-func (h *Handler) GenerateFromRoutines(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-
-	var input timeblock.GenerateFromRoutinesInput
-	if !middleware.DecodeJSONBody(w, r, &input) {
-		return
-	}
-
-	if input.Date == "" {
-		middleware.ValidationError(w, r, []middleware.ErrorDetail{
-			{Field: "date", Message: "Date is required"},
-		})
-		return
-	}
-
-	result, err := h.service.GenerateFromRoutines(r.Context(), userID, input)
-	if err != nil {
-		if errors.Is(err, service.ErrInvalidDate) {
-			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE", "Invalid date format (expected YYYY-MM-DD)")
-			return
-		}
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate time blocks from routines")
-		return
-	}
-
-	middleware.JSON(w, r, http.StatusCreated, result)
 }
 
 // ========== TimeEntry Handlers ==========

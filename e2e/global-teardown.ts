@@ -20,7 +20,7 @@ export default async function globalTeardown() {
   const notes: { id: string; title: string }[] = json.data ?? []
 
   // Filter notes with [E2E] prefix
-  const e2eNotes = notes.filter((n) => n.title.startsWith('[E2E]'))
+  const e2eNotes = notes.filter((n) => n.title?.startsWith('[E2E]'))
 
   if (e2eNotes.length === 0) {
     console.log('[teardown] No E2E notes to clean up')

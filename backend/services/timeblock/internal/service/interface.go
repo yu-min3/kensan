@@ -13,7 +13,6 @@ type TimeBlockService interface {
 	CreateTimeBlock(ctx context.Context, userID string, input timeblock.CreateTimeBlockInput) (*timeblock.TimeBlock, error)
 	UpdateTimeBlock(ctx context.Context, userID, timeBlockID string, input timeblock.UpdateTimeBlockInput) (*timeblock.TimeBlock, error)
 	DeleteTimeBlock(ctx context.Context, userID, timeBlockID string) error
-	GenerateFromRoutines(ctx context.Context, userID string, input timeblock.GenerateFromRoutinesInput) (*timeblock.GenerateFromRoutinesResult, error)
 }
 
 // TimeEntryService defines the interface for time entry operations

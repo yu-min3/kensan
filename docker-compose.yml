@@ -119,7 +119,9 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - kensan-network
+      kensan-network:
+        aliases:
+          - kensan-lakehouse.kensan-minio
 
   minio-init:
     image: minio/mc:latest
@@ -134,38 +136,6 @@ services:
       mc mb --ignore-existing local/kensan-lakehouse &&
       echo '{\"CORSRules\":[{\"AllowedOrigins\":[\"http://localhost:5173\"],\"AllowedMethods\":[\"GET\",\"PUT\"],\"AllowedHeaders\":[\"*\"],\"MaxAgeSeconds\":3600}]}' | mc cors set local/kensan-notes /dev/stdin
       "
-    networks:
-      - kensan-network
-
-  # =============================================================================
-  # Lakehouse
-  # =============================================================================
-  nessie:
-    image: ghcr.io/projectnessie/nessie:latest
-    container_name: kensan-nessie
-    ports:
-      - "19120:19120"
-    environment:
-      NESSIE_VERSION_STORE_TYPE: IN_MEMORY
-      # Quarkus config properties (using Quarkus property names directly)
-      QUARKUS_PROFILE: ""
-      nessie.catalog.default-warehouse: lakehouse
-      nessie.catalog.warehouses.lakehouse.location: s3://kensan-lakehouse/
-      nessie.catalog.service.s3.default-options.endpoint: http://minio:9000
-      nessie.catalog.service.s3.default-options.external-endpoint: http://localhost:9000
-      nessie.catalog.service.s3.default-options.path-style-access: "true"
-      nessie.catalog.service.s3.default-options.region: us-east-1
-      nessie.catalog.service.s3.default-options.access-key: urn:nessie-secret:quarkus:nessie.catalog.secrets.s3
-      nessie.catalog.secrets.s3.name: kensan
-      nessie.catalog.secrets.s3.secret: kensan-minio
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:19120/api/v2/config"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    depends_on:
-      minio:
-        condition: service_healthy
     networks:
       - kensan-network
 
@@ -209,6 +179,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
       OTEL_ENABLED: "true"
       OTEL_COLLECTOR_URL: "otel-collector:4318"
+      DEMO_SEED_DIR: /app/demo-seed
+    volumes:
+      - ./scripts/demo-seed:/app/demo-seed:ro
     ports:
       - "8081:8081"
     depends_on:
@@ -303,10 +276,15 @@ services:
       DB_PASSWORD: kensan
       DB_NAME: kensan
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      AI_PROVIDER: ${AI_PROVIDER:-google}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: kensan
       MINIO_SECRET_KEY: kensan-minio
@@ -315,6 +293,13 @@ services:
       OTEL_ENABLED: "true"
       OTEL_COLLECTOR_URL: "otel-collector:4318"
       OTEL_SEMCONV_STABILITY_OPT_IN: "http"
+      LAKEHOUSE_ENABLED: "true"
+      POLARIS_URI: "http://polaris:8181/api/catalog"
+      POLARIS_CREDENTIAL: "root:s3cr3t"
+      POLARIS_WAREHOUSE: "kensan-lakehouse"
+      LAKEHOUSE_S3_ENDPOINT: "http://minio:9000"
+      LAKEHOUSE_S3_ACCESS_KEY: "kensan"
+      LAKEHOUSE_S3_SECRET_KEY: "kensan-minio"
     ports:
       - "8089:8089"
     depends_on:

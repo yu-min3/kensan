@@ -1,81 +1,48 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Plus, History, ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/stores/useChatStore'
-import type { ActionItem } from '@/stores/useChatStore'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ActionProposal } from './ActionProposal'
-import { streamAgentChat, streamApproveActions } from '@/api/services/agent'
-import type { AgentStreamEvent, AgentStreamRequest } from '@/api/services/agent'
+import { WelcomeMessage } from './WelcomeMessage'
+import { ConversationRating } from './ConversationRating'
+import { streamApproveActions, rejectActions } from '@/api/services/agent'
+import { usePanelResize } from '@/hooks/usePanelResize'
+import { useChatStream } from '@/hooks/useChatStream'
 
 export function ChatPanel() {
   const {
     isOpen,
-    messages,
-    conversationId,
-    isStreaming,
-    pendingActions,
     conversations,
     isLoadingHistory,
     isViewingHistory,
+    conversationRating,
     close,
-    addMessage,
-    appendToLastAssistantMessage,
-    setStreaming,
-    setPendingActions,
-    setConversationId,
     newConversation,
     fetchConversations,
     loadConversation,
   } = useChatStore()
 
+  const stream = useChatStream()
+  const {
+    messages,
+    isStreaming,
+    conversationId,
+    pendingActions,
+    sendMessage,
+    processSSEEvent,
+    setMessages,
+    setConversationId,
+    setPendingActions,
+    setStreaming,
+    reset,
+  } = stream
+
   const [showHistory, setShowHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Resize state
-  const MIN_WIDTH = 320
-  const MAX_WIDTH = 700
-  const DEFAULT_WIDTH = 380
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
-  const isResizing = useRef(false)
-  const startX = useRef(0)
-  const startWidth = useRef(DEFAULT_WIDTH)
-
-  useLayoutEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return
-      // Panel is on the right side, so dragging left increases width
-      const delta = startX.current - e.clientX
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
-      setPanelWidth(newWidth)
-    }
-
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [])
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isResizing.current = true
-    startX.current = e.clientX
-    startWidth.current = panelWidth
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [panelWidth])
+  const { panelWidth, handleResizeStart } = usePanelResize()
 
   // Global keyboard shortcut: Ctrl+Shift+A to toggle panel
   useEffect(() => {
@@ -94,139 +61,9 @@ export function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSSEEvent = useCallback(
-    (event: AgentStreamEvent) => {
-      switch (event.type) {
-        case 'text': {
-          const msgs = useChatStore.getState().messages
-          const last = msgs[msgs.length - 1]
-          if (last && last.role === 'assistant' && last.type === 'text') {
-            appendToLastAssistantMessage(event.data.content as string)
-          } else {
-            addMessage({
-              id: crypto.randomUUID(),
-              role: 'assistant',
-              content: event.data.content as string,
-              type: 'text',
-              timestamp: new Date(),
-            })
-          }
-          break
-        }
-
-        case 'tool_call':
-          addMessage({
-            id: event.data.id as string,
-            role: 'assistant',
-            content: '',
-            type: 'tool_call',
-            toolName: event.data.name as string,
-            timestamp: new Date(),
-          })
-          break
-
-        case 'tool_result': {
-          // Mark tool_call as completed instead of removing it
-          const store = useChatStore.getState()
-          const updated = store.messages.map((m) =>
-            m.type === 'tool_call' && m.id === event.data.id
-              ? { ...m, toolCompleted: true }
-              : m
-          )
-          useChatStore.setState({ messages: updated })
-
-          // Show error message if the tool execution failed
-          if (event.data.error) {
-            addMessage({
-              id: crypto.randomUUID(),
-              role: 'assistant',
-              content: `⚠ ${event.data.name || 'アクション'}の実行に失敗しました: ${event.data.error}`,
-              type: 'text',
-              timestamp: new Date(),
-            })
-          }
-          break
-        }
-
-        case 'action_proposal': {
-          const rawActions = event.data.actions as Array<Record<string, unknown>>
-          const mappedActions: ActionItem[] = rawActions.map((a) => ({
-            id: a.id as string,
-            type: (a.tool_name as string) || (a.type as string) || '',
-            description: (a.description as string) || '',
-            input: (a.input as Record<string, unknown>) || {},
-          }))
-          setPendingActions(mappedActions)
-          addMessage({
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: '',
-            type: 'action_proposal',
-            actions: mappedActions,
-            timestamp: new Date(),
-          })
-          break
-        }
-
-        case 'done':
-          if (event.data.conversation_id) {
-            setConversationId(event.data.conversation_id as string)
-          }
-          break
-      }
-    },
-    [addMessage, appendToLastAssistantMessage, setPendingActions, setConversationId]
-  )
-
-  const handleSendWithSituation = useCallback(
-    async (text: string, situation: AgentStreamRequest['situation'] = 'auto') => {
-      addMessage({
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: text,
-        type: 'text',
-        timestamp: new Date(),
-      })
-
-      setStreaming(true)
-      abortControllerRef.current = new AbortController()
-
-      try {
-        const stream = streamAgentChat(
-          {
-            message: text,
-            conversation_id: conversationId,
-            situation,
-          },
-          abortControllerRef.current.signal
-        )
-
-        for await (const event of stream) {
-          handleSSEEvent(event)
-        }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          const errorMessage = (err as Error).message?.includes('タイムアウト')
-            ? 'AIサービスからの応答がタイムアウトしました。もう一度お試しください。'
-            : 'エラーが発生しました。もう一度お試しください。'
-          addMessage({
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: errorMessage,
-            type: 'text',
-            timestamp: new Date(),
-          })
-        }
-      } finally {
-        setStreaming(false)
-      }
-    },
-    [conversationId, addMessage, setStreaming, handleSSEEvent]
-  )
-
   const handleSend = useCallback(
-    (text: string) => handleSendWithSituation(text, 'auto'),
-    [handleSendWithSituation]
+    (text: string) => sendMessage(text, 'auto'),
+    [sendMessage]
   )
 
   // Handle prefilled messages (e.g., from A02_AIReview)
@@ -234,9 +71,11 @@ export function ChatPanel() {
     const prefilled = useChatStore.getState().prefilledMessage
     if (prefilled && isOpen && !isStreaming) {
       useChatStore.getState().clearPrefilled()
-      handleSendWithSituation(prefilled.message, prefilled.situation || 'auto')
+      // Reset stream state for new prefilled conversation
+      reset()
+      sendMessage(prefilled.message, prefilled.situation || 'auto')
     }
-  }, [isOpen, isStreaming, handleSendWithSituation])
+  }, [isOpen, isStreaming, sendMessage, reset])
 
   const handleApprove = useCallback(
     async (actionIds: string[]) => {
@@ -246,39 +85,50 @@ export function ChatPanel() {
       setStreaming(true)
 
       try {
-        const stream = streamApproveActions({
+        const sseStream = streamApproveActions({
           conversation_id: conversationId,
           action_ids: actionIds,
         })
 
-        for await (const event of stream) {
-          handleSSEEvent(event)
+        for await (const event of sseStream) {
+          processSSEEvent(event)
         }
       } catch {
-        addMessage({
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: 'アクションの実行中にエラーが発生しました。',
-          type: 'text',
-          timestamp: new Date(),
-        })
+        setMessages(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant' as const,
+            content: 'アクションの実行中にエラーが発生しました。',
+            type: 'text' as const,
+            timestamp: new Date(),
+          },
+        ])
       } finally {
         setStreaming(false)
       }
     },
-    [conversationId, setPendingActions, setStreaming, handleSSEEvent, addMessage]
+    [conversationId, setPendingActions, setStreaming, processSSEEvent, setMessages]
   )
 
   const handleReject = useCallback(() => {
     setPendingActions(null)
-    addMessage({
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: '提案をキャンセルしました。他にお手伝いできることはありますか？',
-      type: 'text',
-      timestamp: new Date(),
-    })
-  }, [setPendingActions, addMessage])
+    setMessages(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '提案をキャンセルしました。他にお手伝いできることはありますか？',
+        type: 'text' as const,
+        timestamp: new Date(),
+      },
+    ])
+    if (conversationId) {
+      rejectActions(conversationId).catch(() => {
+        // Non-critical: rejection recording failure doesn't affect UX
+      })
+    }
+  }, [conversationId, setPendingActions, setMessages])
 
   const handleShowHistory = useCallback(() => {
     setShowHistory(true)
@@ -286,11 +136,14 @@ export function ChatPanel() {
   }, [fetchConversations])
 
   const handleSelectConversation = useCallback(
-    (id: string) => {
-      loadConversation(id)
+    async (id: string) => {
+      const loadedMessages = await loadConversation(id)
+      setMessages(loadedMessages)
+      setConversationId(id)
+      setPendingActions(null)
       setShowHistory(false)
     },
-    [loadConversation]
+    [loadConversation, setMessages, setConversationId, setPendingActions]
   )
 
   const handleBackFromHistory = useCallback(() => {
@@ -299,13 +152,14 @@ export function ChatPanel() {
 
   const handleNewFromHistory = useCallback(() => {
     newConversation()
+    reset()
     setShowHistory(false)
-  }, [newConversation])
+  }, [newConversation, reset])
 
   if (!isOpen) return null
 
   return (
-    <div className="border-l flex flex-col bg-background h-full relative" style={{ width: panelWidth }}>
+    <div role="complementary" aria-label="AI Chat" className="border-l flex flex-col bg-background h-full relative" style={{ width: panelWidth }}>
       {/* Resize handle */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 z-10"
@@ -321,12 +175,13 @@ export function ChatPanel() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={handleBackFromHistory}
+                aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-sm font-semibold">履歴</h2>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close} aria-label="Close">
               <X className="h-4 w-4" />
             </Button>
           </>
@@ -345,6 +200,7 @@ export function ChatPanel() {
                 className="h-7 w-7"
                 onClick={handleShowHistory}
                 title="履歴"
+                aria-label="History"
               >
                 <History className="h-4 w-4" />
               </Button>
@@ -354,10 +210,11 @@ export function ChatPanel() {
                 className="h-7 w-7"
                 onClick={handleNewFromHistory}
                 title="新しい会話"
+                aria-label="New conversation"
               >
                 <Plus className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={close} aria-label="Close">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -401,15 +258,10 @@ export function ChatPanel() {
       ) : (
         <>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto py-2">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm px-6 text-center">
-                <p>何かお手伝いしましょうか？</p>
-                <p className="text-xs mt-1">例：「今日の予定立てて」「タスク見せて」</p>
-              </div>
-            )}
-            {messages.map((msg) =>
-              msg.type === 'action_proposal' && msg.actions ? (
+          <div role="log" aria-live="polite" className="flex-1 overflow-y-auto py-2">
+            {messages.length === 0 && <WelcomeMessage onSend={handleSend} />}
+            {messages.map((msg) => {
+              return msg.type === 'action_proposal' && msg.actions ? (
                 <ActionProposal
                   key={msg.id}
                   actions={msg.actions}
@@ -420,7 +272,7 @@ export function ChatPanel() {
               ) : (
                 <ChatMessage key={msg.id} message={msg} />
               )
-            )}
+            })}
             {isStreaming && !pendingActions && (
               <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -429,6 +281,19 @@ export function ChatPanel() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Conversation rating */}
+          {conversationRating ? (
+            <div className="flex items-center px-4 py-2 border-t text-xs text-muted-foreground">
+              評価しました — ありがとうございます
+            </div>
+          ) : (
+            <ConversationRating
+              messages={messages}
+              isStreaming={isStreaming}
+              conversationId={conversationId}
+            />
+          )}
 
           {/* Input - disabled when viewing history */}
           <ChatInput

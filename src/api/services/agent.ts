@@ -1,6 +1,7 @@
 // Agent API Service - SSE streaming for AI agent interactions
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
+import { injectTraceHeaders } from '../telemetry'
 
 // Types
 export interface AgentStreamEvent {
@@ -11,8 +12,10 @@ export interface AgentStreamEvent {
 export interface AgentStreamRequest {
   message: string
   conversation_id?: string | null
-  situation?: 'auto' | 'morning' | 'evening' | 'weekly' | 'chat'
+  situation?: 'auto' | 'review' | 'chat' | 'daily_advice'
   context?: Record<string, string> | null
+  context_id?: string | null
+  version_number?: number | null
 }
 
 export interface AgentApproveRequest {
@@ -74,6 +77,7 @@ export async function* streamAgentChat(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  injectTraceHeaders(headers)
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`
   }
@@ -180,6 +184,7 @@ export async function* streamApproveActions(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  injectTraceHeaders(headers)
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`
   }
@@ -264,6 +269,43 @@ export async function* streamApproveActions(
     clearTimeout(chunkTimeoutId)
     reader.releaseLock()
   }
+}
+
+/**
+ * Notify the backend that the user rejected proposed actions.
+ * Records the rejection in conversation history so the agent
+ * doesn't re-propose the same actions.
+ */
+export async function rejectActions(conversationId: string): Promise<void> {
+  const url = `${API_CONFIG.baseUrls.ai}/api/v1/agent/reject`
+  const authToken = httpClient.getAuthToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
+
+  await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ conversation_id: conversationId }),
+  })
+}
+
+/**
+ * Rate a conversation.
+ */
+export async function rateConversation(
+  conversationId: string,
+  rating: number,
+): Promise<{ success: boolean; message: string }> {
+  return httpClient.post<{ success: boolean; message: string }>(
+    API_CONFIG.baseUrls.ai,
+    `/conversations/${conversationId}/rate`,
+    { rating },
+  )
 }
 
 // Conversations history API

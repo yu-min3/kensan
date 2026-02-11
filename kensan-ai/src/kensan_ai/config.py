@@ -32,13 +32,24 @@ class Settings(BaseSettings):
             return self.database_url
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
+    # AI Provider ("anthropic" or "google")
+    ai_provider: str = "google"
+
     # Anthropic API
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
 
+    # Google GenAI API
+    google_api_key: str = ""
+    google_model: str = "gemini-2.0-flash"
+
     # OpenAI API (for embeddings)
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
+
+    # Embedding provider ("openai" or "gemini")
+    embedding_provider: str = "openai"
+    gemini_embedding_model: str = "gemini-embedding-001"
 
     # MinIO Storage (read-only access for note content)
     minio_endpoint: str = "localhost:9000"
@@ -64,6 +75,19 @@ class Settings(BaseSettings):
     otel_enabled: bool = False
     otel_collector_url: str = "localhost:4318"
 
+    # External Tools
+    tavily_api_key: str = ""
+
+    # Lakehouse (Iceberg direct write via Polaris)
+    polaris_uri: str = "http://localhost:8181/api/catalog"
+    polaris_credential: str = "root:s3cr3t"
+    polaris_warehouse: str = "kensan-lakehouse"
+    lakehouse_s3_endpoint: str = "http://localhost:9000"
+    lakehouse_s3_access_key: str = "kensan"
+    lakehouse_s3_secret_key: str = "kensan-minio"
+    lakehouse_s3_bucket: str = "kensan-lakehouse"
+    lakehouse_enabled: bool = False
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug_bool(cls, v: Any) -> bool:
@@ -78,8 +102,10 @@ class Settings(BaseSettings):
     def validate_production_settings(self) -> "Settings":
         """Validate critical settings in production environment."""
         if self.server_env == "production":
-            if not self.anthropic_api_key:
-                raise ValueError("ANTHROPIC_API_KEY is required in production")
+            if self.ai_provider == "anthropic" and not self.anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY is required in production with ai_provider=anthropic")
+            if self.ai_provider == "google" and not self.google_api_key:
+                raise ValueError("GOOGLE_API_KEY is required in production with ai_provider=google")
             if self.jwt_secret == "dev-secret-key-change-in-production":
                 raise ValueError("JWT_SECRET must be changed in production")
         return self

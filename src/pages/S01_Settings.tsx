@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSettingsStore } from '@/stores/useSettingsStore'
+import { PageGuide } from '@/components/guide/PageGuide'
+import { useGuideStore } from '@/components/guide/useGuideStore'
+import { RotateCcw } from 'lucide-react'
 
 export function S01Settings() {
   const navigate = useNavigate()
@@ -16,6 +19,7 @@ export function S01Settings() {
     setIsConfigured,
     saveSettings,
   } = useSettingsStore()
+  const resetGuide = useGuideStore((s) => s.resetAll)
 
   const handleSave = async () => {
     setIsConfigured(true)
@@ -30,6 +34,8 @@ export function S01Settings() {
           <h1 className="text-3xl font-bold">Kensan</h1>
           <p className="text-muted-foreground mt-1">自己研鑽プラットフォーム</p>
         </div>
+
+        <PageGuide pageId="settings" />
 
         <Card>
           <CardHeader>
@@ -76,6 +82,17 @@ export function S01Settings() {
             >
               設定を保存{isConfigured ? '' : 'して始める'}
             </Button>
+
+            {isConfigured && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={resetGuide}
+              >
+                <RotateCcw className="h-4 w-4" />
+                ページガイドをリセット
+              </Button>
+            )}
 
             {isConfigured && (
               <Button

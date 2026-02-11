@@ -23,7 +23,33 @@ def _local_date_to_utc_range(
     return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
 
 
+def _to_local(utc_iso: str | None, tz: ZoneInfo) -> str | None:
+    """Convert a UTC ISO 8601 string to a readable local datetime string."""
+    if not utc_iso:
+        return utc_iso
+    dt = datetime.fromisoformat(utc_iso)
+    return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
+def _localize_summary(summary: dict, tz: ZoneInfo) -> dict:
+    """Convert all datetime fields in a summary dict to local timezone."""
+    result = dict(summary)
+    for key in ("startDatetime", "endDatetime"):
+        if key in result:
+            result[key] = _to_local(result[key], tz)
+    for list_key in ("planned", "actual"):
+        if list_key in result and isinstance(result[list_key], list):
+            result[list_key] = [
+                {**item, "startDatetime": _to_local(item.get("startDatetime"), tz),
+                 "endDatetime": _to_local(item.get("endDatetime"), tz)}
+                if "startDatetime" in item else item
+                for item in result[list_key]
+            ]
+    return result
+
+
 @tool(
+    category="analytics",
     name="get_analytics_summary",
     description="週次または月次の稼働サマリーを取得する。目標別の時間配分を確認する。",
     input_schema={
@@ -55,10 +81,11 @@ async def get_analytics_summary(args: dict[str, Any]) -> dict[str, Any]:
         start_datetime=start_dt,
         end_datetime=end_dt,
     )
-    return {"summary": summary}
+    return {"summary": _localize_summary(summary, user_tz)}
 
 
 @tool(
+    category="analytics",
     name="get_daily_summary",
     description="特定日の時間配分サマリーを取得する。計画vs実績の比較に使う。",
     input_schema={
@@ -88,7 +115,7 @@ async def get_daily_summary(args: dict[str, Any]) -> dict[str, Any]:
         start_datetime=start_dt,
         end_datetime=end_dt,
     )
-    return {"summary": summary}
+    return {"summary": _localize_summary(summary, user_tz)}
 
 
 ALL_ANALYTICS_TOOLS = [

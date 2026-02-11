@@ -3,6 +3,7 @@ import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { FloatingMemoButton } from '@/components/common/FloatingMemoButton'
 import { ChatPanel } from '@/components/agent/ChatPanel'
+import { DemoTour } from '@/components/guide/DemoTour'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function Layout() {
@@ -20,6 +21,7 @@ export function Layout() {
         <ChatPanel />
       </div>
       <FloatingMemoButton />
+      <DemoTour />
     </div>
   )
 }

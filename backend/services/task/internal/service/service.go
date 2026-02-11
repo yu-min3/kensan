@@ -2,26 +2,26 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	task "github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/repository"
 	"github.com/kensan/backend/shared/errors"
 )
 
-// Re-export shared errors for backward compatibility with handlers
-// Handlers can use service.ErrTaskNotFound or import shared/errors directly
+// Service-specific errors
 var (
-	ErrTaskNotFound                = errors.ErrTaskNotFound
-	ErrGoalNotFound                = errors.ErrGoalNotFound
-	ErrMilestoneNotFound           = errors.ErrMilestoneNotFound
-	ErrTagNotFound                 = errors.ErrTagNotFound
+	ErrTaskNotFound                = errors.NotFound("task")
+	ErrGoalNotFound                = errors.NotFound("goal")
+	ErrMilestoneNotFound           = errors.NotFound("milestone")
+	ErrTagNotFound                 = errors.NotFound("tag")
 	ErrTagAlreadyExists            = repository.ErrTagAlreadyExists
-	ErrEntityMemoNotFound          = errors.ErrEntityMemoNotFound
-	ErrTodoNotFound                = errors.ErrTodoNotFound
+	ErrEntityMemoNotFound          = errors.NotFound("entity memo")
+	ErrTodoNotFound                = errors.NotFound("todo")
 	ErrTodoCompletionAlreadyExists = repository.ErrTodoCompletionAlreadyExists
-	ErrInvalidStatus               = errors.ErrInvalidStatus
-	ErrInvalidEntityType           = errors.ErrInvalidEntityType
-	ErrInvalidFrequency            = errors.ErrInvalidFrequency
+	ErrInvalidStatus               = fmt.Errorf("invalid status: %w", errors.ErrInvalidInput)
+	ErrInvalidEntityType           = fmt.Errorf("invalid entity type: %w", errors.ErrInvalidInput)
+	ErrInvalidFrequency            = fmt.Errorf("invalid frequency: %w", errors.ErrInvalidInput)
 	ErrInvalidInput                = errors.ErrInvalidInput
 )
 
@@ -477,6 +477,12 @@ func (s *Service) CreateTag(ctx context.Context, userID string, input task.Creat
 	if input.Color == "" {
 		input.Color = "#6B7280" // default color
 	}
+	if input.Category == "" {
+		input.Category = "general"
+	}
+	if !task.IsValidTagCategory(input.Category) {
+		return nil, ErrInvalidInput
+	}
 	return s.repo.CreateTag(ctx, userID, input)
 }
 
@@ -488,11 +494,20 @@ func (s *Service) CreateNoteTag(ctx context.Context, userID string, input task.C
 	if input.Color == "" {
 		input.Color = "#6B7280" // default color
 	}
+	if input.Category == "" {
+		input.Category = "general"
+	}
+	if !task.IsValidTagCategory(input.Category) {
+		return nil, ErrInvalidInput
+	}
 	return s.repo.CreateNoteTag(ctx, userID, input)
 }
 
 // UpdateTag updates an existing tag
 func (s *Service) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
+	if input.Category != nil && !task.IsValidTagCategory(*input.Category) {
+		return nil, ErrInvalidInput
+	}
 	existing, err := s.repo.GetTagByID(ctx, userID, tagID)
 	if err != nil {
 		return nil, err
@@ -566,10 +581,10 @@ func (s *Service) GetEntityMemo(ctx context.Context, userID, memoID string) (*ta
 
 // CreateEntityMemo creates a new entity memo
 func (s *Service) CreateEntityMemo(ctx context.Context, userID string, input task.CreateEntityMemoInput) (*task.EntityMemo, error) {
-	if input.Content == "" {
+	if input.Content == "" || input.EntityID == "" {
 		return nil, ErrInvalidInput
 	}
-	if !input.EntityType.IsValid() {
+	if input.EntityType == "" || !input.EntityType.IsValid() {
 		return nil, ErrInvalidEntityType
 	}
 
@@ -755,20 +770,20 @@ func (s *Service) ToggleTodoComplete(ctx context.Context, userID, todoID, date s
 	}
 
 	// Check if already completed today
-	completion, err := s.repo.GetTodoCompletion(ctx, todoID, date)
+	completion, err := s.repo.GetTodoCompletion(ctx, userID, todoID, date)
 	if err != nil {
 		return nil, err
 	}
 
 	if completion != nil {
 		// Already completed, uncomplete it
-		err = s.repo.DeleteTodoCompletion(ctx, todoID, date)
+		err = s.repo.DeleteTodoCompletion(ctx, userID, todoID, date)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Not completed, complete it
-		_, err = s.repo.CreateTodoCompletion(ctx, todoID, date)
+		_, err = s.repo.CreateTodoCompletion(ctx, userID, todoID, date)
 		if err != nil {
 			return nil, err
 		}

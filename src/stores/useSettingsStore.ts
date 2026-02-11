@@ -7,6 +7,9 @@ interface SettingsState extends UserSettings {
   isLoading: boolean
   error: string | null
 
+  // UI preferences (localStorage only)
+  hideCompleted: boolean
+
   // データ取得
   fetchSettings: () => Promise<void>
 
@@ -15,6 +18,7 @@ interface SettingsState extends UserSettings {
   setTheme: (theme: Theme) => void
   setUserName: (name: string) => void
   setIsConfigured: (configured: boolean) => void
+  setHideCompleted: (hide: boolean) => void
   saveSettings: () => Promise<void>
   resetSettings: () => void
 }
@@ -32,6 +36,7 @@ export const useSettingsStore = create<SettingsState>()(
       ...initialSettings,
       isLoading: false,
       error: null,
+      hideCompleted: false,
 
       fetchSettings: async () => {
         set({ isLoading: true, error: null })
@@ -56,6 +61,9 @@ export const useSettingsStore = create<SettingsState>()(
       setIsConfigured: (configured) =>
         set({ isConfigured: configured }),
 
+      setHideCompleted: (hide) =>
+        set({ hideCompleted: hide }),
+
       saveSettings: async () => {
         const state = get()
         try {
@@ -78,6 +86,7 @@ export const useSettingsStore = create<SettingsState>()(
         theme: state.theme,
         isConfigured: state.isConfigured,
         userName: state.userName,
+        hideCompleted: state.hideCompleted,
       }),
     }
   )

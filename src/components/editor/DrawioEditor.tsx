@@ -89,6 +89,16 @@ export function DrawioEditor({ value, onChange }: DrawioEditorProps) {
               dangerouslySetInnerHTML={{ __html: previewSvg }}
               style={{ maxHeight: '100%', overflow: 'hidden' }}
             />
+          ) : value ? (
+            <div className="w-full h-full flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary/20 rounded-sm">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
+                  <Shapes className="h-7 w-7 text-primary" />
+                </div>
+                <p className="text-sm font-medium">図が保存されています</p>
+                <p className="text-xs text-muted-foreground mt-1">クリックして編集・プレビュー</p>
+              </div>
+            </div>
           ) : (
             <div className="text-center text-muted-foreground">
               <Shapes className="h-12 w-12 mx-auto mb-2 opacity-30" />

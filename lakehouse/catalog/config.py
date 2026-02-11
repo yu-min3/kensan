@@ -1,30 +1,49 @@
 """
-共通設定: Nessie Catalog接続、S3設定
+共通設定: Polaris Catalog接続、S3設定、ロギング
 """
 
+import logging
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pyiceberg.catalog import load_catalog
+from pyiceberg.catalog import Catalog, load_catalog
 
 # .envファイルを読み込み
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
-def get_catalog():
-    """Nessie Iceberg REST Catalog への接続を返す"""
+def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
+    """構造化ロガーをセットアップ"""
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(level)
+    return logger
+
+
+def get_catalog() -> Catalog:
+    """Polaris Iceberg REST Catalog への接続を返す"""
     return load_catalog(
-        "nessie",
+        "polaris",
         **{
             "type": "rest",
-            "uri": os.environ.get("NESSIE_URI", "http://localhost:19120/iceberg/"),
+            "uri": os.environ.get("POLARIS_URI", "http://localhost:8181/api/catalog"),
+            "credential": os.environ.get("POLARIS_CREDENTIAL", "root:s3cr3t"),
+            "scope": "PRINCIPAL_ROLE:ALL",
+            "warehouse": os.environ.get("POLARIS_WAREHOUSE", "kensan-lakehouse"),
             "s3.endpoint": os.environ.get("S3_ENDPOINT", "http://localhost:9000"),
             "s3.access-key-id": os.environ.get("S3_ACCESS_KEY", "kensan"),
             "s3.secret-access-key": os.environ.get("S3_SECRET_KEY", "kensan-minio"),
             "s3.path-style-access": "true",
             "s3.region": "us-east-1",
-            "warehouse": f"s3://{os.environ.get('S3_BUCKET', 'kensan-lakehouse')}",
         },
     )
 

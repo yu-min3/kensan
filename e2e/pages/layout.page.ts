@@ -11,6 +11,8 @@ export class LayoutPage {
 
   // Sidebar navigation
   readonly navDaily: Locator
+  readonly navBriefing: Locator
+  readonly navReflection: Locator
   readonly navNotes: Locator
   readonly navTasks: Locator
   readonly navAnalytics: Locator
@@ -26,7 +28,9 @@ export class LayoutPage {
     this.userMenuTrigger = page.locator('header button').filter({ has: page.locator('.rounded-full') })
 
     // Sidebar
-    this.navDaily = page.locator('nav a[href="/"]').filter({ hasText: 'デイリー' })
+    this.navDaily = page.locator('nav a[href="/"]').filter({ hasText: 'Daily' })
+    this.navBriefing = page.locator('nav a[href="/briefing"]')
+    this.navReflection = page.locator('nav a[href="/reflection"]')
     this.navNotes = page.locator('nav a[href="/notes"]')
     this.navTasks = page.locator('nav a[href="/tasks"]')
     this.navAnalytics = page.locator('nav a[href="/analytics"]')
@@ -50,9 +54,11 @@ export class LayoutPage {
     await this.getLogoutMenuItem().click()
   }
 
-  async navigateTo(target: 'daily' | 'notes' | 'tasks' | 'analytics' | 'interactions') {
+  async navigateTo(target: 'daily' | 'briefing' | 'reflection' | 'notes' | 'tasks' | 'analytics' | 'interactions') {
     const navMap = {
       daily: this.navDaily,
+      briefing: this.navBriefing,
+      reflection: this.navReflection,
       notes: this.navNotes,
       tasks: this.navTasks,
       analytics: this.navAnalytics,

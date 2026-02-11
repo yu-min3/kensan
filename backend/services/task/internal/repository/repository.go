@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kensan/backend/services/task/internal"
 	sharedErrors "github.com/kensan/backend/shared/errors"
+	"github.com/kensan/backend/shared/sqlbuilder"
 )
 
 // Repository-level errors
@@ -42,43 +43,27 @@ func wrapDBError(msg string, err error) error {
 
 // ListTasks returns all tasks for a user with optional filters
 func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filter task.TaskFilter) ([]task.Task, error) {
-	query := `
-		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
-		FROM tasks
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilter(w, "milestone_id", filter.MilestoneID)
+	sqlbuilder.AddFilter(w, "completed", filter.Completed)
+	sqlbuilder.AddFilter(w, "parent_task_id", filter.ParentTaskID)
 
-	if filter.MilestoneID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND milestone_id = $%d", argCount)
-		args = append(args, *filter.MilestoneID)
-	}
-
-	if filter.Completed != nil {
-		argCount++
-		query += fmt.Sprintf(" AND completed = $%d", argCount)
-		args = append(args, *filter.Completed)
-	}
-
-	if filter.ParentTaskID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND parent_task_id = $%d", argCount)
-		args = append(args, *filter.ParentTaskID)
-	}
-
+	whereClause := w.WhereClause()
 	if filter.HasParent != nil {
 		if *filter.HasParent {
-			query += " AND parent_task_id IS NOT NULL"
+			whereClause += " AND parent_task_id IS NOT NULL"
 		} else {
-			query += " AND parent_task_id IS NULL"
+			whereClause += " AND parent_task_id IS NULL"
 		}
 	}
 
-	query += " ORDER BY created_at DESC"
+	query := fmt.Sprintf(`
+		SELECT id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
+		FROM tasks
+		%s ORDER BY created_at DESC
+	`, whereClause)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query tasks", err)
 	}
@@ -219,81 +204,38 @@ func (r *PostgresRepository) CreateTask(ctx context.Context, userID string, inpu
 
 // UpdateTask updates an existing task
 func (r *PostgresRepository) UpdateTask(ctx context.Context, userID, taskID string, input task.UpdateTaskInput) (*task.Task, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
-
-	if input.MilestoneID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("milestone_id = $%d", argCount))
-		args = append(args, *input.MilestoneID)
-	}
-
-	if input.ParentTaskID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("parent_task_id = $%d", argCount))
-		args = append(args, *input.ParentTaskID)
-	}
-
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
-
-	if input.EstimatedMinutes != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("estimated_minutes = $%d", argCount))
-		args = append(args, *input.EstimatedMinutes)
-	}
-
-	if input.Completed != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("completed = $%d", argCount))
-		args = append(args, *input.Completed)
-	}
-
-	if input.DueDate != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("due_date = $%d", argCount))
-		args = append(args, *input.DueDate)
-	}
-
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "milestone_id", input.MilestoneID)
+	sqlbuilder.AddField(b, "parent_task_id", input.ParentTaskID)
+	sqlbuilder.AddField(b, "name", input.Name)
+	sqlbuilder.AddField(b, "estimated_minutes", input.EstimatedMinutes)
+	sqlbuilder.AddField(b, "completed", input.Completed)
+	sqlbuilder.AddField(b, "due_date", input.DueDate)
 	if input.Frequency != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("frequency = $%d", argCount))
-		args = append(args, string(*input.Frequency))
+		b.AddFieldValue("frequency", string(*input.Frequency))
 	}
-
 	if input.DaysOfWeek != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("days_of_week = $%d", argCount))
-		args = append(args, input.DaysOfWeek)
+		b.AddFieldValue("days_of_week", input.DaysOfWeek)
 	}
 
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetTaskByID(ctx, userID, taskID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, taskID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(taskID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE tasks
 		SET %s
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, milestone_id, parent_task_id, name, estimated_minutes, completed, due_date, frequency, days_of_week, COALESCE(sort_order, 0), created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var t task.Task
 	var frequency *string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&t.ID,
 		&t.UserID,
 		&t.MilestoneID,
@@ -582,23 +524,18 @@ func (r *PostgresRepository) BulkCompleteTasks(ctx context.Context, userID strin
 
 // ListGoals returns all goals for a user with optional filters
 func (r *PostgresRepository) ListGoals(ctx context.Context, userID string, filter task.GoalFilter) ([]task.Goal, error) {
-	query := `
-		SELECT id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
-		FROM goals
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
-
+	w := sqlbuilder.NewWhereBuilder(userID)
 	if filter.Status != nil {
-		argCount++
-		query += fmt.Sprintf(" AND status = $%d", argCount)
-		args = append(args, string(*filter.Status))
+		w.AddCondition("status = $%d", string(*filter.Status))
 	}
 
-	query += " ORDER BY sort_order ASC, created_at DESC"
+	query := fmt.Sprintf(`
+		SELECT id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
+		FROM goals
+		%s ORDER BY sort_order ASC, created_at DESC
+	`, w.WhereClause())
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query goals", err)
 	}
@@ -676,52 +613,30 @@ func (r *PostgresRepository) CreateGoal(ctx context.Context, userID string, inpu
 
 // UpdateGoal updates an existing goal
 func (r *PostgresRepository) UpdateGoal(ctx context.Context, userID, goalID string, input task.UpdateGoalInput) (*task.Goal, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
-
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
-	if input.Description != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argCount))
-		args = append(args, *input.Description)
-	}
-	if input.Color != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("color = $%d", argCount))
-		args = append(args, *input.Color)
-	}
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "name", input.Name)
+	sqlbuilder.AddField(b, "description", input.Description)
+	sqlbuilder.AddField(b, "color", input.Color)
 	if input.Status != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argCount))
-		args = append(args, string(*input.Status))
+		b.AddFieldValue("status", string(*input.Status))
 	}
 
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetGoalByID(ctx, userID, goalID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, goalID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(goalID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE goals SET %s WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, name, description, color, status, COALESCE(sort_order, 0), created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var g task.Goal
 	var status string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&g.ID, &g.UserID, &g.Name, &g.Description, &g.Color, &status, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if err != nil {
@@ -822,28 +737,19 @@ func (r *PostgresRepository) ReorderGoals(ctx context.Context, userID string, go
 
 // ListMilestones returns all milestones for a user with optional filters
 func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, filter task.MilestoneFilter) ([]task.Milestone, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilter(w, "goal_id", filter.GoalID)
+	if filter.Status != nil {
+		w.AddCondition("status = $%d", string(*filter.Status))
+	}
+
+	query := fmt.Sprintf(`
 		SELECT id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
 		FROM milestones
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+		%s ORDER BY created_at DESC
+	`, w.WhereClause())
 
-	if filter.GoalID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND goal_id = $%d", argCount)
-		args = append(args, *filter.GoalID)
-	}
-	if filter.Status != nil {
-		argCount++
-		query += fmt.Sprintf(" AND status = $%d", argCount)
-		args = append(args, string(*filter.Status))
-	}
-
-	query += " ORDER BY created_at DESC"
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query milestones", err)
 	}
@@ -914,62 +820,32 @@ func (r *PostgresRepository) CreateMilestone(ctx context.Context, userID string,
 
 // UpdateMilestone updates an existing milestone
 func (r *PostgresRepository) UpdateMilestone(ctx context.Context, userID, milestoneID string, input task.UpdateMilestoneInput) (*task.Milestone, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
-
-	if input.GoalID != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("goal_id = $%d", argCount))
-		args = append(args, *input.GoalID)
-	}
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
-	if input.Description != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argCount))
-		args = append(args, *input.Description)
-	}
-	if input.StartDate != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("start_date = $%d", argCount))
-		args = append(args, *input.StartDate)
-	}
-	if input.TargetDate != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("target_date = $%d", argCount))
-		args = append(args, *input.TargetDate)
-	}
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "goal_id", input.GoalID)
+	sqlbuilder.AddField(b, "name", input.Name)
+	sqlbuilder.AddField(b, "description", input.Description)
+	sqlbuilder.AddField(b, "start_date", input.StartDate)
+	sqlbuilder.AddField(b, "target_date", input.TargetDate)
 	if input.Status != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argCount))
-		args = append(args, string(*input.Status))
+		b.AddFieldValue("status", string(*input.Status))
 	}
 
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetMilestoneByID(ctx, userID, milestoneID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, milestoneID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(milestoneID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE milestones SET %s WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, goal_id, name, description, start_date, target_date, status, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var m task.Milestone
 	var status string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&m.ID, &m.UserID, &m.GoalID, &m.Name, &m.Description, &m.StartDate, &m.TargetDate, &status, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
@@ -1001,7 +877,7 @@ func (r *PostgresRepository) DeleteMilestone(ctx context.Context, userID, milest
 // ListTags returns all task-type tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE user_id = $1 AND COALESCE(type, 'task') = 'task'
 		ORDER BY pinned DESC, usage_count DESC, name ASC
@@ -1017,7 +893,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 	for rows.Next() {
 		var t task.Tag
 		var tagType string
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
@@ -1031,7 +907,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 // ListNoteTags returns all note-type tags for a user, sorted by pinned first, then usage count
 func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([]task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE user_id = $1 AND COALESCE(type, 'task') = 'note'
 		ORDER BY pinned DESC, usage_count DESC, name ASC
@@ -1047,7 +923,7 @@ func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([
 	for rows.Next() {
 		var t task.Tag
 		var tagType string
-		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+		err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note tag: %w", err)
 		}
@@ -1061,14 +937,14 @@ func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([
 // GetTagByID returns a tag by ID
 func (r *PostgresRepository) GetTagByID(ctx context.Context, userID, tagID string) (*task.Tag, error) {
 	query := `
-		SELECT id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
+		SELECT id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
 		FROM tags
 		WHERE id = $1 AND user_id = $2
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, tagID, userID).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -1088,17 +964,21 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, userID string, input
 	if input.Pinned != nil {
 		pinned = *input.Pinned
 	}
+	category := input.Category
+	if category == "" {
+		category = "general"
+	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'task', $5, 0, $6, $6)
-		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
+		INSERT INTO tags (id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'task', $5, $6, 0, $7, $7)
+		RETURNING id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, category, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
@@ -1119,17 +999,21 @@ func (r *PostgresRepository) CreateNoteTag(ctx context.Context, userID string, i
 	if input.Pinned != nil {
 		pinned = *input.Pinned
 	}
+	category := input.Category
+	if category == "" {
+		category = "general"
+	}
 
 	query := `
-		INSERT INTO tags (id, user_id, name, color, type, pinned, usage_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'note', $5, 0, $6, $6)
-		RETURNING id, user_id, name, color, type, pinned, usage_count, created_at, updated_at
+		INSERT INTO tags (id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'note', $5, $6, 0, $7, $7)
+		RETURNING id, user_id, name, color, type, category, pinned, usage_count, created_at, updated_at
 	`
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, pinned, now).Scan(
-		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
+	err := r.pool.QueryRow(ctx, query, id, userID, input.Name, input.Color, category, pinned, now).Scan(
+		&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
@@ -1144,43 +1028,27 @@ func (r *PostgresRepository) CreateNoteTag(ctx context.Context, userID string, i
 
 // UpdateTag updates an existing tag
 func (r *PostgresRepository) UpdateTag(ctx context.Context, userID, tagID string, input task.UpdateTagInput) (*task.Tag, error) {
-	var setClauses []string
-	var args []any
-	argCount := 0
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "name", input.Name)
+	sqlbuilder.AddField(b, "color", input.Color)
+	sqlbuilder.AddField(b, "category", input.Category)
+	sqlbuilder.AddField(b, "pinned", input.Pinned)
 
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
-	if input.Color != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("color = $%d", argCount))
-		args = append(args, *input.Color)
-	}
-	if input.Pinned != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("pinned = $%d", argCount))
-		args = append(args, *input.Pinned)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetTagByID(ctx, userID, tagID)
 	}
 
-	argCount++
-	args = append(args, tagID)
-	argCount++
-	args = append(args, userID)
+	idArg := b.AddArg(tagID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE tags SET %s WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, color, COALESCE(type, 'task'), pinned, usage_count, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+		RETURNING id, user_id, name, color, COALESCE(type, 'task'), COALESCE(category, 'general'), pinned, usage_count, created_at, updated_at
+	`, b.SetClause(), idArg, userArg)
 
 	var t task.Tag
 	var tagType string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(&t.ID, &t.UserID, &t.Name, &t.Color, &tagType, &t.Category, &t.Pinned, &t.UsageCount, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -1258,35 +1126,20 @@ func (r *PostgresRepository) SetTaskTags(ctx context.Context, taskID string, tag
 
 // ListEntityMemos returns all entity memos for a user with optional filters
 func (r *PostgresRepository) ListEntityMemos(ctx context.Context, userID string, filter task.EntityMemoFilter) ([]task.EntityMemo, error) {
-	query := `
+	w := sqlbuilder.NewWhereBuilder(userID)
+	if filter.EntityType != nil {
+		w.AddCondition("entity_type = $%d", string(*filter.EntityType))
+	}
+	sqlbuilder.AddFilter(w, "entity_id", filter.EntityID)
+	sqlbuilder.AddFilter(w, "pinned", filter.Pinned)
+
+	query := fmt.Sprintf(`
 		SELECT id, user_id, entity_type, entity_id, content, pinned, created_at, updated_at
 		FROM entity_memos
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+		%s ORDER BY pinned DESC, created_at DESC
+	`, w.WhereClause())
 
-	if filter.EntityType != nil {
-		argCount++
-		query += fmt.Sprintf(" AND entity_type = $%d", argCount)
-		args = append(args, string(*filter.EntityType))
-	}
-
-	if filter.EntityID != nil {
-		argCount++
-		query += fmt.Sprintf(" AND entity_id = $%d", argCount)
-		args = append(args, *filter.EntityID)
-	}
-
-	if filter.Pinned != nil {
-		argCount++
-		query += fmt.Sprintf(" AND pinned = $%d", argCount)
-		args = append(args, *filter.Pinned)
-	}
-
-	query += " ORDER BY pinned DESC, created_at DESC"
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query entity memos", err)
 	}
@@ -1357,42 +1210,26 @@ func (r *PostgresRepository) CreateEntityMemo(ctx context.Context, userID string
 
 // UpdateEntityMemo updates an existing entity memo
 func (r *PostgresRepository) UpdateEntityMemo(ctx context.Context, userID, memoID string, input task.UpdateEntityMemoInput) (*task.EntityMemo, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "content", input.Content)
+	sqlbuilder.AddField(b, "pinned", input.Pinned)
 
-	if input.Content != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("content = $%d", argCount))
-		args = append(args, *input.Content)
-	}
-	if input.Pinned != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("pinned = $%d", argCount))
-		args = append(args, *input.Pinned)
-	}
-
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetEntityMemoByID(ctx, userID, memoID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, memoID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(memoID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE entity_memos SET %s WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, entity_type, entity_id, content, pinned, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var m task.EntityMemo
 	var entityType string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&m.ID, &m.UserID, &entityType, &m.EntityID, &m.Content, &m.Pinned, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
@@ -1423,31 +1260,25 @@ func (r *PostgresRepository) DeleteEntityMemo(ctx context.Context, userID, memoI
 
 // ListTodos returns all todos for a user with optional filters
 func (r *PostgresRepository) ListTodos(ctx context.Context, userID string, filter task.TodoFilter) ([]task.Todo, error) {
-	query := `
-		SELECT id, user_id, name, frequency, days_of_week, due_date, estimated_minutes, tag_ids, enabled, created_at, updated_at
-		FROM todos
-		WHERE user_id = $1
-	`
-	args := []interface{}{userID}
-	argCount := 1
+	w := sqlbuilder.NewWhereBuilder(userID)
+	sqlbuilder.AddFilter(w, "enabled", filter.Enabled)
 
-	if filter.Enabled != nil {
-		argCount++
-		query += fmt.Sprintf(" AND enabled = $%d", argCount)
-		args = append(args, *filter.Enabled)
-	}
-
+	whereClause := w.WhereClause()
 	if filter.IsRecurring != nil {
 		if *filter.IsRecurring {
-			query += " AND frequency IS NOT NULL"
+			whereClause += " AND frequency IS NOT NULL"
 		} else {
-			query += " AND frequency IS NULL"
+			whereClause += " AND frequency IS NULL"
 		}
 	}
 
-	query += " ORDER BY created_at DESC"
+	query := fmt.Sprintf(`
+		SELECT id, user_id, name, frequency, days_of_week, due_date, estimated_minutes, tag_ids, enabled, created_at, updated_at
+		FROM todos
+		%s ORDER BY created_at DESC
+	`, whereClause)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
 		return nil, wrapDBError("failed to query todos", err)
 	}
@@ -1605,67 +1436,37 @@ func (r *PostgresRepository) CreateTodo(ctx context.Context, userID string, inpu
 
 // UpdateTodo updates an existing todo
 func (r *PostgresRepository) UpdateTodo(ctx context.Context, userID, todoID string, input task.UpdateTodoInput) (*task.Todo, error) {
-	var setClauses []string
-	var args []interface{}
-	argCount := 0
-
-	if input.Name != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
-		args = append(args, *input.Name)
-	}
+	b := sqlbuilder.NewUpdateBuilder()
+	sqlbuilder.AddField(b, "name", input.Name)
 	if input.Frequency != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("frequency = $%d", argCount))
-		args = append(args, string(*input.Frequency))
+		b.AddFieldValue("frequency", string(*input.Frequency))
 	}
 	if input.DaysOfWeek != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("days_of_week = $%d", argCount))
-		args = append(args, input.DaysOfWeek)
+		b.AddFieldValue("days_of_week", input.DaysOfWeek)
 	}
-	if input.DueDate != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("due_date = $%d", argCount))
-		args = append(args, *input.DueDate)
-	}
-	if input.EstimatedMinutes != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("estimated_minutes = $%d", argCount))
-		args = append(args, *input.EstimatedMinutes)
-	}
+	sqlbuilder.AddField(b, "due_date", input.DueDate)
+	sqlbuilder.AddField(b, "estimated_minutes", input.EstimatedMinutes)
 	if input.TagIDs != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("tag_ids = $%d", argCount))
-		args = append(args, input.TagIDs)
+		b.AddFieldValue("tag_ids", input.TagIDs)
 	}
-	if input.Enabled != nil {
-		argCount++
-		setClauses = append(setClauses, fmt.Sprintf("enabled = $%d", argCount))
-		args = append(args, *input.Enabled)
-	}
+	sqlbuilder.AddField(b, "enabled", input.Enabled)
 
-	if len(setClauses) == 0 {
+	if !b.HasUpdates() {
 		return r.GetTodoByID(ctx, userID, todoID)
 	}
 
-	argCount++
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argCount))
-	args = append(args, time.Now())
-
-	argCount++
-	args = append(args, todoID)
-	argCount++
-	args = append(args, userID)
+	b.AddTimestamp()
+	idArg := b.AddArg(todoID)
+	userArg := b.AddArg(userID)
 
 	query := fmt.Sprintf(`
 		UPDATE todos SET %s WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, name, frequency, days_of_week, due_date, estimated_minutes, tag_ids, enabled, created_at, updated_at
-	`, strings.Join(setClauses, ", "), argCount-1, argCount)
+	`, b.SetClause(), idArg, userArg)
 
 	var t task.Todo
 	var frequency *string
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, b.Args()...).Scan(
 		&t.ID, &t.UserID, &t.Name, &frequency, &t.DaysOfWeek, &t.DueDate,
 		&t.EstimatedMinutes, &t.TagIDs, &t.Enabled, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -1699,15 +1500,15 @@ func (r *PostgresRepository) DeleteTodo(ctx context.Context, userID, todoID stri
 // ========== TodoCompletion Operations ==========
 
 // GetTodoCompletion returns a completion record for a todo on a specific date
-func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
 	query := `
 		SELECT id, todo_id, completed_date, completed_at
 		FROM todo_completions
-		WHERE todo_id = $1 AND completed_date = $2
+		WHERE user_id = $1 AND todo_id = $2 AND completed_date = $3
 	`
 
 	var c task.TodoCompletion
-	err := r.pool.QueryRow(ctx, query, todoID, date).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
+	err := r.pool.QueryRow(ctx, query, userID, todoID, date).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -1719,18 +1520,18 @@ func (r *PostgresRepository) GetTodoCompletion(ctx context.Context, todoID, date
 }
 
 // CreateTodoCompletion creates a completion record for a todo
-func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, todoID, date string) (*task.TodoCompletion, error) {
+func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, userID, todoID, date string) (*task.TodoCompletion, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
 	query := `
-		INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, todo_id, completed_date, completed_at
 	`
 
 	var c task.TodoCompletion
-	err := r.pool.QueryRow(ctx, query, id, todoID, date, now).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
+	err := r.pool.QueryRow(ctx, query, id, userID, todoID, date, now).Scan(&c.ID, &c.TodoID, &c.CompletedDate, &c.CompletedAt)
 	if err != nil {
 		if sharedErrors.IsUniqueViolation(err) {
 			return nil, ErrTodoCompletionAlreadyExists
@@ -1742,9 +1543,9 @@ func (r *PostgresRepository) CreateTodoCompletion(ctx context.Context, todoID, d
 }
 
 // DeleteTodoCompletion deletes a completion record
-func (r *PostgresRepository) DeleteTodoCompletion(ctx context.Context, todoID, date string) error {
-	query := `DELETE FROM todo_completions WHERE todo_id = $1 AND completed_date = $2`
-	result, err := r.pool.Exec(ctx, query, todoID, date)
+func (r *PostgresRepository) DeleteTodoCompletion(ctx context.Context, userID, todoID, date string) error {
+	query := `DELETE FROM todo_completions WHERE user_id = $1 AND todo_id = $2 AND completed_date = $3`
+	result, err := r.pool.Exec(ctx, query, userID, todoID, date)
 	if err != nil {
 		return fmt.Errorf("failed to delete todo completion: %w", err)
 	}

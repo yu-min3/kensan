@@ -39,8 +39,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
       </div>
       <div
         className={cn(
-          'rounded-lg px-3 py-2 text-sm max-w-[85%]',
-          isUser ? 'bg-primary text-primary-foreground whitespace-pre-wrap' : 'bg-muted'
+          'rounded-lg text-sm max-w-[85%]',
+          isUser ? 'bg-primary text-primary-foreground whitespace-pre-wrap px-3 py-2' : 'bg-muted px-3.5 py-2.5'
         )}
       >
         {isUser ? message.content : <MarkdownContent content={message.content} />}
