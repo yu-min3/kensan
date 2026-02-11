@@ -1,7 +1,7 @@
 import {
   BookOpen,
   TrendingUp,
-  ListChecks,
+  CalendarDays,
   Target,
 } from 'lucide-react'
 
@@ -18,9 +18,9 @@ const suggestions: SuggestionItem[] = [
     message: '最近の行動パターンや感情の傾向を分析して、気になる点があれば率直に教えて',
   },
   {
-    icon: <ListChecks className="h-4 w-4 shrink-0" />,
-    label: '今週の優先順位を整理して',
-    message: '今週の優先順位を整理して。何に集中すべきか、後回しにしていいものは何か教えて',
+    icon: <CalendarDays className="h-4 w-4 shrink-0" />,
+    label: '今週の予定を立てて',
+    message: '今週のスケジュールを立てて。タスクの優先度と生産性のピーク時間を考慮して',
   },
   {
     icon: <Target className="h-4 w-4 shrink-0" />,
@@ -29,8 +29,8 @@ const suggestions: SuggestionItem[] = [
   },
   {
     icon: <BookOpen className="h-4 w-4 shrink-0" />,
-    label: '今日を振り返って明日に活かす',
-    message: '今日の進捗と時間の使い方を振り返って、明日に活かせることを教えて',
+    label: '最近の学習記録を振り返って',
+    message: '最近の学習記録を振り返って、何が身についたか、目標とのつながりを教えて',
   },
 ]
 

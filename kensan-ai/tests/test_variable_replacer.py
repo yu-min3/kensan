@@ -10,13 +10,12 @@ from kensan_ai.context.variable_replacer import VariableReplacer
 class TestSupportedVariables:
     """Test SUPPORTED_VARIABLES set."""
 
-    def test_all_15_variables_present(self):
+    def test_all_16_variables_present(self):
         expected = {
             "current_datetime",
             "user_memory",
             "today_schedule",
             "tomorrow_schedule",
-            "routine_tasks",
             "today_entries",
             "pending_tasks",
             "recent_context",
@@ -27,11 +26,13 @@ class TestSupportedVariables:
             "interest_profile",
             "user_traits",
             "communication_style",
+            "yesterday_entries",
+            "recent_learning_notes",
         }
         assert VariableReplacer.SUPPORTED_VARIABLES == expected
 
     def test_variable_count(self):
-        assert len(VariableReplacer.SUPPORTED_VARIABLES) == 15
+        assert len(VariableReplacer.SUPPORTED_VARIABLES) == 16
 
 
 class TestVariablePattern:

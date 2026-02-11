@@ -24,6 +24,7 @@ import {
   Archive,
   Tag,
 } from 'lucide-react'
+import { PageGuide } from '@/components/guide/PageGuide'
 
 export function N01NoteList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -128,6 +129,8 @@ export function N01NoteList() {
 
   return (
     <div className="space-y-6">
+      <PageGuide pageId="notes" />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

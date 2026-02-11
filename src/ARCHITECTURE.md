@@ -51,7 +51,7 @@ src/
 │   ├── telemetry.ts              # OTel SDK 初期化 + トレースヘルパー
 │   ├── config.ts                 # サービスURL設定
 │   ├── createApiService.ts       # 汎用CRUDファクトリ
-│   └── services/                 # ドメイン別API（11ファイル）
+│   └── services/                 # ドメイン別API（12ファイル）
 ├── components/
 │   ├── ui/                       # shadcn/uiプリミティブ
 │   ├── layout/                   # Header, Sidebar, Layout
@@ -60,13 +60,15 @@ src/
 │   ├── task/                     # タスク関連UI
 │   ├── daily/                    # デイリーページセクション
 │   ├── note/                     # ノートエディタ
-│   ├── agent/                    # AIチャットUI
+│   ├── agent/                    # AIチャットUI (ChatPanel, ActionProposal, ProposalTimeline, ConversationRating)
+│   ├── analytics/                # 分析レポート (AIReviewSection, AIReviewContent, AnalyticsPeriodSelector)
 │   ├── weekly/                   # ウィークリーページ（DnD対応）
 │   ├── interactions/             # AI Interaction Explorer
-│   └── prompt/                  # プロンプト管理 (PromptSidebar, PromptEditor, VersionHistory, VersionDiffDialog)
+│   ├── guide/                   # ページガイドシステム (PageGuide, SpotlightTour, SpotlightOverlay)
+│   └── prompt/                  # プロンプト管理 (PromptSidebar, PromptEditor, VersionHistory, VersionDiffDialog, ChallengeList, ChallengeDetail, ChallengeChatPanel, ChallengePromptDiff, ChallengeVoting, ToolSelector) — ChallengeList/Detail/Voting はバージョンベース比較UI
 ├── pages/                        # ページコンポーネント（10ファイル）
-├── stores/                       # Zustandストア（17ストア）
-├── hooks/                        # カスタムReactフック
+├── stores/                       # Zustandストア（18ストア）
+├── hooks/                        # カスタムReactフック (usePanelResize, useChatStream, useVersionSeen)
 ├── lib/                          # ユーティリティ（timezone, taskUtils等）
 ├── mocks/                        # MSWハンドラとモックデータ
 ├── types/                        # TypeScript型定義
@@ -157,7 +159,28 @@ graph TB
 | `TaskCard` | チェックボックス、ゴールバッジ付きタスク表示 |
 | `TaskDetailPanel` | 右からスライドインする詳細パネル（Sheet） |
 | `TimerWidget` | ヘッダー内アクティブタイマー表示 |
-| `ChatPanel` | AIチャットUI（SSEストリーミング） |
+| `ChatPanel` | AIチャットUI（`useChatStream`フック利用） |
+| `ActionProposal` | AI提案UI（タイムブロック+その他アクション、日別タブ切替、`readOnly`モード対応） |
+| `ProposalTimeline` | 提案タイムライン（TimelineCoreリードオンリー、既存ブロック半透明表示） |
+| `ConversationRating` | 会話評価UI（4段階ボタン: イマイチ/ふつう/いい/とてもいい） |
+| `ChallengeChatPanel` | バージョンベースA/B比較用パネル（`useChatStream(contextId, versionNumber)` + `ChatMessage` + `ActionProposal readOnly`で構成） |
+| `PageGuide` | ページ初回訪問時のウェルカムカード（✕で閉じるとlocalStorage記憶） |
+| `SpotlightTour` | ステップ式スポットライトツアー（clip-pathくり抜きオーバーレイ） |
+
+### ページガイドシステム (`components/guide/`)
+
+初回ユーザー向けのオンボーディングシステム。削除時は `components/guide/` フォルダごと削除可能。
+
+| ファイル | 役割 |
+|---------|------|
+| `useGuideStore.ts` | Zustand store (localStorage `kensan-guide` に永続化) |
+| `guideContent.ts` | 全9ページのウェルカムカード内容定義 |
+| `tourSteps.ts` | 3ページ (Daily, Task, Weekly) のツアーステップ定義 |
+| `PageGuide.tsx` | ウェルカムカード表示（Tips 2列グリッド + ツアー開始ボタン） |
+| `SpotlightTour.tsx` | ツアーエンジン（ステップ管理 + createPortal でオーバーレイ表示） |
+| `SpotlightOverlay.tsx` | `clip-path` でターゲット要素をくり抜くオーバーレイ描画 |
+
+**ツアー対象ページ**: `data-guide="..."` 属性を使って要素を特定。
 
 ### TimeBlockTimelineアーキテクチャ
 
@@ -239,9 +262,18 @@ flowchart TB
 | `useNoteStore` | ノート | - | noteCache (Map) でフルコンテンツキャッシュ |
 | `useMemoStore` | メモ | - | createCrudStoreファクトリ |
 | `useAnalyticsStore` | 分析データ | - | 週次/月次サマリー |
-| `useChatStore` | AIチャット | - | SSEストリーミング対話 |
+| `useChatStore` | AIチャット | - | パネルUI状態（開閉、履歴、評価、プリフィル）。SSEストリーミングは`useChatStream`フックに移行 |
 | `usePromptStore` | プロンプト管理 | - | AIコンテキスト一覧・バージョン管理 |
+| `useChallengeStore` | バージョン比較（Comparison） | - | バージョンベースA/B比較・投票・採否判定。保存後バナーからの比較開始、バージョン履歴からの比較開始に対応 |
 | `useTaskManagerStore` | タスク管理統合 | - | Goal/Milestone/Tag/Taskストアの統合フック |
+
+### カスタムフック
+
+| フック | 用途 | 備考 |
+|--------|------|------|
+| `useChatStream` | SSEストリーミングチャット | contextId/versionNumber対応、ChatPanel/ChallengeChatPanelで使用 |
+| `usePanelResize` | ドラッグリサイズ | min/max/default幅指定 |
+| `useVersionSeen` | 未確認バージョン追跡 | localStorage (`kensan-version-seen`)、useSyncExternalStore パターン。initializeIfNeededで初回ロード時のfalse positive防止 |
 
 ### ストア初期化フロー
 
@@ -352,6 +384,7 @@ graph TB
 | `agent.ts` | kensan-ai | カスタム（SSE対応） |
 | `analytics.ts` | analytics-service | カスタム |
 | `prompts.ts` | kensan-ai | カスタム（AIコンテキスト・バージョン管理） |
+| `challenges.ts` | kensan-ai | カスタム（バージョンベース比較 Comparison API） |
 | `observability.ts` | kensan-ai | カスタム（AI Interaction Explorer用、Lakehouse Silver経由） |
 
 ### タイムゾーン変換（timeblocks.ts）

@@ -68,7 +68,7 @@ kensan-mockup/
 │   ├── api/                      # APIクライアント層
 │   │   ├── config.ts             # 環境変数設定
 │   │   ├── client.ts             # HTTPクライアント（JWT認証対応）
-│   │   └── services/             # 11個のAPIサービス
+│   │   └── services/             # 12個のAPIサービス
 │   ├── mocks/                    # MSWモック（オプトイン）
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui コンポーネント
@@ -79,21 +79,20 @@ kensan-mockup/
 │   │   ├── editor/               # エディタ（Markdown, Drawio）
 │   │   └── note/                 # ノートコンポーネント
 │   ├── pages/                    # 10ページ
-│   ├── stores/                   # 17個のZustandストア
+│   ├── stores/                   # 18個のZustandストア
 │   ├── hooks/                    # カスタムフック
 │   ├── lib/                      # ユーティリティ（timezone等）
 │   └── types/                    # 型定義
 ├── backend/                      # バックエンド (Go)
-│   ├── services/                 # 7つのGoマイクロサービス
+│   ├── services/                 # 6つのGoマイクロサービス
 │   │   ├── user/                 # 認証・設定 (:8081)
 │   │   ├── task/                 # 目標・タスク管理 (:8082)
 │   │   ├── timeblock/            # タイムブロック・タイマー (:8084)
 │   │   ├── analytics/            # 分析・レポート (:8088)
 │   │   ├── memo/                 # クイックメモ (:8090)
 │   │   ├── note/                 # 統合ノート (:8091)
-│   │   └── routine/              # 定期タスク（docker-compose未登録）
 │   ├── shared/                   # 共有パッケージ（auth, bootstrap, config, database, middleware, errors, telemetry, types）
-│   ├── migrations/               # DBマイグレーション（51ファイル）
+│   ├── migrations/               # DBマイグレーション（61ファイル）
 │   └── Makefile
 ├── kensan-ai/                    # AIサービス (Python/FastAPI)
 │   └── src/kensan_ai/
@@ -140,8 +139,6 @@ kensan-mockup/
 | memo-service | 8090 | ✅ | クイックメモ |
 | note-service | 8091 | ✅ | 統合ノート・NoteContent・ファイルストレージ |
 
-> **Note**: `routine/`ディレクトリは存在するがdocker-compose.ymlには未登録。定期タスク機能はtask-serviceのTodo（frequency）で代替。
-
 ### Python AIサービス
 
 | サービス | ポート | 状態 | 概要 |
@@ -164,7 +161,7 @@ kensan-mockup/
 
 ## フロントエンド詳細
 
-### Zustandストア（17個）
+### Zustandストア（18個）
 
 | ストア | 役割 |
 |--------|------|
@@ -184,11 +181,12 @@ kensan-mockup/
 | `useAnalyticsStore` | 分析データ |
 | `useChatStore` | AIチャット |
 | `usePromptStore` | AIコンテキスト・バージョン管理 |
+| `useChallengeStore` | チャレンジ（プロンプト最適化） |
 | `createCrudStore` | ストアファクトリ |
 
-### APIサービス（11個）
+### APIサービス（12個）
 
-`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, prompts, observability
+`src/api/services/`: auth, user, tasks, timeblocks, timer, analytics, memos, notes, agent, prompts, challenges, observability
 
 ---
 

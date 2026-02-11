@@ -11,6 +11,7 @@ import {
   ArrowDownUp,
 } from 'lucide-react'
 import { InteractionTable } from '@/components/interactions/InteractionTable'
+import { PageGuide } from '@/components/guide/PageGuide'
 import { fetchInteractions, type Interaction } from '@/api/services/observability'
 
 type TimeRange = '30m' | '1h' | '3h' | '6h' | '24h'
@@ -76,8 +77,10 @@ export function O01InteractionExplorer() {
 
   return (
     <div className="space-y-4">
+      <PageGuide pageId="interactions" />
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div data-guide="explorer-header" className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity className="h-5 w-5" />
           <h1 className="text-xl font-semibold">AI Interaction Explorer</h1>
@@ -117,7 +120,7 @@ export function O01InteractionExplorer() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div data-guide="explorer-stats" className="grid grid-cols-4 gap-3">
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -174,6 +177,7 @@ export function O01InteractionExplorer() {
       )}
 
       {/* Interaction table */}
+      <div data-guide="explorer-table">
       {loading && interactions.length === 0 ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -181,6 +185,7 @@ export function O01InteractionExplorer() {
       ) : (
         <InteractionTable interactions={filteredInteractions} />
       )}
+      </div>
     </div>
   )
 }

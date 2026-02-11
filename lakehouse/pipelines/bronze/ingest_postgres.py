@@ -220,7 +220,9 @@ TABLES = {
     },
     "bronze.ai_reviews_raw": {
         "query": """
-            SELECT id, user_id, week_start, week_end, summary,
+            SELECT id, user_id,
+                   period_start AS week_start, period_end AS week_end,
+                   summary,
                    array_to_json(good_points)::text AS good_points_json,
                    array_to_json(improvement_points)::text AS improvement_points_json,
                    array_to_json(advice)::text AS advice_json,

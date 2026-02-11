@@ -25,6 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { GanttChartWidget } from '@/components/task/GanttChartWidget'
 import { PageMemo } from '@/components/common/PageMemo'
+import { PageGuide } from '@/components/guide/PageGuide'
 import { DndContext, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
@@ -83,13 +84,15 @@ export function T01TaskManagement() {
 
   return (
     <div className="space-y-4">
+      <PageGuide pageId="tasks" />
+
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <FolderKanban className="h-8 w-8 text-slate-500" />
           <h1 className="text-2xl font-bold">タスク管理</h1>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center" data-guide="task-search">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -114,7 +117,7 @@ export function T01TaskManagement() {
       {/* 3カラムレイアウト */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-280px)]">
         {/* カラム1: 目標 */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-guide="task-goals">
           <CardHeader className="py-3 px-4 border-b flex-shrink-0">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Target className="h-4 w-4" />
@@ -212,7 +215,7 @@ export function T01TaskManagement() {
         </Card>
 
         {/* カラム2: マイルストーン */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-guide="task-milestones">
           <CardHeader className="py-3 px-4 border-b flex-shrink-0">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Flag className="h-4 w-4" />
@@ -311,7 +314,7 @@ export function T01TaskManagement() {
         </Card>
 
         {/* カラム3: タスク */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-guide="task-tasks">
           <CardHeader className="py-3 px-4 border-b flex-shrink-0">
             {tm.isSelectionMode ? (
               <div className="flex items-center gap-2">

@@ -240,10 +240,72 @@ test(''ボタンクリックでカウントが増える'', () => {
 来月はテストとポートフォリオ完成に集中しつつ、金曜の推し活を死守しましょう。',
  500, 350, 2000, CURRENT_DATE - 2);
 
+-- 直近の AI interaction 追加
+INSERT INTO ai_interactions (id, user_id, session_id, conversation_id, situation, user_input, ai_output, tokens_input, tokens_output, latency_ms, created_at) VALUES
+('d1800009-0000-0000-0000-000000000000', 'd1111111-1111-1111-1111-111111111111',
+ 'd1900009-0000-0000-0000-000000000000', 'd1900009-0000-0000-0000-000000000000',
+ 'chat',
+ 'RTLのテスト初めて書いたんだけど、screen.getByRoleとscreen.getByTextってどう使い分ける？',
+ 'テスト書き始めたんですね！使い分けの基準はシンプルです。
+
+**推奨順位:**
+1. `getByRole` → アクセシビリティ的に正しい（推奨）
+2. `getByLabelText` → フォーム要素に最適
+3. `getByText` → 上記で取れない場合のフォールバック
+4. `getByTestId` → 最終手段
+
+**例:**
+```tsx
+// ✅ getByRole（推奨）
+screen.getByRole(''button'', { name: ''送信'' })
+
+// ✅ getByLabelText（フォーム）
+screen.getByLabelText(''メールアドレス'')
+
+// ⚠️ getByText（フォールバック）
+screen.getByText(''ログイン成功'')
+```
+
+RTLの哲学は「ユーザーが見えるもの・操作するものでテストする」。getByRoleが基本で、それで取れない場合にgetByTextを使う感じです。
+
+この使い分け、Zenn記事のネタにもなりそうですよ！',
+ 450, 320, 1800, CURRENT_DATE - 1),
+
+('d1800010-0000-0000-0000-000000000000', 'd1111111-1111-1111-1111-111111111111',
+ 'd1900010-0000-0000-0000-000000000000', 'd1900010-0000-0000-0000-000000000000',
+ 'evening',
+ 'ポートフォリオのVercelデプロイがうまくいかない。next.config.jsでエラーが出る。',
+ 'Vercelデプロイのエラー、よくあるパターンがいくつかあります。
+
+**よくある原因と対処:**
+
+1. **ESLintエラー**
+```js
+// next.config.js
+const nextConfig = {
+  eslint: { ignoreDuringBuilds: true }, // 一時的に回避
+}
+```
+ただし本番ではちゃんと直しましょう。
+
+2. **TypeScriptエラー**
+ローカルでは出ないけどVercelで出るパターン。`npm run build`をローカルで実行して確認。
+
+3. **環境変数の未設定**
+`.env.local`の値がVercel側に設定されていない。ダッシュボードから追加。
+
+**確認手順:**
+1. ローカルで `npm run build` が通るか確認
+2. エラーログをVercelのダッシュボードで確認
+3. 環境変数を確認
+
+エラーメッセージを教えてもらえれば、もっとピンポイントでアドバイスできます！',
+ 500, 350, 2000, CURRENT_DATE);
+
 -- ==============================================================================
 -- AI Review Reports (4件)
 -- ==============================================================================
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 
 ('d1900101-0000-0000-0000-000000000000', 'd1111111-1111-1111-1111-111111111111',
  CURRENT_DATE - 49, CURRENT_DATE - 43,

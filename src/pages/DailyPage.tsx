@@ -13,6 +13,7 @@ import { calculateTimeFromYWithDuration } from '@/components/common/TimeBlockTim
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTimeBlockStore } from '@/stores/useTimeBlockStore'
 import { formatDateJa, formatDateIso } from '@/lib/dateFormat'
+import { PageGuide } from '@/components/guide/PageGuide'
 import {
   Sun,
   Moon,
@@ -149,8 +150,10 @@ export function DailyPage() {
       onDragCancel={handleDragCancel}
     >
       <div className="space-y-6">
+        <PageGuide pageId="daily" />
+
         {/* ヘッダー + サマリー（インライン） */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-4 flex-wrap" data-guide="daily-header">
           <div className="flex items-center gap-3">
             <Icon className={`h-8 w-8 ${iconColor}`} />
             <div>
@@ -168,12 +171,9 @@ export function DailyPage() {
           placeholder="今日の予定、気づき、やることなど..."
         />
 
-        {/* AI Planning（今日の場合のみ） */}
-        {isToday && <AIAdviceCard selectedDate={selectedDateIso} />}
-
         {/* タイムブロック + タスクリスト */}
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2" data-guide="daily-timeblocks">
             <TimeBlockSection
               showAddButtons={true}
               isDraggingTask={isDraggingTask}
@@ -185,10 +185,13 @@ export function DailyPage() {
           </div>
 
           {/* 右サイド: タスクリスト */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block" data-guide="daily-tasks">
             <TaskListWidget onTaskClick={taskDetailPanel.openTask} />
           </div>
         </div>
+
+        {/* AI Planning（今日の場合のみ） */}
+        {isToday && <div data-guide="daily-ai"><AIAdviceCard selectedDate={selectedDateIso} /></div>}
 
         {/* 記録 */}
         <section className="space-y-4">

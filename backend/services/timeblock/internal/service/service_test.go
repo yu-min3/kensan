@@ -161,29 +161,6 @@ func TestValidateDatetime(t *testing.T) {
 	}
 }
 
-func TestValidateDate(t *testing.T) {
-	testCases := []struct {
-		date     string
-		expected bool
-	}{
-		{"2024-01-01", true},
-		{"2024-12-31", true},
-		{"2024-06-15", true},
-		{"24-01-01", false},
-		{"2024/01/01", false},
-		{"2024-1-1", false},
-		{"invalid", false},
-		{"", false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.date, func(t *testing.T) {
-			result := validateDate(tc.date)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 // ========== TimeBlock List Tests ==========
 
 func TestService_ListTimeBlocks_Success(t *testing.T) {
@@ -873,59 +850,6 @@ func TestService_DeleteTimeEntry_NotFound(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrTimeEntryNotFound)
 	mockRepo.AssertNotCalled(t, "DeleteTimeEntry")
-}
-
-// ========== GenerateFromRoutines Tests ==========
-
-func TestService_GenerateFromRoutines_Success(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-	ctx := context.Background()
-	userID := "user-123"
-
-	input := timeblock.GenerateFromRoutinesInput{
-		Date: "2024-01-15",
-	}
-
-	result, err := svc.GenerateFromRoutines(ctx, userID, input)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, 0, result.Generated)
-	assert.NotNil(t, result.Blocks)
-	assert.Len(t, result.Blocks, 0)
-}
-
-func TestService_GenerateFromRoutines_InvalidDate(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-	ctx := context.Background()
-	userID := "user-123"
-
-	input := timeblock.GenerateFromRoutinesInput{
-		Date: "invalid-date",
-	}
-
-	result, err := svc.GenerateFromRoutines(ctx, userID, input)
-
-	assert.ErrorIs(t, err, ErrInvalidDate)
-	assert.Nil(t, result)
-}
-
-func TestService_GenerateFromRoutines_EmptyDate(t *testing.T) {
-	mockRepo := new(MockRepository)
-	svc := NewService(mockRepo)
-	ctx := context.Background()
-	userID := "user-123"
-
-	input := timeblock.GenerateFromRoutinesInput{
-		Date: "",
-	}
-
-	result, err := svc.GenerateFromRoutines(ctx, userID, input)
-
-	assert.ErrorIs(t, err, ErrInvalidDate)
-	assert.Nil(t, result)
 }
 
 // Helper function

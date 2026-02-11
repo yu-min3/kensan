@@ -119,7 +119,9 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - kensan-network
+      kensan-network:
+        aliases:
+          - kensan-lakehouse.kensan-minio
 
   minio-init:
     image: minio/mc:latest
@@ -281,6 +283,8 @@ services:
       GOOGLE_MODEL: ${GOOGLE_MODEL:-gemini-2.0-flash}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: kensan
       MINIO_SECRET_KEY: kensan-minio
@@ -289,6 +293,13 @@ services:
       OTEL_ENABLED: "true"
       OTEL_COLLECTOR_URL: "otel-collector:4318"
       OTEL_SEMCONV_STABILITY_OPT_IN: "http"
+      LAKEHOUSE_ENABLED: "true"
+      POLARIS_URI: "http://polaris:8181/api/catalog"
+      POLARIS_CREDENTIAL: "root:s3cr3t"
+      POLARIS_WAREHOUSE: "kensan-lakehouse"
+      LAKEHOUSE_S3_ENDPOINT: "http://minio:9000"
+      LAKEHOUSE_S3_ACCESS_KEY: "kensan"
+      LAKEHOUSE_S3_SECRET_KEY: "kensan-minio"
     ports:
       - "8089:8089"
     depends_on:

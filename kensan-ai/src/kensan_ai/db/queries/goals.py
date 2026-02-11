@@ -167,8 +167,8 @@ async def create_milestone(
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO milestones (goal_id, name, target_date)
-            SELECT $1, $2, $3
+            INSERT INTO milestones (goal_id, user_id, name, target_date)
+            SELECT $1, $4, $2, $3
             FROM goals WHERE id = $1 AND user_id = $4
             RETURNING id, name, target_date, status
             """,

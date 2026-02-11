@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { computeLineDiff } from '@/lib/diffUtils'
 import type { AIContextVersion } from '@/api/services/prompts'
 
 interface VersionDiffDialogProps {
@@ -14,51 +15,6 @@ interface VersionDiffDialogProps {
   onOpenChange: (open: boolean) => void
   oldVersion: AIContextVersion | null
   newVersion: AIContextVersion | null
-}
-
-interface DiffLine {
-  type: 'added' | 'removed' | 'unchanged'
-  content: string
-}
-
-function computeLineDiff(oldText: string, newText: string): DiffLine[] {
-  const oldLines = oldText.split('\n')
-  const newLines = newText.split('\n')
-
-  // Simple LCS-based diff
-  const m = oldLines.length
-  const n = newLines.length
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (oldLines[i - 1] === newLines[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
-      }
-    }
-  }
-
-  // Backtrack to build diff
-  const diffs: DiffLine[] = []
-  let i = m
-  let j = n
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      diffs.push({ type: 'unchanged', content: oldLines[i - 1] })
-      i--
-      j--
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      diffs.push({ type: 'added', content: newLines[j - 1] })
-      j--
-    } else {
-      diffs.push({ type: 'removed', content: oldLines[i - 1] })
-      i--
-    }
-  }
-
-  return diffs.reverse()
 }
 
 export function VersionDiffDialog({

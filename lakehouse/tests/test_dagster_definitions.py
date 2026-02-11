@@ -5,7 +5,7 @@ Dagster Definitions の構造テスト
 
 from dagster import AssetKey
 
-from dagster_project import all_assets, defs, daily_schedule, ai_explorer_schedule, full_pipeline, ai_explorer_pipeline
+from dagster_project import all_assets, defs, daily_schedule, ai_explorer_schedule, reindex_schedule, weekly_review_schedule, prompt_optimization_schedule, full_pipeline, ai_explorer_pipeline, reindex_pipeline, weekly_review_pipeline, prompt_optimization_pipeline
 from dagster_project.assets.bronze import bronze_assets
 
 
@@ -14,8 +14,8 @@ from dagster_project.assets.bronze import bronze_assets
 # ---------------------------------------------------------------------------
 
 def test_total_asset_count():
-    """Bronze 10 + Silver 12 + Gold 7 = 29 アセットが登録されている"""
-    assert len(all_assets) == 29
+    """Bronze 10 + Silver 12 + Gold 7 + Maintenance 3 = 32 アセットが登録されている"""
+    assert len(all_assets) == 32
 
 
 def test_bronze_asset_count():
@@ -222,17 +222,94 @@ def test_ai_explorer_schedule():
 # Definitions 統合
 # ---------------------------------------------------------------------------
 
+def test_reindex_note_chunks_asset():
+    """reindex_note_chunks アセットが存在する"""
+    asset = _find_asset("reindex_note_chunks")
+    assert asset.key.to_user_string() == "reindex_note_chunks"
+
+
+def test_reindex_note_chunks_has_no_deps():
+    """reindex_note_chunks は他のアセットに依存しない"""
+    asset = _find_asset("reindex_note_chunks")
+    deps = _get_asset_dep_keys(asset)
+    assert len(deps) == 0
+
+
+def test_reindex_pipeline_job():
+    """reindex_pipeline ジョブが存在する"""
+    assert reindex_pipeline.name == "reindex_pipeline"
+
+
+def test_reindex_schedule():
+    """reindex_schedule が10分ごと、初期 RUNNING"""
+    assert reindex_schedule.cron_schedule == "*/10 * * * *"
+    assert reindex_schedule.default_status.value == "RUNNING"
+
+
+def test_generate_weekly_reviews_asset():
+    """generate_weekly_reviews アセットが存在する"""
+    asset = _find_asset("generate_weekly_reviews")
+    assert asset.key.to_user_string() == "generate_weekly_reviews"
+
+
+def test_generate_weekly_reviews_has_no_deps():
+    """generate_weekly_reviews は他のアセットに依存しない"""
+    asset = _find_asset("generate_weekly_reviews")
+    deps = _get_asset_dep_keys(asset)
+    assert len(deps) == 0
+
+
+def test_weekly_review_pipeline_job():
+    """weekly_review_pipeline ジョブが存在する"""
+    assert weekly_review_pipeline.name == "weekly_review_pipeline"
+
+
+def test_weekly_review_schedule():
+    """weekly_review_schedule が毎週月曜 03:00、初期 RUNNING"""
+    assert weekly_review_schedule.cron_schedule == "0 3 * * 1"
+    assert weekly_review_schedule.default_status.value == "RUNNING"
+
+
+def test_run_prompt_optimization_asset():
+    """run_prompt_optimization アセットが存在する"""
+    asset = _find_asset("run_prompt_optimization")
+    assert asset.key.to_user_string() == "run_prompt_optimization"
+
+
+def test_run_prompt_optimization_has_no_deps():
+    """run_prompt_optimization は他のアセットに依存しない"""
+    asset = _find_asset("run_prompt_optimization")
+    deps = _get_asset_dep_keys(asset)
+    assert len(deps) == 0
+
+
+def test_prompt_optimization_pipeline_job():
+    """prompt_optimization_pipeline ジョブが存在する"""
+    assert prompt_optimization_pipeline.name == "prompt_optimization_pipeline"
+
+
+def test_prompt_optimization_schedule():
+    """prompt_optimization_schedule が毎週月曜 03:10、初期 RUNNING"""
+    assert prompt_optimization_schedule.cron_schedule == "10 3 * * 1"
+    assert prompt_optimization_schedule.default_status.value == "RUNNING"
+
+
+# ---------------------------------------------------------------------------
+# Definitions 統合
+# ---------------------------------------------------------------------------
+
 def test_definitions_resolve():
     """Definitions が矛盾なく解決される"""
     repo = defs.get_repository_def()
     asset_keys = repo.asset_graph.get_all_asset_keys()
-    assert len(asset_keys) == 29
+    assert len(asset_keys) == 32
 
 
 def test_definitions_resources():
-    """iceberg_catalog, pg_dsn, loki リソースが登録されている"""
+    """iceberg_catalog, pg_dsn, loki, kensan_ai リソースが登録されている"""
     repo = defs.get_repository_def()
     resource_defs = repo.get_top_level_resources()
     assert "iceberg_catalog" in resource_defs
     assert "pg_dsn" in resource_defs
     assert "loki" in resource_defs
+    assert "kensan_ai" in resource_defs

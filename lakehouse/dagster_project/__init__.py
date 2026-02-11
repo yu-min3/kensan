@@ -1,6 +1,6 @@
 """
 Kensan Lakehouse - Dagster Definitions
-全29アセット (Bronze 10 + Silver 12 + Gold 7) をオーケストレーション
+全32アセット (Bronze 10 + Silver 12 + Gold 7 + Maintenance 3) をオーケストレーション
 """
 
 from dagster import AssetSelection, DefaultScheduleStatus, Definitions, ScheduleDefinition, define_asset_job
@@ -32,7 +32,8 @@ from dagster_project.assets.silver_explorer import (
 )
 from dagster_project.assets.silver_tags import silver_tag_usage_profile
 from dagster_project.assets.silver_traits import silver_user_trait_segments
-from dagster_project.resources import IcebergCatalogResource, LokiResource, PostgresDsnResource
+from dagster_project.assets.maintenance import reindex_note_chunks, generate_weekly_reviews, run_prompt_optimization
+from dagster_project.resources import IcebergCatalogResource, KensanAiResource, LokiResource, PostgresDsnResource
 
 all_assets = [
     *bronze_assets,
@@ -56,6 +57,9 @@ all_assets = [
     gold_user_interest_profile,
     gold_user_trait_profile,
     gold_emotion_weekly,
+    reindex_note_chunks,
+    generate_weekly_reviews,
+    run_prompt_optimization,
 ]
 
 full_pipeline = define_asset_job(
@@ -74,6 +78,24 @@ ai_explorer_pipeline = define_asset_job(
     description="Loki → Bronze → Silver AI Explorer パイプライン",
 )
 
+reindex_pipeline = define_asset_job(
+    name="reindex_pipeline",
+    selection=AssetSelection.assets(reindex_note_chunks),
+    description="pending ノートのチャンクインデックス再構築",
+)
+
+weekly_review_pipeline = define_asset_job(
+    name="weekly_review_pipeline",
+    selection=AssetSelection.assets(generate_weekly_reviews),
+    description="週次レビュー自動生成",
+)
+
+prompt_optimization_pipeline = define_asset_job(
+    name="prompt_optimization_pipeline",
+    selection=AssetSelection.assets(run_prompt_optimization),
+    description="プロンプト品質評価＋自動最適化",
+)
+
 daily_schedule = ScheduleDefinition(
     name="daily_schedule",
     job=full_pipeline,
@@ -88,13 +110,35 @@ ai_explorer_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
+reindex_schedule = ScheduleDefinition(
+    name="reindex_schedule",
+    job=reindex_pipeline,
+    cron_schedule="*/10 * * * *",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+weekly_review_schedule = ScheduleDefinition(
+    name="weekly_review_schedule",
+    job=weekly_review_pipeline,
+    cron_schedule="0 3 * * 1",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+prompt_optimization_schedule = ScheduleDefinition(
+    name="prompt_optimization_schedule",
+    job=prompt_optimization_pipeline,
+    cron_schedule="10 3 * * 1",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 defs = Definitions(
     assets=all_assets,
-    jobs=[full_pipeline, ai_explorer_pipeline],
-    schedules=[daily_schedule, ai_explorer_schedule],
+    jobs=[full_pipeline, ai_explorer_pipeline, reindex_pipeline, weekly_review_pipeline, prompt_optimization_pipeline],
+    schedules=[daily_schedule, ai_explorer_schedule, reindex_schedule, weekly_review_schedule, prompt_optimization_schedule],
     resources={
         "iceberg_catalog": IcebergCatalogResource(),
         "pg_dsn": PostgresDsnResource(),
         "loki": LokiResource(),
+        "kensan_ai": KensanAiResource(),
     },
 )

@@ -5,7 +5,7 @@ import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
 import { TagBadge } from '@/components/common/TagBadge'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Edit, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
+import { GripVertical, Plus, Edit, Trash2, ChevronRight, ChevronDown, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Task, Tag } from '@/types'
 
@@ -104,6 +104,23 @@ export function SortableTaskItem({
           {task.name}
         </span>
         <EntityMemoPopover entityType="task" entityId={task.id} />
+
+        {/* Due date */}
+        {task.dueDate && (() => {
+          const today = new Date().toISOString().slice(0, 10)
+          const isOverdue = !task.completed && task.dueDate < today
+          const isToday = task.dueDate === today
+          const [, m, d] = task.dueDate.split('-')
+          return (
+            <span className={cn(
+              'flex items-center gap-0.5 text-xs flex-shrink-0',
+              isOverdue ? 'text-red-500 font-medium' : isToday ? 'text-amber-500' : 'text-muted-foreground'
+            )}>
+              <Calendar className="h-3 w-3" />
+              {`${Number(m)}/${Number(d)}`}
+            </span>
+          )
+        })()}
 
         {/* Tags */}
         {task.tagIds && task.tagIds.length > 0 && (

@@ -8,6 +8,7 @@ from kensan_ai.lib.parsers import parse_uuid, parse_date
 
 
 @tool(
+    category="review",
     name="get_reviews",
     description="過去のAI週次レビュー一覧を取得する。",
     input_schema={
@@ -28,6 +29,7 @@ async def get_reviews(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="review",
     name="get_review",
     description="特定のAI週次レビューを取得する。事前に get_reviews でIDを確認すること。",
     input_schema={
@@ -50,6 +52,7 @@ async def get_review(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="review",
     name="generate_review",
     description="指定した期間のレビューを生成しDBに保存する。事前に get_analytics_summary と get_time_entries で期間のデータを取得してから生成すること。",
     readonly=False,

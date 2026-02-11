@@ -187,12 +187,12 @@ BEGIN
             IF dow IN (1, 3, 5) THEN
                 seq := seq + 1;
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     (d - INTERVAL '1 day') + TIME '21:30', (d - INTERVAL '1 day') + TIME '22:00',
                     'ヨガ', NULL, NULL, NULL,
-                    ARRAY[tag_yoga], true
+                    ARRAY[tag_yoga]
                 );
             END IF;
 
@@ -200,21 +200,21 @@ BEGIN
             seq := seq + 1;
             IF week_num <= 3 THEN
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '03:15', d + TIME '03:45',
                     t_em_book, 'エンジニアリングマネージャーのしごと 読了', m_read4, '2ヶ月で4冊読了', g3_id, g3_name, g3_color,
-                    ARRAY[tag_read], true
+                    ARRAY[tag_read]
                 );
             ELSE
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '03:15', d + TIME '03:45',
                     t_high_output, 'HIGH OUTPUT MANAGEMENT 読了', m_read4, '2ヶ月で4冊読了', g3_id, g3_name, g3_color,
-                    ARRAY[tag_read], true
+                    ARRAY[tag_read]
                 );
             END IF;
 
@@ -251,12 +251,12 @@ BEGIN
                 -- Sunday: 読書 + ヨガ
                 seq := seq + 1;
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     (d - INTERVAL '1 day') + TIME '21:00', (d - INTERVAL '1 day') + TIME '21:30',
                     'ヨガ', NULL, NULL, NULL,
-                    ARRAY[tag_yoga], true
+                    ARRAY[tag_yoga]
                 );
 
                 seq := seq + 1;

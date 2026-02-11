@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -15,9 +16,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Save, Loader2, ChevronDown, Eye, Pencil, AlertTriangle } from 'lucide-react'
+import { Save, Loader2, ChevronDown } from 'lucide-react'
 import type { AIContext, AIContextUpdateInput } from '@/api/services/prompts'
 import { usePromptStore } from '@/stores/usePromptStore'
+import { ToolSelector } from './ToolSelector'
 
 interface PromptEditorProps {
   context: AIContext
@@ -33,7 +35,7 @@ function detectVariables(prompt: string): string[] {
 
 export function PromptEditor({ context, isLoading, onSave }: PromptEditorProps) {
   const [systemPrompt, setSystemPrompt] = useState(context.system_prompt)
-  const [allowedTools, setAllowedTools] = useState(context.allowed_tools.join(', '))
+  const [allowedTools, setAllowedTools] = useState<string[]>(context.allowed_tools)
   const [maxTurns, setMaxTurns] = useState(context.max_turns)
   const [temperature, setTemperature] = useState(context.temperature)
   const [changelog, setChangelog] = useState('')
@@ -49,7 +51,7 @@ export function PromptEditor({ context, isLoading, onSave }: PromptEditorProps) 
 
   useEffect(() => {
     setSystemPrompt(context.system_prompt)
-    setAllowedTools(context.allowed_tools.join(', '))
+    setAllowedTools(context.allowed_tools)
     setMaxTurns(context.max_turns)
     setTemperature(context.temperature)
     setChangelog('')
@@ -59,29 +61,19 @@ export function PromptEditor({ context, isLoading, onSave }: PromptEditorProps) 
   const variableMap = new Map(
     metadata?.variables.map((v) => [v.name, v]) ?? [],
   )
-  const toolMap = new Map(
-    metadata?.tools.map((t) => [t.name, t]) ?? [],
-  )
-
-  const parsedTools = allowedTools
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-
   const hasChanges =
     systemPrompt !== context.system_prompt ||
-    allowedTools !== context.allowed_tools.join(', ') ||
+    JSON.stringify(allowedTools) !== JSON.stringify(context.allowed_tools) ||
     maxTurns !== context.max_turns ||
     temperature !== context.temperature
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const toolsArray = parsedTools
       const data: AIContextUpdateInput = { changelog: changelog || undefined }
       if (systemPrompt !== context.system_prompt) data.system_prompt = systemPrompt
-      if (JSON.stringify(toolsArray) !== JSON.stringify(context.allowed_tools))
-        data.allowed_tools = toolsArray
+      if (JSON.stringify(allowedTools) !== JSON.stringify(context.allowed_tools))
+        data.allowed_tools = allowedTools
       if (maxTurns !== context.max_turns) data.max_turns = maxTurns
       if (temperature !== context.temperature) data.temperature = temperature
 
@@ -104,6 +96,9 @@ export function PromptEditor({ context, isLoading, onSave }: PromptEditorProps) 
               <span>v{context.current_version_number}</span>
             )}
           </div>
+          {context.description && (
+            <p className="mt-1 text-sm text-muted-foreground">{context.description}</p>
+          )}
         </div>
 
         {/* System Prompt */}
@@ -231,81 +226,38 @@ export function PromptEditor({ context, isLoading, onSave }: PromptEditorProps) 
         </div>
 
         {/* Allowed Tools */}
-        <div className="space-y-2">
-          <Label htmlFor="allowed-tools">Allowed Tools (カンマ区切り)</Label>
-          <p className="text-xs text-muted-foreground">
-            会話中にAIが呼び出せるアクション
-          </p>
-          <Textarea
-            id="allowed-tools"
-            value={allowedTools}
-            onChange={(e) => setAllowedTools(e.target.value)}
-            className="min-h-[60px] font-mono text-xs"
-            placeholder="get_goals_and_milestones, get_tasks, ..."
+        {metadata && (
+          <ToolSelector
+            tools={metadata.tools}
+            selectedTools={allowedTools}
+            onChange={setAllowedTools}
           />
-          {parsedTools.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {parsedTools.map((name) => {
-                const meta = toolMap.get(name)
-                const isKnown = !!meta
-                return (
-                  <Tooltip key={name}>
-                    <TooltipTrigger asChild>
-                      <Badge
-                        variant={isKnown ? 'outline' : 'destructive'}
-                        className="cursor-help gap-1 text-xs"
-                      >
-                        {isKnown ? (
-                          meta.readonly ? (
-                            <Eye className="h-3 w-3" />
-                          ) : (
-                            <Pencil className="h-3 w-3" />
-                          )
-                        ) : (
-                          <AlertTriangle className="h-3 w-3" />
-                        )}
-                        {name}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="bottom"
-                      className="max-w-xs bg-popover text-popover-foreground"
-                    >
-                      {isKnown ? (
-                        <p>{meta.description}</p>
-                      ) : (
-                        <p className="text-destructive">不明なツール名です</p>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Changelog + Save */}
-        {hasChanges && (
-          <div className="space-y-3 rounded-lg border border-brand/30 bg-brand/5 p-4">
-            <div className="space-y-2">
-              <Label htmlFor="changelog">変更内容メモ</Label>
-              <Input
-                id="changelog"
-                value={changelog}
-                onChange={(e) => setChangelog(e.target.value)}
-                placeholder="変更内容を簡単に記述..."
-              />
-            </div>
-            <Button onClick={handleSave} disabled={saving || isLoading} className="w-full">
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              保存してバージョン作成
-            </Button>
+        <div className={cn(
+          'space-y-3 rounded-lg border p-4',
+          hasChanges ? 'border-brand/30 bg-brand/5' : 'border-border bg-muted/30'
+        )}>
+          <div className="space-y-2">
+            <Label htmlFor="changelog">変更内容メモ</Label>
+            <Input
+              id="changelog"
+              value={changelog}
+              onChange={(e) => setChangelog(e.target.value)}
+              placeholder="変更内容を簡単に記述..."
+              disabled={!hasChanges}
+            />
           </div>
-        )}
+          <Button onClick={handleSave} disabled={!hasChanges || saving || isLoading} className="w-full">
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            保存してバージョン作成
+          </Button>
+        </div>
       </div>
     </TooltipProvider>
   )

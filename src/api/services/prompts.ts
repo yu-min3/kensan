@@ -2,6 +2,13 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 
+export interface PendingExperiment {
+  id: string
+  status: 'pending_review' | 'in_challenge'
+  win_rate: number | null
+  created_at: string
+}
+
 export interface AIContext {
   id: string
   name: string
@@ -13,9 +20,11 @@ export interface AIContext {
   allowed_tools: string[]
   max_turns: number
   temperature: number
+  description: string | null
   created_at: string
   updated_at: string
   current_version_number: number | null
+  pending_experiment?: PendingExperiment | null
 }
 
 export interface AIContextUpdateInput {
@@ -49,6 +58,7 @@ export interface ToolMetadata {
   name: string
   description: string
   readonly: boolean
+  category: string
 }
 
 export interface PromptMetadata {

@@ -22,6 +22,7 @@ def _parse_uuid(value: str | None) -> UUID | None:
 
 
 @tool(
+    category="search",
     name="semantic_search",
     description="ベクトル類似度を使用してノートのチャンクを検索します。意味的に類似したコンテンツを見つけるのに適しています。",
     input_schema={
@@ -57,7 +58,9 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         embedding_service = get_embedding_service()
-        query_embedding = await embedding_service.generate_embedding(query)
+        query_embedding = await embedding_service.generate_embedding(
+            query, task_type="RETRIEVAL_QUERY"
+        )
 
         async with get_connection() as conn:
             if content_type:
@@ -116,6 +119,7 @@ async def semantic_search(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="search",
     name="keyword_search",
     description="キーワードベースの全文検索をノートチャンクに対して行います。特定の単語やフレーズを含むコンテンツを見つけるのに適しています。",
     input_schema={
@@ -213,6 +217,7 @@ async def keyword_search(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="search",
     name="hybrid_search",
     description="セマンティック検索とキーワード検索を組み合わせたハイブリッド検索を行います。より精度の高い検索結果を得るのに適しています。",
     input_schema={
@@ -256,7 +261,9 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         embedding_service = get_embedding_service()
-        query_embedding = await embedding_service.generate_embedding(query)
+        query_embedding = await embedding_service.generate_embedding(
+            query, task_type="RETRIEVAL_QUERY"
+        )
 
         keywords = query.split()
         tsquery = " | ".join(keywords)  # OR for broader matching
@@ -356,6 +363,7 @@ async def hybrid_search(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="search",
     name="search_notes",
     description="ノート（学習記録・日記）をキーワードで検索します。タイトルと本文を全文検索します。",
     input_schema={
@@ -455,6 +463,7 @@ async def search_notes(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="search",
     name="semantic_search_notes",
     description="ノート（学習記録・日記）をベクトル類似度で検索します。意味的に類似した内容を見つけるのに適しています。embedding列がセットされたノートのみ対象。",
     input_schema={
@@ -490,7 +499,9 @@ async def semantic_search_notes(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         embedding_service = get_embedding_service()
-        query_embedding = await embedding_service.generate_embedding(query)
+        query_embedding = await embedding_service.generate_embedding(
+            query, task_type="RETRIEVAL_QUERY"
+        )
 
         async with get_connection() as conn:
             if note_type:
@@ -543,6 +554,7 @@ async def semantic_search_notes(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="search",
     name="reindex_notes",
     description="インデックス未生成のノートに対してチャンク分割とembedding生成を一括実行します。検索精度を高めるために使用します。",
     input_schema={

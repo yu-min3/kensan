@@ -6,9 +6,10 @@ interface PromptSidebarProps {
   contexts: AIContext[]
   selectedId: string | null
   onSelect: (id: string) => void
+  unseenContextIds?: Set<string>
 }
 
-export function PromptSidebar({ contexts, selectedId, onSelect }: PromptSidebarProps) {
+export function PromptSidebar({ contexts, selectedId, onSelect, unseenContextIds }: PromptSidebarProps) {
   return (
     <div className="space-y-1">
       <h3 className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -28,8 +29,16 @@ export function PromptSidebar({ contexts, selectedId, onSelect }: PromptSidebarP
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{ctx.name}</div>
             <div className="text-xs text-muted-foreground">{ctx.situation}</div>
+            {ctx.description && (
+              <div className="mt-0.5 truncate text-xs text-muted-foreground/70">{ctx.description}</div>
+            )}
           </div>
           <div className="ml-2 flex items-center gap-1.5">
+            {ctx.pending_experiment && (
+              <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-700 text-[10px] px-1.5 py-0 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700">
+                改善案
+              </Badge>
+            )}
             {ctx.situation === 'persona' && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">共有</Badge>
             )}
@@ -37,6 +46,9 @@ export function PromptSidebar({ contexts, selectedId, onSelect }: PromptSidebarP
               <span className="text-[10px] text-muted-foreground">
                 v{ctx.current_version_number}
               </span>
+            )}
+            {unseenContextIds?.has(ctx.id) && (
+              <span className="h-2 w-2 rounded-full bg-blue-500" title="未確認バージョン" />
             )}
             {ctx.is_active && (
               <span className="h-2 w-2 rounded-full bg-green-500" title="Active" />

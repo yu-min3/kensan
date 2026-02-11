@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { RotateCcw, GitCompare, Loader2 } from 'lucide-react'
+import { RotateCcw, GitCompare, Loader2, FlaskConical } from 'lucide-react'
 import type { AIContextVersion } from '@/api/services/prompts'
 
 interface VersionHistoryProps {
@@ -10,6 +10,8 @@ interface VersionHistoryProps {
   isLoading: boolean
   onRollback: (versionNumber: number) => Promise<void>
   onShowDiff: (v1: AIContextVersion, v2: AIContextVersion) => void
+  onCompare?: (versionNumber: number) => void
+  lastSeenVersion?: number | null
 }
 
 function formatDate(iso: string): string {
@@ -24,6 +26,8 @@ export function VersionHistory({
   isLoading,
   onRollback,
   onShowDiff,
+  onCompare,
+  lastSeenVersion,
 }: VersionHistoryProps) {
   const [rollingBack, setRollingBack] = useState<number | null>(null)
 
@@ -65,6 +69,11 @@ export function VersionHistory({
                       current
                     </Badge>
                   )}
+                  {lastSeenVersion != null && version.version_number > lastSeenVersion && (
+                    <Badge className="h-4 bg-blue-500 px-1 text-[9px] text-white hover:bg-blue-600">
+                      NEW
+                    </Badge>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {formatDate(version.created_at)}
                   </span>
@@ -85,6 +94,17 @@ export function VersionHistory({
                     title="前のバージョンとのdiffを表示"
                   >
                     <GitCompare className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {!isCurrent && onCompare && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => onCompare(version.version_number)}
+                    title="現行版と比較"
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {!isCurrent && (

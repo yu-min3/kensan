@@ -45,7 +45,7 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 	query := fmt.Sprintf(`
 		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		       tag_ids, is_routine, routine_task_id, created_at, updated_at
+		       tag_ids, created_at, updated_at
 		FROM time_blocks
 		%s ORDER BY start_datetime ASC
 	`, w.WhereClause())
@@ -73,8 +73,6 @@ func (r *PostgresRepository) ListTimeBlocks(ctx context.Context, userID string, 
 			&tb.GoalName,
 			&tb.GoalColor,
 			&tagIDs,
-			&tb.IsRoutine,
-			&tb.RoutineTaskID,
 			&tb.CreatedAt,
 			&tb.UpdatedAt,
 		)
@@ -97,7 +95,7 @@ func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeB
 	query := `
 		SELECT id, user_id, start_datetime, end_datetime, task_id, task_name,
 		       milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		       tag_ids, is_routine, routine_task_id, created_at, updated_at
+		       tag_ids, created_at, updated_at
 		FROM time_blocks
 		WHERE id = $1 AND user_id = $2
 	`
@@ -117,8 +115,6 @@ func (r *PostgresRepository) GetTimeBlockByID(ctx context.Context, userID, timeB
 		&tb.GoalName,
 		&tb.GoalColor,
 		&tagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)
@@ -158,11 +154,11 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime, task_id, task_name,
 		                         milestone_id, milestone_name,
 		                         goal_id, goal_name, goal_color, tag_ids,
-		                         is_routine, routine_task_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		                         created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		          tag_ids, is_routine, routine_task_id, created_at, updated_at
+		          tag_ids, created_at, updated_at
 	`
 
 	var tb timeblock.TimeBlock
@@ -180,8 +176,6 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		input.GoalName,
 		input.GoalColor,
 		tagIDs,
-		input.IsRoutine,
-		input.RoutineTaskID,
 		now,
 		now,
 	).Scan(
@@ -197,8 +191,6 @@ func (r *PostgresRepository) CreateTimeBlock(ctx context.Context, userID string,
 		&tb.GoalName,
 		&tb.GoalColor,
 		&returnedTagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)
@@ -240,8 +232,6 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 	if input.TagIDs != nil {
 		b.AddFieldValue("tag_ids", input.TagIDs)
 	}
-	sqlbuilder.AddField(b, "is_routine", input.IsRoutine)
-	sqlbuilder.AddField(b, "routine_task_id", input.RoutineTaskID)
 
 	if !b.HasUpdates() {
 		return r.GetTimeBlockByID(ctx, userID, timeBlockID)
@@ -257,7 +247,7 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		WHERE id = $%d AND user_id = $%d
 		RETURNING id, user_id, start_datetime, end_datetime, task_id, task_name,
 		          milestone_id, milestone_name, goal_id, goal_name, goal_color,
-		          tag_ids, is_routine, routine_task_id, created_at, updated_at
+		          tag_ids, created_at, updated_at
 	`, b.SetClause(), idArg, userArg)
 
 	var tb timeblock.TimeBlock
@@ -275,8 +265,6 @@ func (r *PostgresRepository) UpdateTimeBlock(ctx context.Context, userID, timeBl
 		&tb.GoalName,
 		&tb.GoalColor,
 		&tagIDs,
-		&tb.IsRoutine,
-		&tb.RoutineTaskID,
 		&tb.CreatedAt,
 		&tb.UpdatedAt,
 	)

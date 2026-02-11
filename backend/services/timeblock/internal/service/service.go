@@ -8,7 +8,6 @@ import (
 	"github.com/kensan/backend/services/timeblock/internal"
 	"github.com/kensan/backend/services/timeblock/internal/repository"
 	"github.com/kensan/backend/shared/errors"
-	"github.com/kensan/backend/shared/validation"
 )
 
 // Service-specific errors
@@ -17,9 +16,8 @@ var (
 	ErrTimeEntryNotFound    = errors.NotFound("time entry")
 	ErrRunningTimerNotFound = errors.NotFound("timer")
 	ErrTimerAlreadyRunning  = repository.ErrTimerAlreadyRunning
-	ErrInvalidInput         = errors.ErrInvalidInput
-	ErrInvalidDate          = errors.InvalidFormat("date", "YYYY-MM-DD")
-	ErrInvalidDatetime      = fmt.Errorf("invalid datetime: %w", errors.ErrInvalidInput)
+	ErrInvalidInput    = errors.ErrInvalidInput
+	ErrInvalidDatetime = fmt.Errorf("invalid datetime: %w", errors.ErrInvalidInput)
 )
 
 // Service handles business logic for time blocks and time entries
@@ -30,11 +28,6 @@ type Service struct {
 // NewService creates a new timeblock service
 func NewService(repo repository.Repository) *Service {
 	return &Service{repo: repo}
-}
-
-// validateDate validates that a date string is in YYYY-MM-DD format
-func validateDate(date string) bool {
-	return validation.IsValidDate(date)
 }
 
 // validateDatetime validates that a datetime string is in RFC3339 format and returns the parsed time
@@ -149,25 +142,6 @@ func (s *Service) DeleteTimeBlock(ctx context.Context, userID, timeBlockID strin
 	}
 
 	return s.repo.DeleteTimeBlock(ctx, userID, timeBlockID)
-}
-
-// GenerateFromRoutines generates time blocks from routine tasks for a given date
-// NOTE: This is a simplified implementation. Full integration with Routine Service will be added later via gRPC.
-func (s *Service) GenerateFromRoutines(ctx context.Context, userID string, input timeblock.GenerateFromRoutinesInput) (*timeblock.GenerateFromRoutinesResult, error) {
-	// Validate date
-	if input.Date == "" || !validateDate(input.Date) {
-		return nil, ErrInvalidDate
-	}
-
-	// TODO: In the future, this will call the Routine Service via gRPC to get routine tasks
-	// For now, return an empty result as a placeholder implementation
-
-	result := &timeblock.GenerateFromRoutinesResult{
-		Generated: 0,
-		Blocks:    []timeblock.TimeBlock{},
-	}
-
-	return result, nil
 }
 
 // ========== TimeEntry Operations ==========

@@ -6,11 +6,9 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-import anthropic
-from google import genai
-
 from kensan_ai.config import get_settings
 from kensan_ai.db.connection import get_connection
+from kensan_ai.lib.ai_provider import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +37,7 @@ class ProfileSummarizer:
 
     def __init__(self):
         """Initialize the profile summarizer with the configured AI provider."""
-        settings = get_settings()
-        self.ai_provider = settings.ai_provider
-
-        if self.ai_provider == "google":
-            self.google_client = genai.Client(api_key=settings.google_api_key)
-            self.model = settings.google_model
-        else:
-            self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            self.model = "claude-sonnet-4-20250514"
+        self.llm = LLMClient()
 
     async def get_users_with_new_facts(
         self,
@@ -156,19 +146,8 @@ class ProfileSummarizer:
             new_facts=facts_text,
         )
 
-        if self.ai_provider == "google":
-            response = await self.google_client.aio.models.generate_content(
-                model=self.model,
-                contents=prompt,
-            )
-            return (response.text or "").strip()
-        else:
-            response = await self.anthropic_client.messages.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return response.content[0].text.strip() if response.content else ""
+        result = await self.llm.generate(prompt, max_tokens=500)
+        return result.strip()
 
     async def update_user_memory(
         self,

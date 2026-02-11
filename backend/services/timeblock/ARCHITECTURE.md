@@ -39,16 +39,12 @@ graph TB
     Svc --> Repos
     Repos --> DB[(PostgreSQL<br/>time_blocks<br/>time_entries<br/>running_timers)]
 
-    RS["routine-service"] -.->|"ルーティン情報取得<br/>(generate-from-routines)"| Svc
     AN["analytics-service"] -.->|"TimeEntry/TimeBlock<br/>集計参照"| DB
-
-    style RS fill:#fef3c7
 ```
 
 **特徴:**
 - 3 つのエンティティ（予定 / 実績 / タイマー）で時間管理の全サイクルをカバー
 - DB は `TIMESTAMPTZ`（UTC）で保存、タイムゾーン変換はフロントエンド側
-- routine-service と連携し、ルーティンから TimeBlock を自動生成
 - analytics-service が TimeEntry/TimeBlock を集計に使用
 - Goal/Milestone 情報は非正規化（同期トリガーで維持）
 
@@ -71,8 +67,6 @@ erDiagram
         string goal_name
         string goal_color
         uuid_array tag_ids
-        boolean is_routine
-        uuid routine_task_id
     }
 
     time_entries {
@@ -134,7 +128,6 @@ TimeBlock / TimeEntry / RunningTimer はすべて `goal_name`, `goal_color`, `mi
 | POST | /timeblocks | 作成 |
 | PUT | /timeblocks/{timeBlockId} | 更新 |
 | DELETE | /timeblocks/{timeBlockId} | 削除 |
-| POST | /timeblocks/generate-from-routines | ルーティンから自動生成（`date` 指定） |
 
 ### TimeEntry（実績）
 
@@ -199,10 +192,6 @@ sequenceDiagram
         Service-->>User: 404 Not Found
     end
 ```
-
-### ルーティン連携
-
-`POST /timeblocks/generate-from-routines` は指定日のルーティンタスクを routine-service から取得し、`defaultStartTime` + `estimatedMinutes` で TimeBlock を自動生成する。
 
 ### 日跨ぎ処理
 

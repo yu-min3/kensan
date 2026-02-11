@@ -49,6 +49,7 @@ def _localize_summary(summary: dict, tz: ZoneInfo) -> dict:
 
 
 @tool(
+    category="analytics",
     name="get_analytics_summary",
     description="週次または月次の稼働サマリーを取得する。目標別の時間配分を確認する。",
     input_schema={
@@ -84,6 +85,7 @@ async def get_analytics_summary(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="analytics",
     name="get_daily_summary",
     description="特定日の時間配分サマリーを取得する。計画vs実績の比較に使う。",
     input_schema={

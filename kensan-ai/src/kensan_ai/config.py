@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
 
+    # Embedding provider ("openai" or "gemini")
+    embedding_provider: str = "openai"
+    gemini_embedding_model: str = "gemini-embedding-001"
+
     # MinIO Storage (read-only access for note content)
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "kensan"

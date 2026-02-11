@@ -53,15 +53,27 @@ DECLARE
     tag_learn UUID := 'd20a0002-0000-0000-0000-000000000000';
     tag_cert UUID := 'd20a0003-0000-0000-0000-000000000000';
 
-    jitter INT;
+    -- Time jitter (minutes) — start and end independent
+    jitter_start INT;
+    jitter_end INT;
+
+    -- Description for recent entries
+    desc_text TEXT;
+
+    -- Recent threshold: day_offset >= 42 means within last 2 weeks
+    is_recent BOOLEAN;
 
 BEGIN
     FOR day_offset IN 0..55 LOOP
         d := base_date + day_offset;
         dow := EXTRACT(DOW FROM d)::INT;
         week_num := day_offset / 7 + 1;
+        is_recent := (day_offset >= 42);
 
-        jitter := (day_offset % 5) * 3 - 6;
+        -- Pseudo-random jitter using multiple factors (-15 to +15 min range for start)
+        jitter_start := ((day_offset * 7 + dow * 13 + week_num * 3) % 31) - 15;
+        -- Independent end jitter (-10 to +25 min range)
+        jitter_end := ((day_offset * 11 + dow * 7 + week_num * 17) % 36) - 10;
 
         -- Skip logic: Week1-4 skip ~50%, Week5-8 skip ~20%
         IF week_num <= 4 THEN
@@ -84,39 +96,98 @@ BEGIN
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
                         uuid_generate_v4(), uid,
-                        (d - INTERVAL '1 day') + TIME '21:35' + (jitter || ' minutes')::INTERVAL,
-                        (d - INTERVAL '1 day') + TIME '21:55' + (jitter || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:35' + (jitter_start || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:55' + (jitter_end || ' minutes')::INTERVAL,
                         t_udemy1, 'Udemy AWS SAA講座', m_aws_base, 'AWS基礎理解', g1_id, g1_name, g1_color,
                         ARRAY[tag_cert], NULL
                     );
                 END IF;
             ELSIF week_num >= 6 AND NOT skip_block THEN
                 seq := seq + 1;
+
+                -- Recent descriptions for morning entries (朝活)
+                desc_text := NULL;
+                IF is_recent THEN
+                    IF day_offset % 2 = 0 THEN
+                        desc_text := CASE (day_offset % 5)
+                            WHEN 0 THEN '午前問題5問。ネットワーク系が弱い'
+                            WHEN 2 THEN 'セキュリティの問題3問。PKIの仕組みを復習'
+                            WHEN 4 THEN 'データベースの正規化問題。第3正規形まで整理'
+                            ELSE 'アルゴリズムの擬似コード問題2問。トレースが大事'
+                        END;
+                    ELSE
+                        desc_text := CASE (day_offset % 4)
+                            WHEN 1 THEN 'IAMポリシーの評価順序を復習'
+                            WHEN 3 THEN 'S3ストレージクラスの比較表を作った'
+                            ELSE 'RDSマルチAZの仕組みを理解'
+                        END;
+                    END IF;
+                END IF;
+
                 IF day_offset % 2 = 0 THEN
                     INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
                         uuid_generate_v4(), uid,
-                        (d - INTERVAL '1 day') + TIME '21:33' + (jitter || ' minutes')::INTERVAL,
-                        (d - INTERVAL '1 day') + TIME '21:58' + (jitter || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:33' + (jitter_start || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:58' + (jitter_end || ' minutes')::INTERVAL,
                         t_ap_past, '応用情報 過去問 午前', m_ap_am, '午前問題80%以上', g3_id, g3_name, g3_color,
-                        ARRAY[tag_cert], NULL
+                        ARRAY[tag_cert], desc_text
                     );
                 ELSE
                     INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
                         uuid_generate_v4(), uid,
-                        (d - INTERVAL '1 day') + TIME '21:33' + (jitter || ' minutes')::INTERVAL,
-                        (d - INTERVAL '1 day') + TIME '21:56' + (jitter || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:33' + (jitter_start || ' minutes')::INTERVAL,
+                        (d - INTERVAL '1 day') + TIME '21:56' + (jitter_end || ' minutes')::INTERVAL,
                         t_udemy2, 'Udemy AWS SAA講座 セクション6-10', m_aws_base, 'AWS基礎理解', g1_id, g1_name, g1_color,
-                        ARRAY[tag_cert], NULL
+                        ARRAY[tag_cert], desc_text
                     );
                 END IF;
             END IF;
 
             -- === Evening block ===
             IF NOT skip_block THEN
+
+                -- Recent descriptions for evening entries (AWS学習/Python/応用情報)
+                desc_text := NULL;
+                IF is_recent THEN
+                    IF week_num >= 7 AND dow <= 2 THEN
+                        desc_text := CASE (day_offset % 5)
+                            WHEN 0 THEN 'S3ストレージクラスの比較表を作った'
+                            WHEN 1 THEN 'RDSマルチAZの仕組みを理解'
+                            WHEN 2 THEN 'IAMポリシーの評価順序を復習'
+                            WHEN 3 THEN 'VPCエンドポイントのGateway型とInterface型の違い'
+                            ELSE 'CloudFrontのキャッシュ戦略。TTL設定がポイント'
+                        END;
+                    ELSIF week_num >= 7 AND dow = 3 THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'Clickのコマンド定義が直感的'
+                            WHEN 1 THEN 'SQLiteとの接続を実装'
+                            ELSE 'argparseとClickの違いを比較。Clickの方がモダン'
+                        END;
+                    ELSIF week_num >= 7 AND dow = 4 THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'OSI参照モデルの各層の役割を整理'
+                            WHEN 1 THEN 'SQLのサブクエリとJOINの使い分け問題'
+                            ELSE 'セキュリティのCIA（機密性・完全性・可用性）'
+                        END;
+                    ELSIF week_num >= 7 AND dow = 5 THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'ソートアルゴリズムの計算量比較表を作成'
+                            WHEN 1 THEN 'スタックとキューの実装パターン'
+                            ELSE '二分探索木のトラバース問題。再帰で解けた'
+                        END;
+                    ELSIF week_num = 6 THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'Udemyのハンズオンでセキュリティグループ設定'
+                            WHEN 1 THEN 'Python入門書の例外処理の章。try-except'
+                            ELSE NULL
+                        END;
+                    END IF;
+                END IF;
+
                 IF week_num <= 2 THEN
                     IF dow IN (1, 3, 5) THEN
                         seq := seq + 1;
@@ -125,30 +196,30 @@ BEGIN
                                 task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                             VALUES (
                                 uuid_generate_v4(), uid,
-                                d + TIME '12:10' + (jitter || ' minutes')::INTERVAL,
-                                d + TIME '13:15' + (jitter || ' minutes')::INTERVAL,
+                                d + TIME '12:10' + (jitter_start || ' minutes')::INTERVAL,
+                                d + TIME '13:15' + (jitter_end || ' minutes')::INTERVAL,
                                 t_udemy1, 'Udemy AWS SAA講座 セクション1-5', m_aws_base, 'AWS基礎理解', g1_id, g1_name, g1_color,
-                                ARRAY[tag_cert], NULL
+                                ARRAY[tag_cert], desc_text
                             );
                         ELSIF dow = 3 THEN
                             INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                                 task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                             VALUES (
                                 uuid_generate_v4(), uid,
-                                d + TIME '12:10' + (jitter || ' minutes')::INTERVAL,
-                                d + TIME '13:10' + (jitter || ' minutes')::INTERVAL,
+                                d + TIME '12:10' + (jitter_start || ' minutes')::INTERVAL,
+                                d + TIME '13:10' + (jitter_end || ' minutes')::INTERVAL,
                                 t_py1, 'Python入門書 前半', m_py_base, 'Python基礎習得', g2_id, g2_name, g2_color,
-                                ARRAY[tag_learn], NULL
+                                ARRAY[tag_learn], desc_text
                             );
                         ELSE
                             INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                                 task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                             VALUES (
                                 uuid_generate_v4(), uid,
-                                d + TIME '12:10' + (jitter || ' minutes')::INTERVAL,
-                                d + TIME '13:05' + (jitter || ' minutes')::INTERVAL,
+                                d + TIME '12:10' + (jitter_start || ' minutes')::INTERVAL,
+                                d + TIME '13:05' + (jitter_end || ' minutes')::INTERVAL,
                                 t_git, 'Git/GitHub使い方まとめ', m_py_base, 'Python基礎習得', g2_id, g2_name, g2_color,
-                                ARRAY[tag_learn], NULL
+                                ARRAY[tag_learn], desc_text
                             );
                         END IF;
                     END IF;
@@ -160,20 +231,20 @@ BEGIN
                                 task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                             VALUES (
                                 uuid_generate_v4(), uid,
-                                d + TIME '12:08' + (jitter || ' minutes')::INTERVAL,
-                                d + TIME '13:20' + (jitter || ' minutes')::INTERVAL,
+                                d + TIME '12:08' + (jitter_start || ' minutes')::INTERVAL,
+                                d + TIME '13:20' + (jitter_end || ' minutes')::INTERVAL,
                                 t_udemy1, 'Udemy AWS SAA講座', m_aws_base, 'AWS基礎理解', g1_id, g1_name, g1_color,
-                                ARRAY[tag_cert], NULL
+                                ARRAY[tag_cert], desc_text
                             );
                         ELSE
                             INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                                 task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                             VALUES (
                                 uuid_generate_v4(), uid,
-                                d + TIME '12:08' + (jitter || ' minutes')::INTERVAL,
-                                d + TIME '13:15' + (jitter || ' minutes')::INTERVAL,
+                                d + TIME '12:08' + (jitter_start || ' minutes')::INTERVAL,
+                                d + TIME '13:15' + (jitter_end || ' minutes')::INTERVAL,
                                 t_py1, 'Python入門書 前半', m_py_base, 'Python基礎習得', g2_id, g2_name, g2_color,
-                                ARRAY[tag_learn], NULL
+                                ARRAY[tag_learn], desc_text
                             );
                         END IF;
                     END IF;
@@ -185,48 +256,48 @@ BEGIN
                             task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                         VALUES (
                             uuid_generate_v4(), uid,
-                            d + TIME '12:05' + (jitter || ' minutes')::INTERVAL,
-                            d + TIME '13:28' + (jitter || ' minutes')::INTERVAL,
+                            d + TIME '12:05' + (jitter_start || ' minutes')::INTERVAL,
+                            d + TIME '13:28' + (jitter_end || ' minutes')::INTERVAL,
                             CASE WHEN week_num <= 6 THEN t_udemy2 ELSE t_weak END,
                             CASE WHEN week_num <= 6 THEN 'Udemy AWS SAA講座 セクション6-10' ELSE '弱点分野復習' END,
                             CASE WHEN week_num <= 6 THEN m_aws_base ELSE m_aws_mock END,
                             CASE WHEN week_num <= 6 THEN 'AWS基礎理解' ELSE '模擬試験70%以上' END,
                             g1_id, g1_name, g1_color,
-                            ARRAY[tag_cert], NULL
+                            ARRAY[tag_cert], desc_text
                         );
                     ELSIF dow = 3 THEN
                         INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                             task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                         VALUES (
                             uuid_generate_v4(), uid,
-                            d + TIME '12:05' + (jitter || ' minutes')::INTERVAL,
-                            d + TIME '13:25' + (jitter || ' minutes')::INTERVAL,
+                            d + TIME '12:05' + (jitter_start || ' minutes')::INTERVAL,
+                            d + TIME '13:25' + (jitter_end || ' minutes')::INTERVAL,
                             CASE WHEN week_num <= 6 THEN t_py2 ELSE t_click END,
                             CASE WHEN week_num <= 6 THEN 'Python入門書 後半' ELSE 'Click ライブラリ調査' END,
                             CASE WHEN week_num <= 6 THEN m_py_base ELSE m_cli END,
                             CASE WHEN week_num <= 6 THEN 'Python基礎習得' ELSE 'CLIツールのMVP完成' END,
                             g2_id, g2_name, g2_color,
-                            ARRAY[CASE WHEN week_num <= 6 THEN tag_learn ELSE tag_dev END], NULL
+                            ARRAY[CASE WHEN week_num <= 6 THEN tag_learn ELSE tag_dev END], desc_text
                         );
                     ELSIF dow = 4 THEN
                         INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                             task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                         VALUES (
                             uuid_generate_v4(), uid,
-                            d + TIME '12:05' + (jitter || ' minutes')::INTERVAL,
-                            d + TIME '13:25' + (jitter || ' minutes')::INTERVAL,
+                            d + TIME '12:05' + (jitter_start || ' minutes')::INTERVAL,
+                            d + TIME '13:25' + (jitter_end || ' minutes')::INTERVAL,
                             t_ap_text, '応用情報テキスト読み込み', m_ap_am, '午前問題80%以上', g3_id, g3_name, g3_color,
-                            ARRAY[tag_cert], NULL
+                            ARRAY[tag_cert], desc_text
                         );
                     ELSE
                         INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                             task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                         VALUES (
                             uuid_generate_v4(), uid,
-                            d + TIME '12:05' + (jitter || ' minutes')::INTERVAL,
-                            d + TIME '13:22' + (jitter || ' minutes')::INTERVAL,
+                            d + TIME '12:05' + (jitter_start || ' minutes')::INTERVAL,
+                            d + TIME '13:22' + (jitter_end || ' minutes')::INTERVAL,
                             t_algo, 'アルゴリズム問題演習', m_ap_pm, '午後問題対策', g3_id, g3_name, g3_color,
-                            ARRAY[tag_cert], NULL
+                            ARRAY[tag_cert], desc_text
                         );
                     END IF;
                 END IF;
@@ -235,13 +306,24 @@ BEGIN
             -- === Running Wed (Week 5+) ===
             IF dow = 3 AND week_num >= 5 AND NOT skip_block THEN
                 seq := seq + 1;
+
+                desc_text := NULL;
+                IF is_recent THEN
+                    desc_text := CASE (day_offset % 4)
+                        WHEN 0 THEN '3km走った。タイム18:30'
+                        WHEN 1 THEN '坂道がきつい。でも走った後はスッキリ'
+                        WHEN 2 THEN '2.5km。ちょっと短めだけどペースは良かった'
+                        ELSE '3km完走。先週よりタイム30秒縮まった'
+                    END;
+                END IF;
+
                 INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                     task_name, goal_id, goal_name, goal_color, tag_ids, description)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '10:05', d + TIME '10:28',
                     'ランニング', NULL, NULL, NULL,
-                    NULL, NULL
+                    NULL, desc_text
                 );
             END IF;
 
@@ -266,6 +348,16 @@ BEGIN
                 ELSE
                     -- Week 5-8: full Saturday
                     seq := seq + 1;
+
+                    desc_text := NULL;
+                    IF is_recent THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'ELBの種類（ALB/NLB/CLB）の使い分けを整理'
+                            WHEN 1 THEN 'Auto Scalingのステップスケーリングとターゲット追跡'
+                            ELSE 'Lambda + API Gatewayのサーバーレスパターン'
+                        END;
+                    END IF;
+
                     INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
@@ -276,9 +368,19 @@ BEGIN
                         CASE WHEN week_num <= 6 THEN m_aws_base ELSE m_aws_mock END,
                         CASE WHEN week_num <= 6 THEN 'AWS基礎理解' ELSE '模擬試験70%以上' END,
                         g1_id, g1_name, g1_color,
-                        ARRAY[tag_cert], NULL
+                        ARRAY[tag_cert], desc_text
                     );
                     seq := seq + 1;
+
+                    desc_text := NULL;
+                    IF is_recent THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'Click + SQLiteでCRUD実装。deleteコマンド完成'
+                            WHEN 1 THEN 'リスト表示のフォーマットを改善。tabulate使った'
+                            ELSE 'エラーハンドリング追加。ファイルが壊れた時の対応'
+                        END;
+                    END IF;
+
                     INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
@@ -289,18 +391,28 @@ BEGIN
                         CASE WHEN week_num <= 6 THEN m_py_base ELSE m_cli END,
                         CASE WHEN week_num <= 6 THEN 'Python基礎習得' ELSE 'CLIツールのMVP完成' END,
                         g2_id, g2_name, g2_color,
-                        ARRAY[CASE WHEN week_num <= 6 THEN tag_learn ELSE tag_dev END], NULL
+                        ARRAY[CASE WHEN week_num <= 6 THEN tag_learn ELSE tag_dev END], desc_text
                     );
 
                     -- Running Saturday
                     IF NOT skip_block THEN
                         seq := seq + 1;
+
+                        desc_text := NULL;
+                        IF is_recent THEN
+                            desc_text := CASE (day_offset % 3)
+                                WHEN 0 THEN '3.5km。土曜は距離を伸ばしてみた'
+                                WHEN 1 THEN '3km。新しいコース発見。川沿いが気持ちいい'
+                                ELSE '2.5km。昨日の筋肉痛が残ってて短めに'
+                            END;
+                        END IF;
+
                         INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                             task_name, goal_id, goal_name, goal_color, tag_ids, description)
                         VALUES (
                             uuid_generate_v4(), uid,
                             d + TIME '08:05', d + TIME '08:28',
-                            'ランニング', NULL, NULL, NULL, NULL, NULL
+                            'ランニング', NULL, NULL, NULL, NULL, desc_text
                         );
                     END IF;
                 END IF;
@@ -324,13 +436,23 @@ BEGIN
                 -- Sunday: mostly gaming, but Week 5+ adds study
                 IF week_num >= 5 AND NOT skip_block THEN
                     seq := seq + 1;
+
+                    desc_text := NULL;
+                    IF is_recent THEN
+                        desc_text := CASE (day_offset % 3)
+                            WHEN 0 THEN 'TCP/IPの4層モデルを整理。OSIとの対応表作った'
+                            WHEN 1 THEN 'SQLの結合（INNER JOIN, LEFT JOIN）問題3問'
+                            ELSE 'プロジェクトマネジメントの問題。WBSとガントチャート'
+                        END;
+                    END IF;
+
                     INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
                         task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
                     VALUES (
                         uuid_generate_v4(), uid,
                         d + TIME '05:10', d + TIME '05:55',
                         t_ap_text, '応用情報テキスト読み込み', m_ap_am, '午前問題80%以上', g3_id, g3_name, g3_color,
-                        ARRAY[tag_cert], NULL
+                        ARRAY[tag_cert], desc_text
                     );
                 END IF;
             END IF;
@@ -340,3 +462,98 @@ BEGIN
 
     RAISE NOTICE 'Takuya: Inserted % time entry operations', seq;
 END $$;
+
+-- ============================================================================
+-- 今朝のエントリー（朝活）
+-- ============================================================================
+
+-- 今日の朝活: JST 06:35-07:08 = UTC 前日21:35-22:08
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+  uuid_generate_v4(),
+  'd2222222-2222-2222-2222-222222222222',
+  CURRENT_DATE - INTERVAL '1 day' + INTERVAL '21 hours 35 minutes',
+  CURRENT_DATE - INTERVAL '1 day' + INTERVAL '22 hours 8 minutes',
+  '朝活',
+  'd2000003-0000-0000-0000-000000000000', '応用情報技術者取得', '#3B82F6',
+  ARRAY['d20a0002-0000-0000-0000-000000000000', 'd20a0003-0000-0000-0000-000000000000']::uuid[],
+  '応用情報の午前問題4問。データベースの正規化で1問ミス'
+);
+
+-- ============================================================================
+-- イレギュラーエントリー（計画外の人間味ある実績）
+-- ============================================================================
+
+-- 1. ゲームしすぎて勉強ほぼ0分（CURRENT_DATE - 25, 平日夜）
+-- 新シーズン始まってゲームに負けた日。21:00開始予定が22:30開始→22:45で力尽き
+-- JST 22:30-22:45 = UTC 13:30-13:45
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+    uuid_generate_v4(), 'd2222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE - 25) + TIME '13:30', (CURRENT_DATE - 25) + TIME '13:45',
+    'd2100003-0000-0000-0000-000000000000', 'Udemy AWS SAA講座 セクション6-10',
+    'd2010001-0000-0000-0000-000000000000', 'AWS基礎理解',
+    'd2000001-0000-0000-0000-000000000000', 'AWS SAA取得', '#F59E0B',
+    ARRAY['d20a0003-0000-0000-0000-000000000000']::uuid[],
+    'ゲームしすぎた反省。22:30から始めたけど15分で力尽きた。昨日分も取り返す'
+);
+
+-- 2. 先輩勉強会が盛り上がって延長（CURRENT_DATE - 16, 土曜）
+-- 予定1時間→2.5時間に延長。S3とRDSの設計パターンをみっちり
+-- JST 14:00-16:30 = UTC 05:00-07:30
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+    uuid_generate_v4(), 'd2222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE - 16) + TIME '05:00', (CURRENT_DATE - 16) + TIME '07:30',
+    '先輩勉強会',
+    'd2000001-0000-0000-0000-000000000000', 'AWS SAA取得', '#F59E0B',
+    ARRAY['d20a0002-0000-0000-0000-000000000000', 'd20a0003-0000-0000-0000-000000000000']::uuid[],
+    'VPCの設計パターンを教えてもらった。S3のライフサイクルポリシーを一緒に整理。予定1時間が2.5時間に'
+);
+
+-- 3. 模擬試験集中日（CURRENT_DATE - 10, 日曜）
+-- 日曜午後に模擬試験2回目。JST 13:00-16:30 = UTC 04:00-07:30
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+    uuid_generate_v4(), 'd2222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE - 10) + TIME '04:00', (CURRENT_DATE - 10) + TIME '07:30',
+    'd2100004-0000-0000-0000-000000000000', 'SAA模擬試験',
+    'd2010002-0000-0000-0000-000000000000', '模擬試験70%以上',
+    'd2000001-0000-0000-0000-000000000000', 'AWS SAA取得', '#F59E0B',
+    ARRAY['d20a0003-0000-0000-0000-000000000000']::uuid[],
+    '模擬試験2回目68%！前回52%から16ポイント改善。S3とRDSがまだ弱い。見直しに1時間かけた'
+);
+
+-- 4. ランニング後の超集中（CURRENT_DATE - 7, 水曜）
+-- ランニング後にAWS勉強。普段30分のところ1.5時間やった
+-- JST 21:00-22:30 = UTC 12:00-13:30
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+    uuid_generate_v4(), 'd2222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE - 7) + TIME '12:00', (CURRENT_DATE - 7) + TIME '13:30',
+    'd2100005-0000-0000-0000-000000000000', '弱点分野復習',
+    'd2010002-0000-0000-0000-000000000000', '模擬試験70%以上',
+    'd2000001-0000-0000-0000-000000000000', 'AWS SAA取得', '#F59E0B',
+    ARRAY['d20a0003-0000-0000-0000-000000000000']::uuid[],
+    'ランニング後にゾーン入った。S3ストレージクラス全部覚えた。普段30分が1.5時間に'
+);
+
+-- 5. 朝寝坊リカバリー（CURRENT_DATE - 4）
+-- アラーム聞こえず朝活失敗。夜に30分延長して対応
+-- JST 22:00-22:35 = UTC 13:00-13:35
+INSERT INTO time_entries (id, user_id, start_datetime, end_datetime,
+    task_id, task_name, milestone_id, milestone_name, goal_id, goal_name, goal_color, tag_ids, description)
+VALUES (
+    uuid_generate_v4(), 'd2222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE - 4) + TIME '13:00', (CURRENT_DATE - 4) + TIME '13:35',
+    'd2100010-0000-0000-0000-000000000000', '応用情報 過去問 午前',
+    'd2030001-0000-0000-0000-000000000000', '午前問題80%以上',
+    'd2000003-0000-0000-0000-000000000000', '応用情報技術者取得', '#3B82F6',
+    ARRAY['d20a0002-0000-0000-0000-000000000000', 'd20a0003-0000-0000-0000-000000000000']::uuid[],
+    'アラーム聞こえず朝活失敗。夜に30分延長してリカバリー。午前問題3問解いた'
+);

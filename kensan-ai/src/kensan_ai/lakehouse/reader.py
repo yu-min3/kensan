@@ -34,6 +34,7 @@ class LakehouseReader:
                     "type": "rest",
                     "uri": self._settings.polaris_uri,
                     "credential": self._settings.polaris_credential,
+                    "scope": "PRINCIPAL_ROLE:ALL",
                     "warehouse": self._settings.polaris_warehouse,
                     "s3.endpoint": self._settings.lakehouse_s3_endpoint,
                     "s3.access-key-id": self._settings.lakehouse_s3_access_key,

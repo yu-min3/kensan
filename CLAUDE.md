@@ -48,7 +48,6 @@ make dev-backend     # Backend only (for local frontend dev)
 | user-service | 8081 | Auth, Settings |
 | task-service | 8082 | Goals, Tasks |
 | timeblock-service | 8084 | Time Planning |
-| routine-service | 8085 | Routines |
 | analytics-service | 8088 | Analytics |
 | memo-service | 8090 | Memo |
 | note-service | 8091 | Notes |

@@ -19,7 +19,7 @@ Kensanアプリケーションのバックエンド共通インフラストラ�
 
 ### アーキテクチャスタイル
 
-- **7つの独立したGoマイクロサービス**（ポート8081-8091）
+- **6つの独立したGoマイクロサービス**（ポート8081-8091）
 - 単一のPostgreSQL 16データベース（共有スキーマ）
 - JWT認証（HS256）
 - マルチテナント：全テーブルに`user_id`カラムでデータ分離
@@ -34,7 +34,6 @@ graph TB
         US[user-service :8081]
         TS[task-service :8082]
         TBS[timeblock-service :8084]
-        RS[routine-service :8085]
         AS[analytics-service :8088]
         MS[memo-service :8090]
         NS[note-service :8091]
@@ -52,7 +51,6 @@ graph TB
     SPA -->|Auth, Settings| US
     SPA -->|Goals, Tasks| TS
     SPA -->|TimeBlocks, Timer| TBS
-    SPA -->|Routines| RS
     SPA -->|Summaries| AS
     SPA -->|Quick Notes| MS
     SPA -->|Notes| NS
@@ -61,7 +59,6 @@ graph TB
     US --> PG
     TS --> PG
     TBS --> PG
-    RS --> PG
     AS --> PG
     MS --> PG
     NS --> PG
@@ -91,7 +88,6 @@ graph TB
 | user-service | 8081 | 認証、設定 | [services/user/ARCHITECTURE.md](services/user/ARCHITECTURE.md) |
 | task-service | 8082 | 目標、タスク | [services/task/ARCHITECTURE.md](services/task/ARCHITECTURE.md) |
 | timeblock-service | 8084 | 時間管理 | [services/timeblock/ARCHITECTURE.md](services/timeblock/ARCHITECTURE.md) |
-| routine-service | 8085 | ルーティンタスク | [services/routine/ARCHITECTURE.md](services/routine/ARCHITECTURE.md) |
 | analytics-service | 8088 | 分析 | [services/analytics/ARCHITECTURE.md](services/analytics/ARCHITECTURE.md) |
 | memo-service | 8090 | クイックメモ | [services/memo/ARCHITECTURE.md](services/memo/ARCHITECTURE.md) |
 | note-service | 8091 | ノート | [services/note/ARCHITECTURE.md](services/note/ARCHITECTURE.md) |
@@ -203,8 +199,8 @@ flowchart LR
 
 | ビルダー | 用途 | 使用サービス |
 |---------|------|------------|
-| `NewUpdateBuilder` | UPDATE文の動的構築。ポインタ型nilチェックを統一 | task, routine, memo, timeblock, note |
-| `NewWhereBuilder` | WHERE句の動的構築。条件分岐、IN句、LIKE句対応 | task, routine, memo, timeblock, note |
+| `NewUpdateBuilder` | UPDATE文の動的構築。ポインタ型nilチェックを統一 | task, memo, timeblock, note |
+| `NewWhereBuilder` | WHERE句の動的構築。条件分岐、IN句、LIKE句対応 | task, memo, timeblock, note |
 
 ジェネリクス `AddField[T any]` により、ポインタ型の「未指定」と「nullに設定」を型安全に区別。
 
@@ -288,12 +284,19 @@ graph TB
         Combined["TaskService<br/>= TaskReader + TaskWriter"]
     end
 
-    subgraph "Repository Interface"
+    subgraph "Repository Interface (task-service)"
         GoalRepo["GoalRepository"]
         MilestoneRepo["MilestoneRepository"]
         TagRepo["TagRepository"]
         TaskRepo["TaskRepository"]
         CompositeRepo["Repository<br/>= GoalRepo + MilestoneRepo<br/>+ TagRepo + TaskRepo"]
+    end
+
+    subgraph "Repository Interface (timeblock-service)"
+        TBRepo["TimeBlockRepository"]
+        TERepo["TimeEntryRepository"]
+        TimerRepo["TimerRepository"]
+        TBComposite["Repository<br/>= TimeBlockRepo + TimeEntryRepo<br/>+ TimerRepo"]
     end
 
     Combined --> CompositeRepo
@@ -324,7 +327,12 @@ erDiagram
     users ||--o{ user_facts : "has"
     users ||--o{ note_content_chunks : "owns"
     users ||--o{ ai_review_reports : "has"
+    users ||--o{ ai_contexts : "has (per-user)"
 
+    ai_contexts ||--o{ ai_context_versions : "has versions"
+    ai_contexts ||--o{ prompt_evaluations : "evaluated by"
+    ai_contexts ||--o{ prompt_experiments : "tested in"
+    ai_contexts ||--o{ prompt_comparisons : "compared in"
     note_types ||--o{ notes : "defines type"
     goals ||--o{ milestones : "contains"
     milestones ||--o{ tasks : "contains"
@@ -366,6 +374,21 @@ erDiagram
 | learning | 学習記録 | Yes | Yes | なし |
 | general | 一般ノート | No | No | なし |
 | book_review | 読書レビュー | No | No | author, rating, isbn, publisher, finished_date, category |
+
+### ai_contexts テーブル（Per-user AI コンテキスト）
+
+AIエージェントのシステムプロンプトを管理。`user_id = NULL` はシステムテンプレート、ユーザーごとに lazy copy で専用行が作成される。
+
+| カラム | 説明 |
+|-------|------|
+| `situation` | 使用場面（`chat`, `persona`, `morning`, `weekly`, etc.） |
+| `system_prompt` | システムプロンプト本文 |
+| `allowed_tools` | 使用可能なツール一覧 (`TEXT[]`) |
+| `user_id` | NULL=システムテンプレート、UUID=ユーザー固有 |
+| `source_template_id` | コピー元テンプレートへの参照 |
+| `is_default` / `is_active` | デフォルト・有効フラグ |
+
+関連テーブル: `ai_context_versions`（バージョン履歴）、`prompt_evaluations`（定期評価）、`prompt_experiments`（A/Bテスト実験、レガシー）、`prompt_comparisons`（バージョンベースA/B比較）。いずれも `user_id` カラムを持つ。
 
 ### 非正規化フィールド自動同期トリガー
 

@@ -22,6 +22,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
+import { PageGuide } from '@/components/guide/PageGuide'
 import type { TimeBlock, TimeEntry } from '@/types'
 import type { TaskDragData } from '@/components/daily/TaskListWidget'
 
@@ -177,10 +178,14 @@ export function W01WeeklyPlanning() {
       onDragCancel={handleDragCancel}
     >
       <div className="space-y-4">
-        <WeeklyHeader
-          selectedWeekStart={selectedWeekStart}
-          onWeekChange={setSelectedWeekStart}
-        />
+        <PageGuide pageId="weekly" />
+
+        <div data-guide="weekly-header">
+          <WeeklyHeader
+            selectedWeekStart={selectedWeekStart}
+            onWeekChange={setSelectedWeekStart}
+          />
+        </div>
 
         <WeeklySummaryBar
           blocksByDate={blocksByDate}
@@ -188,19 +193,23 @@ export function W01WeeklyPlanning() {
           weekDates={weekDates}
         />
 
-        <WeeklyCalendarGrid
-          blocksByDate={blocksByDate}
-          weekDates={weekDates}
-          onCellClick={handleCellClick}
-          onBlockClick={handleBlockClick}
-          onBlockDelete={blockDialog.deleteBlock}
-          onBlockResize={handleBlockResize}
-          isDraggingTask={isDraggingTask}
-        />
+        <div data-guide="weekly-calendar">
+          <WeeklyCalendarGrid
+            blocksByDate={blocksByDate}
+            weekDates={weekDates}
+            onCellClick={handleCellClick}
+            onBlockClick={handleBlockClick}
+            onBlockDelete={blockDialog.deleteBlock}
+            onBlockResize={handleBlockResize}
+            isDraggingTask={isDraggingTask}
+          />
+        </div>
 
-        <WeeklyTaskCards
-          onTaskClick={taskDetailPanel.openTask}
-        />
+        <div data-guide="weekly-tasks">
+          <WeeklyTaskCards
+            onTaskClick={taskDetailPanel.openTask}
+          />
+        </div>
 
         {/* TimeBlock Dialog */}
         <TimeBlockDialog

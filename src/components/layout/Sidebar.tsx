@@ -15,6 +15,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   label: string
   badge?: string
+  guideId?: string
 }
 
 interface NavSection {
@@ -25,7 +26,7 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     items: [
-      { to: '/', icon: CalendarDays, label: 'Daily' },
+      { to: '/', icon: CalendarDays, label: 'Daily', guideId: 'sidebar-daily' },
       { to: '/weekly', icon: CalendarRange, label: 'Weekly' },
     ],
   },
@@ -33,8 +34,8 @@ const navSections: NavSection[] = [
     label: '記録・管理',
     items: [
       { to: '/notes', icon: StickyNote, label: 'ノート' },
-      { to: '/tasks', icon: FolderKanban, label: 'タスク管理' },
-      { to: '/analytics', icon: BarChart3, label: '分析・レポート' },
+      { to: '/tasks', icon: FolderKanban, label: 'タスク管理', guideId: 'sidebar-tasks' },
+      { to: '/analytics', icon: BarChart3, label: '分析・レポート', guideId: 'sidebar-analytics' },
     ],
   },
   {
@@ -51,6 +52,7 @@ function NavItemLink({ item }: { item: NavItem }) {
     <NavLink
       to={item.to}
       end={item.to === '/'}
+      data-guide={item.guideId}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors relative',

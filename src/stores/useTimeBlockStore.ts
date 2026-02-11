@@ -26,7 +26,6 @@ interface TimeBlockState {
     goalName?: string
     goalColor?: string
     tagIds?: string[]
-    isRoutine?: boolean
   }) => Promise<void>
   updateTimeBlock: (id: string, localStartDate: string, localStartTime?: string, localEndDate?: string, localEndTime?: string, data?: {
     taskId?: string

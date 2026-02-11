@@ -47,7 +47,7 @@ export function WeeklyHeader({ selectedWeekStart, onWeekChange }: WeeklyHeaderPr
         <Button variant="ghost" size="icon" onClick={goToPreviousWeek}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-medium min-w-[140px] text-center">
+        <span className="text-base font-semibold min-w-[160px] text-center bg-muted/50 px-3 py-1 rounded-md">
           {formatDateRange(selectedWeekStart, weekEnd)}
         </span>
         <Button variant="ghost" size="icon" onClick={goToNextWeek}>
@@ -56,7 +56,7 @@ export function WeeklyHeader({ selectedWeekStart, onWeekChange }: WeeklyHeaderPr
       </div>
       {!isCurrentWeek && (
         <Button variant="outline" size="sm" onClick={goToCurrentWeek}>
-          今週
+          今週へ
         </Button>
       )}
     </div>

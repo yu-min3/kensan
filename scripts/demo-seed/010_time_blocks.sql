@@ -78,10 +78,10 @@ DECLARE
     tag_read UUID := 'dd0a0005-0000-0000-0000-000000000000';
 
 BEGIN
-    FOR day_offset IN 0..55 LOOP
+    FOR day_offset IN 0..62 LOOP
         d := base_date + day_offset;
         dow := EXTRACT(DOW FROM d)::INT;  -- 0=Sun, 1=Mon, ...6=Sat
-        week_num := day_offset / 7 + 1;    -- 1-8
+        week_num := day_offset / 7 + 1;    -- 1-9
 
         -- ============================================================
         -- WEEKDAY BLOCKS (Mon-Fri)
@@ -147,13 +147,13 @@ BEGIN
             -- === Lunch block: 12:15-12:45 JST (UTC: 03:15-03:45) ===
             seq := seq + 1;
             INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                task_id, task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                task_id, task_name, goal_id, goal_name, goal_color, tag_ids)
             VALUES (
                 uuid_generate_v4(), uid,
                 d + TIME '03:15', d + TIME '03:45',
                 NULL, CASE WHEN day_offset % 2 = 0 THEN '技術ニュース読む' ELSE '英語リーディング' END,
                 NULL, NULL, NULL,
-                ARRAY[tag_learn], true
+                ARRAY[tag_learn]
             );
 
             -- === Evening block 1: 21:00-22:30 JST (UTC: 12:00-13:30) ===
@@ -271,12 +271,12 @@ BEGIN
             IF dow IN (2, 4) THEN
                 seq := seq + 1;
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '09:00', d + TIME '10:00',
                     'ジム', NULL, NULL, NULL,
-                    ARRAY[tag_exercise], true
+                    ARRAY[tag_exercise]
                 );
             END IF;
 
@@ -383,12 +383,12 @@ BEGIN
                 -- Sunday: ジム 10:00-11:00 JST (UTC: 01:00-02:00)
                 seq := seq + 1;
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '01:00', d + TIME '02:00',
                     'ジム', NULL, NULL, NULL,
-                    ARRAY[tag_exercise], true
+                    ARRAY[tag_exercise]
                 );
 
                 -- Sunday: 軽い学習 14:00-15:00 JST (UTC: 05:00-06:00)

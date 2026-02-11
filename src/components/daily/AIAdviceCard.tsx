@@ -267,7 +267,7 @@ export function AIAdviceCard({ selectedDate }: AIAdviceCardProps) {
                   {planningResult.yesterdayReview.highlights.length > 0 && (
                     <div className="space-y-1">
                       {planningResult.yesterdayReview.highlights.map((h, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <div key={i} className="flex items-start gap-2 text-xs text-foreground/70">
                           <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-emerald-500" />
                           <span>{h}</span>
                         </div>
@@ -277,7 +277,7 @@ export function AIAdviceCard({ selectedDate }: AIAdviceCardProps) {
                   {planningResult.yesterdayReview.learningConnections.length > 0 && (
                     <div className="space-y-1 border-t pt-2">
                       {planningResult.yesterdayReview.learningConnections.map((lc, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <div key={i} className="flex items-start gap-2 text-xs text-foreground/70">
                           <BookOpen className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-blue-500" />
                           <span>{lc}</span>
                         </div>
@@ -307,27 +307,22 @@ export function AIAdviceCard({ selectedDate }: AIAdviceCardProps) {
 
             {/* Insights */}
             {planningResult.insights.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   インサイト
                 </h4>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {planningResult.insights.map((insight, i) => {
-                    const Icon = CATEGORY_ICONS[insight.category] || Zap
-                    return (
-                      <div
-                        key={i}
-                        className="flex gap-2 rounded-md border p-3"
-                      >
-                        <Icon className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{insight.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{insight.description}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                {planningResult.insights.map((insight, i) => {
+                  const Icon = CATEGORY_ICONS[insight.category] || Zap
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 py-1"
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0 text-foreground/50" />
+                      <span className="text-sm">{insight.title}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -376,22 +371,19 @@ export function AIAdviceCard({ selectedDate }: AIAdviceCardProps) {
 
             {/* Task Priorities */}
             {planningResult.taskPriorities.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   タスク優先度
                 </h4>
-                <div className="space-y-1.5">
+                <div className="rounded-lg border p-3 space-y-1">
                   {planningResult.taskPriorities.map((tp, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between gap-2 rounded-md border p-2.5"
+                      className="flex items-center justify-between py-1"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{tp.taskName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{tp.reason}</p>
-                      </div>
+                      <span className="text-sm truncate mr-2">{tp.taskName}</span>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ACTION_BADGE_STYLES[tp.suggestedAction]}`}
+                        className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium ${ACTION_BADGE_STYLES[tp.suggestedAction]}`}
                       >
                         {ACTION_LABELS[tp.suggestedAction]}
                       </span>
@@ -465,7 +457,7 @@ function ProposedBlockRow({
         {block.goalName && (
           <p className="text-xs text-muted-foreground mt-0.5">{block.goalName}</p>
         )}
-        <p className="text-xs text-muted-foreground/70 mt-0.5">{block.reason}</p>
+        <p className="text-xs text-foreground/60 mt-0.5">{block.reason}</p>
       </div>
     </label>
   )

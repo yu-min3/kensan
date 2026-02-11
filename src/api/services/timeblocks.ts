@@ -77,8 +77,6 @@ export interface CreateTimeBlockInput {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
-  isRoutine?: boolean
-  routineTaskId?: string
 }
 
 export interface UpdateTimeBlockInput {
@@ -92,8 +90,6 @@ export interface UpdateTimeBlockInput {
   goalName?: string
   goalColor?: string
   tagIds?: string[]
-  isRoutine?: boolean
-  routineTaskId?: string
 }
 
 export interface CreateTimeEntryInput {

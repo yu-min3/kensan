@@ -9,11 +9,8 @@ from zoneinfo import ZoneInfo
 
 from kensan_ai.db.connection import get_connection
 from kensan_ai.db.queries.patterns import get_user_patterns as db_get_user_patterns
-from kensan_ai.db.queries.routines import get_routine_completions
 from kensan_ai.db.queries.user_settings import get_user_timezone
-
-# Default timezone for displaying local times
-_DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
+from kensan_ai.lib.timezone_utils import DEFAULT_TZ as _DEFAULT_TZ, local_date_to_utc_range
 
 
 class VariableReplacer:
@@ -28,7 +25,6 @@ class VariableReplacer:
         "user_memory",
         "today_schedule",
         "tomorrow_schedule",
-        "routine_tasks",
         "today_entries",
         "pending_tasks",
         "recent_context",
@@ -60,10 +56,6 @@ class VariableReplacer:
         "tomorrow_schedule": {
             "description": "明日のタイムブロック一覧（予定）。時間順。",
             "example": "- 10:00〜12:00: DB設計 [Kensanプロジェクト]",
-        },
-        "routine_tasks": {
-            "description": "今日の定期タスク一覧と完了状態。",
-            "example": "- ✓ 朝のストレッチ\n- ○ 英語学習30分",
         },
         "today_entries": {
             "description": "今日の実績タイムエントリ一覧。実際に記録された作業時間。",
@@ -169,8 +161,6 @@ class VariableReplacer:
                 replacements[var] = await VariableReplacer._get_today_schedule(user_id)
             elif var == "tomorrow_schedule":
                 replacements[var] = await VariableReplacer._get_tomorrow_schedule(user_id)
-            elif var == "routine_tasks":
-                replacements[var] = await VariableReplacer._get_routine_tasks(user_id)
             elif var == "pending_tasks":
                 replacements[var] = await VariableReplacer._get_pending_tasks(user_id)
             elif var == "today_entries":
@@ -237,8 +227,7 @@ class VariableReplacer:
     async def _get_today_schedule(user_id: UUID) -> str:
         """Get today's time blocks."""
         today = date.today()
-        start_utc = datetime(today.year, today.month, today.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
-        end_utc = start_utc + timedelta(days=1)
+        start_utc, end_utc = local_date_to_utc_range(today)
 
         async with get_connection() as conn:
             rows = await conn.fetch(
@@ -272,8 +261,7 @@ class VariableReplacer:
     async def _get_tomorrow_schedule(user_id: UUID) -> str:
         """Get tomorrow's time blocks."""
         tomorrow = date.today() + timedelta(days=1)
-        start_utc = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
-        end_utc = start_utc + timedelta(days=1)
+        start_utc, end_utc = local_date_to_utc_range(tomorrow)
 
         async with get_connection() as conn:
             rows = await conn.fetch(
@@ -302,27 +290,6 @@ class VariableReplacer:
                 schedule_items.append(f"- {start}〜{end}: {task}{goal}")
 
             return "\n".join(schedule_items)
-
-    @staticmethod
-    async def _get_routine_tasks(user_id: UUID) -> str:
-        """Get today's routine tasks with completion status."""
-        today = date.today()
-        # Python weekday: 0=Monday, 6=Sunday
-        # DB days_of_week: 0=Sunday, 6=Saturday
-        py_weekday = today.weekday()
-        db_weekday = (py_weekday + 1) % 7  # Convert to DB format
-
-        completions = await get_routine_completions(user_id, today)
-
-        if not completions:
-            return "（今日の定期タスクなし）"
-
-        routine_items = []
-        for item in completions:
-            status = "✓" if item["completed"] else "○"
-            routine_items.append(f"- {status} {item['name']}")
-
-        return "\n".join(routine_items)
 
     @staticmethod
     async def _get_pending_tasks(user_id: UUID, limit: int = 10) -> str:
@@ -384,8 +351,7 @@ class VariableReplacer:
     async def _get_today_entries(user_id: UUID) -> str:
         """Get today's actual time entries."""
         today = date.today()
-        start_utc = datetime(today.year, today.month, today.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
-        end_utc = start_utc + timedelta(days=1)
+        start_utc, end_utc = local_date_to_utc_range(today)
 
         async with get_connection() as conn:
             rows = await conn.fetch(
@@ -425,8 +391,8 @@ class VariableReplacer:
         week_end = week_start + timedelta(days=6)
 
         # Convert local dates to UTC range
-        start_utc = datetime(week_start.year, week_start.month, week_start.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
-        end_utc = datetime(week_end.year, week_end.month, week_end.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC")) + timedelta(days=1)
+        start_utc, _ = local_date_to_utc_range(week_start)
+        _, end_utc = local_date_to_utc_range(week_end)
 
         async with get_connection() as conn:
             rows = await conn.fetch(
@@ -846,8 +812,7 @@ class VariableReplacer:
     async def _get_yesterday_entries(user_id: UUID) -> str:
         """Get yesterday's actual time entries."""
         yesterday = date.today() - timedelta(days=1)
-        start_utc = datetime(yesterday.year, yesterday.month, yesterday.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
-        end_utc = start_utc + timedelta(days=1)
+        start_utc, end_utc = local_date_to_utc_range(yesterday)
 
         async with get_connection() as conn:
             rows = await conn.fetch(
@@ -887,7 +852,7 @@ class VariableReplacer:
     async def _get_recent_learning_notes(user_id: UUID, days: int = 3) -> str:
         """Get recent learning/diary notes from the last N days."""
         cutoff = date.today() - timedelta(days=days)
-        start_utc = datetime(cutoff.year, cutoff.month, cutoff.day, tzinfo=_DEFAULT_TZ).astimezone(ZoneInfo("UTC"))
+        start_utc, _ = local_date_to_utc_range(cutoff)
 
         async with get_connection() as conn:
             rows = await conn.fetch(

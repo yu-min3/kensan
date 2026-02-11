@@ -34,41 +34,6 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-// GetByID retrieves a note by ID (with content)
-func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*note.Note, error) {
-	query := `
-		SELECT id, user_id, type, title, content, format, date, task_id,
-		       milestone_id, goal_id, milestone_name, goal_name, goal_color,
-		       related_time_entry_ids, file_url, archived, created_at, updated_at
-		FROM notes
-		WHERE id = $1
-	`
-
-	n, err := r.scanNote(ctx, r.pool.QueryRow(ctx, query, id))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoteNotFound
-		}
-		return nil, err
-	}
-
-	// Get tag IDs from junction table
-	tagIDs, err := r.GetTagIDs(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	n.TagIDs = tagIDs
-
-	// Get metadata
-	metadataItems, err := r.ListMetadata(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	n.Metadata = convertMetadataToValue(metadataItems)
-
-	return n, nil
-}
-
 // GetByIDAndUserID retrieves a note by ID and user ID (with content)
 func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*note.Note, error) {
 	query := `
@@ -88,7 +53,7 @@ func (r *PostgresRepository) GetByIDAndUserID(ctx context.Context, id, userID st
 	}
 
 	// Get tag IDs from junction table
-	tagIDs, err := r.GetTagIDs(ctx, id)
+	tagIDs, err := r.getTagIDs(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +123,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter *no
 		}
 
 		// Get tag IDs for each note
-		tagIDs, err := r.GetTagIDs(ctx, item.ID)
+		tagIDs, err := r.getTagIDs(ctx, item.ID)
 		if err != nil {
 			slog.Error("Failed to get tag IDs", "error", err, "noteID", item.ID)
 			return nil, err
@@ -224,7 +189,7 @@ func (r *PostgresRepository) Create(ctx context.Context, n *note.Note) error {
 
 	// Insert tag associations
 	if len(n.TagIDs) > 0 {
-		if err := r.UpdateTags(ctx, n.ID, n.TagIDs); err != nil {
+		if err := r.updateTags(ctx, n.ID, n.TagIDs); err != nil {
 			return err
 		}
 	}
@@ -281,7 +246,7 @@ func (r *PostgresRepository) Update(ctx context.Context, n *note.Note) error {
 	}
 
 	// Update tag associations
-	if err := r.UpdateTags(ctx, n.ID, n.TagIDs); err != nil {
+	if err := r.updateTags(ctx, n.ID, n.TagIDs); err != nil {
 		return err
 	}
 
@@ -294,22 +259,6 @@ func (r *PostgresRepository) Update(ctx context.Context, n *note.Note) error {
 		if err := r.BulkSetMetadata(ctx, n.ID, metadataInputs); err != nil {
 			return err
 		}
-	}
-
-	return nil
-}
-
-// Delete deletes a note
-func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM notes WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, id)
-	if err != nil {
-		return err
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrNoteNotFound
 	}
 
 	return nil
@@ -384,7 +333,7 @@ func (r *PostgresRepository) Search(ctx context.Context, userID, query string, f
 		}
 
 		// Get tag IDs
-		tagIDs, err := r.GetTagIDs(ctx, item.ID)
+		tagIDs, err := r.getTagIDs(ctx, item.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -403,8 +352,8 @@ func (r *PostgresRepository) Search(ctx context.Context, userID, query string, f
 	return results, nil
 }
 
-// UpdateTags updates the tags for a note
-func (r *PostgresRepository) UpdateTags(ctx context.Context, noteID string, tagIDs []string) error {
+// updateTags updates the tags for a note (internal use only)
+func (r *PostgresRepository) updateTags(ctx context.Context, noteID string, tagIDs []string) error {
 	// Delete existing tags
 	_, err := r.pool.Exec(ctx, `DELETE FROM note_tags WHERE note_id = $1`, noteID)
 	if err != nil {
@@ -426,8 +375,8 @@ func (r *PostgresRepository) UpdateTags(ctx context.Context, noteID string, tagI
 	return nil
 }
 
-// GetTagIDs retrieves the tag IDs for a note
-func (r *PostgresRepository) GetTagIDs(ctx context.Context, noteID string) ([]string, error) {
+// getTagIDs retrieves the tag IDs for a note (internal use only)
+func (r *PostgresRepository) getTagIDs(ctx context.Context, noteID string) ([]string, error) {
 	rows, err := r.pool.Query(ctx, `SELECT tag_id FROM note_tags WHERE note_id = $1`, noteID)
 	if err != nil {
 		return nil, err

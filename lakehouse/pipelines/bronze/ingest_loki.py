@@ -10,7 +10,7 @@ Loki query_range API から AI agent イベントを取得し append する。
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -135,7 +135,11 @@ def ingest_loki_events(
         更新後の state dict
     """
     # 前回の最終 timestamp (ナノ秒)
-    last_ns = state.get(TABLE_NAME, "0")
+    # 初回 (state なし) は直近24時間から取得 (Loki は start=0 を拒否する)
+    default_start_ns = str(
+        int((datetime.now(timezone.utc) - timedelta(hours=24)).timestamp() * 1_000_000_000)
+    )
+    last_ns = state.get(TABLE_NAME) or default_start_ns
     now_ns = str(int(datetime.now(timezone.utc).timestamp() * 1_000_000_000))
 
     logger.info(f"Querying Loki from {last_ns} to {now_ns}")

@@ -22,6 +22,7 @@ import {
   Archive,
   ArchiveRestore,
 } from 'lucide-react'
+import { PageGuide } from '@/components/guide/PageGuide'
 
 export function N02NoteEdit() {
   const { id } = useParams()
@@ -368,6 +369,8 @@ export function N02NoteEdit() {
 
   return (
     <div className="space-y-4">
+      <PageGuide pageId="note-edit" />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

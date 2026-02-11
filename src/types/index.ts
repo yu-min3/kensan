@@ -366,20 +366,30 @@ export interface LearningSummaryData {
   goalConnection?: string
 }
 
+export interface SuggestedAction {
+  label: string
+  description: string
+  type: 'chat'
+  prompt: string
+}
+
 export interface AIReviewReport {
   id: string
   periodStart: string
   periodEnd: string
   // 4セクション構造
   taskEvaluations: TaskEvaluation[]
+  taskSummary?: string
   timeEvaluations: TimeEvaluation[]
-  learningSummary: string
+  learningSummary?: string
   learningSummaryData?: LearningSummaryData
   goodPoints: string[]
   improvementPoints: string[]
   advice: string[]
   // おまけ: 日記へのひとこと
   diaryFeedback?: string
+  // アクション提案
+  suggestedActions?: SuggestedAction[]
   // 後方互換
   summary: string
   createdAt: Date

@@ -48,6 +48,7 @@ async def _fire_and_forget_lakehouse(
 
 
 @tool(
+    category="web",
     name="web_search",
     description="Web検索を実行して最新の情報を取得する。技術ドキュメント、ニュース、ブログ記事などの検索に使用。",
     input_schema={
@@ -115,6 +116,7 @@ async def web_search(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="web",
     name="web_fetch",
     description="指定URLのWebページからコンテンツを取得・抽出する。ドキュメントや記事の詳細を読むときに使用。",
     input_schema={

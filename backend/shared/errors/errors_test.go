@@ -7,7 +7,7 @@ import (
 
 // Test generic NotFound constructor
 func TestNotFoundConstructor(t *testing.T) {
-	entities := []string{"task", "goal", "user", "note", "memo", "routine"}
+	entities := []string{"task", "goal", "user", "note", "memo"}
 
 	for _, entity := range entities {
 		t.Run(entity, func(t *testing.T) {

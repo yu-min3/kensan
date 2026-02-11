@@ -227,7 +227,6 @@ func (e *TestEnv) CleanupDB(t *testing.T) {
 		"diary_entries",
 		"learning_records",
 		"memos",
-		"routine_tasks",
 		"time_entries",
 		"time_blocks",
 		"running_timers",

@@ -11,24 +11,42 @@ export interface ActionItem {
 
 export type ChatSituation = 'auto' | 'review' | 'chat' | 'daily_advice'
 
-export interface ChatMessage {
+interface ChatMessageBase {
   id: string
   role: 'user' | 'assistant'
-  content: string
-  type: 'text' | 'tool_call' | 'tool_result' | 'action_proposal'
-  toolName?: string
-  toolCompleted?: boolean
-  actions?: ActionItem[]
   timestamp: Date
 }
 
+export interface TextMessage extends ChatMessageBase {
+  type: 'text'
+  content: string
+}
+
+export interface ToolCallMessage extends ChatMessageBase {
+  type: 'tool_call'
+  content: string
+  toolName: string
+  toolCompleted?: boolean
+}
+
+export interface ToolResultMessage extends ChatMessageBase {
+  type: 'tool_result'
+  content: string
+  toolName: string
+}
+
+export interface ActionProposalMessage extends ChatMessageBase {
+  type: 'action_proposal'
+  content: string
+  actions: ActionItem[]
+}
+
+export type ChatMessage = TextMessage | ToolCallMessage | ToolResultMessage | ActionProposalMessage
+
 interface ChatState {
   isOpen: boolean
-  messages: ChatMessage[]
-  conversationId: string | null
-  isStreaming: boolean
-  pendingActions: ActionItem[] | null
   prefilledMessage: { message: string; situation?: ChatSituation } | null
+  conversationRating: number | null
 
   // History
   conversations: Conversation[]
@@ -38,28 +56,21 @@ interface ChatState {
   toggle: () => void
   open: () => void
   close: () => void
-  addMessage: (message: ChatMessage) => void
-  appendToLastAssistantMessage: (text: string) => void
-  setStreaming: (streaming: boolean) => void
-  setPendingActions: (actions: ActionItem[] | null) => void
-  setConversationId: (id: string | null) => void
+  setConversationRating: (rating: number | null) => void
   newConversation: () => void
   sendPrefilled: (message: string, situation?: ChatSituation) => void
   clearPrefilled: () => void
 
   // History actions
   fetchConversations: () => Promise<void>
-  loadConversation: (id: string) => Promise<void>
+  loadConversation: (id: string) => Promise<ChatMessage[]>
   clearHistory: () => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   isOpen: false,
-  messages: [],
-  conversationId: null,
-  isStreaming: false,
-  pendingActions: null,
   prefilledMessage: null,
+  conversationRating: null,
 
   // History
   conversations: [],
@@ -70,36 +81,17 @@ export const useChatStore = create<ChatState>((set) => ({
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
 
-  addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
-
-  appendToLastAssistantMessage: (text) =>
-    set((state) => {
-      const messages = [...state.messages]
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'assistant' && messages[i].type === 'text') {
-          messages[i] = { ...messages[i], content: messages[i].content + text }
-          break
-        }
-      }
-      return { messages }
-    }),
-
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
-  setPendingActions: (actions) => set({ pendingActions: actions }),
-  setConversationId: (id) => set({ conversationId: id }),
+  setConversationRating: (rating) => set({ conversationRating: rating }),
 
   newConversation: () =>
-    set({ messages: [], conversationId: null, pendingActions: null, isViewingHistory: false }),
+    set({ isViewingHistory: false, conversationRating: null }),
 
   sendPrefilled: (message, situation) =>
     set({
       isOpen: true,
-      messages: [],
-      conversationId: null,
-      pendingActions: null,
       prefilledMessage: { message, situation },
       isViewingHistory: false,
+      conversationRating: null,
     }),
 
   clearPrefilled: () => set({ prefilledMessage: null }),
@@ -127,16 +119,12 @@ export const useChatStore = create<ChatState>((set) => ({
         type: 'text' as const,
         timestamp: new Date(m.createdAt),
       }))
-      set({
-        messages,
-        conversationId: id,
-        pendingActions: null,
-        isViewingHistory: true,
-      })
+      set({ isViewingHistory: true, isLoadingHistory: false })
+      return messages
     } catch (err) {
       console.error('Failed to load conversation:', err)
-    } finally {
       set({ isLoadingHistory: false })
+      return []
     }
   },
 

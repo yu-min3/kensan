@@ -67,12 +67,12 @@ BEGIN
             -- === Lunch: Zenn/Qiita reading 12:15-12:30 JST (UTC: 03:15-03:30) ===
             seq := seq + 1;
             INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                task_name, goal_id, goal_name, goal_color, tag_ids)
             VALUES (
                 uuid_generate_v4(), uid,
                 d + TIME '03:15', d + TIME '03:30',
                 'Zenn/Qiitaの記事読む', NULL, NULL, NULL,
-                ARRAY[tag_learn], true
+                ARRAY[tag_learn]
             );
 
             -- === Evening block 1: 22:00-23:30 JST (UTC: 13:00-14:30) ===

@@ -131,7 +131,59 @@ S3とRDSに集中しましょう。
 
 自分で「サボってた」と認識できるのは成長の証拠です。来月のSAA合格、十分狙えます。', 500, 350, 2000, CURRENT_DATE - 2);
 
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+-- 直近の AI interaction 追加
+INSERT INTO ai_interactions (id, user_id, session_id, conversation_id, situation, user_input, ai_output, tokens_input, tokens_output, latency_ms, created_at) VALUES
+('d2800007-0000-0000-0000-000000000000', 'd2222222-2222-2222-2222-222222222222',
+ 'd2900007-0000-0000-0000-000000000000', 'd2900007-0000-0000-0000-000000000000',
+ 'chat',
+ 'S3のライフサイクルポリシーで、Standard→Standard-IA→Glacierの日数設定ってどう決めればいい？',
+ 'ライフサイクルポリシーの設計、SAA頻出ですね。
+
+**基本的な考え方:**
+「アクセス頻度」と「コスト」のバランスで決めます。
+
+**よくあるパターン:**
+```
+Standard (0-30日) → 頻繁にアクセス
+↓ 30日後
+Standard-IA → たまにアクセス（月1回程度）
+↓ 90日後
+Glacier Flexible → ほぼアクセスしない
+↓ 365日後
+削除 or Deep Archive
+```
+
+**試験で問われるポイント:**
+- Standard-IAは最低30日の保存期間がある
+- Glacierからの取り出しには時間がかかる（Flexible: 分〜時間）
+- One Zone-IAは1つのAZのみ → 安いが可用性低い
+
+**山田さんの場合:**
+前回の模擬試験でS3が58%でしたね。このパターンを覚えるだけで2-3問取れるかも。',
+ 420, 310, 1700, CURRENT_DATE - 1),
+
+('d2800008-0000-0000-0000-000000000000', 'd2222222-2222-2222-2222-222222222222',
+ 'd2900008-0000-0000-0000-000000000000', 'd2900008-0000-0000-0000-000000000000',
+ 'morning',
+ 'おはよう。今日の朝活の予定を確認したい。',
+ 'おはようございます、山田さん！朝活の習慣、順調ですね。
+
+**今朝の予定:**
+応用情報の午前問題演習（30分）
+
+**おすすめの問題:**
+- データベースの正規化（前回苦手だった分野）
+- ネットワーク基礎（TCP/IP、サブネットマスク）
+
+**今週の進捗:**
+- AWS学習: S3ストレージクラス、RDS vs DynamoDB を整理済み
+- Python CLIツール: 基本機能が動作開始
+- 応用情報: 午前問題の正答率が上がってきている
+
+来週末の3回目の模擬試験に向けて、今日もS3周りの復習を夜の学習時間にやりましょう。72%超えが見えてきてます！',
+ 350, 250, 1400, CURRENT_DATE);
+
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 ('d2900101-0000-0000-0000-000000000000', 'd2222222-2222-2222-2222-222222222222',
  CURRENT_DATE - 49, CURRENT_DATE - 43,
  'AWS学習を始めたがモチベーション維持に苦戦。Udemyは購入したが計画通りに進んでいない。Python入門書も読み始めた。',

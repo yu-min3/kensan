@@ -38,7 +38,9 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2">
-        <TimerWidget />
+        <div data-guide="header-timer">
+          <TimerWidget />
+        </div>
 
         <div className="h-6 w-px bg-border mx-1" />
 
@@ -51,6 +53,7 @@ export function Header() {
         </Button>
 
         <button
+          data-guide="header-ai-button"
           className="inline-flex items-center gap-1.5 px-3 h-8 text-sm font-medium rounded-md transition-opacity hover:opacity-90 cursor-pointer"
           style={{
             backgroundColor: 'hsl(var(--brand))',

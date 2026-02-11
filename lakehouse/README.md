@@ -108,6 +108,14 @@ PostgreSQLのデータをそのまま格納。`_ingested_at` カラムを付与�
 - **append-only テーブル** (ai_interactions, ai_facts, ai_reviews): 前回以降の新規行のみ append
 - 初回実行時（ステートファイルなし）は全テーブル全件 overwrite
 
+### Maintenance（定期メンテナンス）
+
+| アセット | 説明 | スケジュール |
+|---------|------|------------|
+| `reindex_note_chunks` | `index_status='pending'` のノートに対してチャンク分割＋embedding生成を kensan-ai 経由で実行 | 10分ごと (`*/10 * * * *`) |
+| `generate_weekly_reviews` | 全アクティブユーザーの週次レビューを kensan-ai 経由で自動生成 | 毎週月曜 3:00 AM (`0 3 * * 1`) |
+| `run_prompt_optimization` | プロンプト品質評価＋自動最適化バッチを kensan-ai 経由で実行 | 毎週月曜 3:10 AM (`10 3 * * 1`) |
+
 ### Silver層（整形済み）
 
 クリーニング、不要カラム除去、算出値の追加。
@@ -319,11 +327,15 @@ Polaris は Apache Iceberg REST Catalog 仕様に準拠。OAuth2 `client_credent
 polaris:
   image: apache/polaris:latest
   environment:
-    QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://dagster-postgres:5432/polaris
-    QUARKUS_DATASOURCE_USERNAME: dagster
-    QUARKUS_DATASOURCE_PASSWORD: dagster
-    polaris.bootstrap.credentials: POLARIS,root,s3cr3t
+    POLARIS_BOOTSTRAP_CREDENTIALS: "POLARIS,root,s3cr3t"
+    AWS_REGION: us-east-1
+    AWS_ACCESS_KEY_ID: kensan
+    AWS_SECRET_ACCESS_KEY: kensan-minio
+  volumes:
+    - ./polaris-config/application.properties:/deployments/config/application.properties:ro
 ```
+
+`application.properties` で `SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION=true` を設定し、MinIO との互換性を確保（STS 不要）。
 
 初回セットアップ: `python3 catalog/bootstrap_polaris.py` で catalog 作成 → `python3 catalog/init_catalog.py` でテーブル作成。
 
@@ -332,6 +344,7 @@ PyIceberg 接続:
 catalog = load_catalog("polaris", type="rest",
     uri="http://localhost:8181/api/catalog",
     credential="root:s3cr3t",
+    scope="PRINCIPAL_ROLE:ALL",
     warehouse="kensan-lakehouse")
 ```
 
@@ -376,7 +389,10 @@ lakehouse/
 │   ├── gold/
 │   │   └── aggregate.py        # Silver → Gold
 │   └── maintenance/
-│       └── compaction.py       # Iceberg compaction & snapshot expiry
+│       ├── compaction.py       # Iceberg compaction & snapshot expiry
+│       ├── reindex_chunks.py   # kensan-ai チャンクインデックス呼び出し
+│       ├── weekly_review.py    # kensan-ai 週次レビュー自動生成呼び出し
+│       └── prompt_optimization.py  # kensan-ai プロンプト自動最適化呼び出し
 └── queries/
     ├── examples.sql            # SQLクエリ例
     └── query.py                # DuckDBインタラクティブシェル

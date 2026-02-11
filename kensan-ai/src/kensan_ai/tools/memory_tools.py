@@ -10,6 +10,7 @@ from kensan_ai.lib.parsers import parse_uuid
 
 
 @tool(
+    category="memory",
     name="get_user_memory",
     description="ユーザーのプロフィールサマリー、好み、強み、成長領域を取得する。",
     input_schema={
@@ -52,6 +53,7 @@ async def get_user_memory(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="memory",
     name="get_user_facts",
     description="ユーザーに関する事実（好み、目標、強み、課題など）を取得する。",
     input_schema={
@@ -122,6 +124,7 @@ async def get_user_facts(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="memory",
     name="add_user_fact",
     description="ユーザーに関する新しい事実を記録する。会話中に明示的に言及されたことのみ記録すること。",
     readonly=False,
@@ -194,6 +197,7 @@ async def add_user_fact(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    category="memory",
     name="get_recent_interactions",
     description="ユーザーの最近のAIとの会話履歴を取得する。",
     input_schema={

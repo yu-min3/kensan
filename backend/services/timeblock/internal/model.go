@@ -17,10 +17,8 @@ type TimeBlock struct {
 	GoalID        *string   `json:"goalId,omitempty"`
 	GoalName      *string   `json:"goalName,omitempty"`
 	GoalColor     *string   `json:"goalColor,omitempty"`
-	TagIDs        []string  `json:"tagIds,omitempty"`
-	IsRoutine     bool      `json:"isRoutine"`
-	RoutineTaskID *string   `json:"routineTaskId,omitempty"` // ID of routine task if generated from one
-	CreatedAt     time.Time `json:"createdAt"`
+	TagIDs    []string  `json:"tagIds,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
@@ -54,9 +52,7 @@ type CreateTimeBlockInput struct {
 	GoalID        *string  `json:"goalId,omitempty"`
 	GoalName      *string  `json:"goalName,omitempty"`
 	GoalColor     *string  `json:"goalColor,omitempty"`
-	TagIDs        []string `json:"tagIds,omitempty"`
-	IsRoutine     bool     `json:"isRoutine"`
-	RoutineTaskID *string  `json:"routineTaskId,omitempty"`
+	TagIDs []string `json:"tagIds,omitempty"`
 }
 
 // UpdateTimeBlockInput represents the input for updating a time block
@@ -71,8 +67,6 @@ type UpdateTimeBlockInput struct {
 	GoalName      *string  `json:"goalName,omitempty"`
 	GoalColor     *string  `json:"goalColor,omitempty"`
 	TagIDs        []string `json:"tagIds,omitempty"`
-	IsRoutine     *bool    `json:"isRoutine,omitempty"`
-	RoutineTaskID *string  `json:"routineTaskId,omitempty"`
 }
 
 // CreateTimeEntryInput represents the input for creating a time entry
@@ -119,17 +113,6 @@ type TimeEntryFilter struct {
 	EndDatetime   *string // UTC timestamp range end (exclusive), ISO 8601
 	GoalID        *string // Filter by goal
 	MilestoneID   *string // Filter by milestone
-}
-
-// GenerateFromRoutinesInput represents input for generating time blocks from routines
-type GenerateFromRoutinesInput struct {
-	Date string `json:"date"` // The date to generate time blocks for
-}
-
-// GenerateFromRoutinesResult represents the result of generating time blocks
-type GenerateFromRoutinesResult struct {
-	Generated int         `json:"generated"` // Number of time blocks generated
-	Blocks    []TimeBlock `json:"blocks"`    // The generated time blocks
 }
 
 // RunningTimer represents an active timer for time tracking

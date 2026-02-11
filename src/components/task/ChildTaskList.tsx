@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ConfirmPopover } from '@/components/common/ConfirmPopover'
 import { EntityMemoPopover } from '@/components/common/EntityMemoPopover'
-import { Edit, Trash2 } from 'lucide-react'
+import { Edit, Trash2, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Task } from '@/types'
 
@@ -61,6 +61,21 @@ export function ChildTaskList({
             {childTask.name}
           </span>
           <EntityMemoPopover entityType="task" entityId={childTask.id} />
+          {childTask.dueDate && (() => {
+            const today = new Date().toISOString().slice(0, 10)
+            const isOverdue = !childTask.completed && childTask.dueDate < today
+            const isToday = childTask.dueDate === today
+            const [, m, d] = childTask.dueDate.split('-')
+            return (
+              <span className={cn(
+                'flex items-center gap-0.5 text-xs flex-shrink-0',
+                isOverdue ? 'text-red-500 font-medium' : isToday ? 'text-amber-500' : 'text-muted-foreground'
+              )}>
+                <Calendar className="h-3 w-3" />
+                {`${Number(m)}/${Number(d)}`}
+              </span>
+            )
+          })()}
           <div className="opacity-0 group-hover:opacity-100 flex gap-1">
             <Button
               variant="ghost"

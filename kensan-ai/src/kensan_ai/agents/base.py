@@ -94,6 +94,50 @@ class AgentRunner:
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     @staticmethod
+    async def _execute_tool_calls(
+        tool_use_blocks: list[dict[str, Any]],
+        user_id: str | None,
+    ) -> tuple[list[dict[str, Any]], list[ToolCall]]:
+        """Execute tool calls and return (tool_results, tool_call_records).
+
+        Injects user_id into tool inputs when provided.
+        """
+        tool_results: list[dict[str, Any]] = []
+        tool_call_records: list[ToolCall] = []
+        for tool_use in tool_use_blocks:
+            tool_name = tool_use["name"]
+            tool_input = dict(tool_use["input"])
+
+            if user_id and "user_id" not in tool_input:
+                tool_input["user_id"] = user_id
+
+            try:
+                result = await execute_tool(tool_name, tool_input)
+                result_str = format_tool_result(result)
+
+                tool_call_records.append(ToolCall(
+                    id=tool_use["id"],
+                    name=tool_name,
+                    input=tool_input,
+                    output=result,
+                ))
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use["id"],
+                    "content": result_str,
+                })
+            except Exception as e:
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use["id"],
+                    "content": json.dumps({"error": str(e)}, ensure_ascii=False),
+                    "is_error": True,
+                })
+
+        return tool_results, tool_call_records
+
+    @staticmethod
     def _parse_prompt_sections(prompt: str) -> dict[str, int]:
         """Parse system prompt into sections by ## headers and return char counts."""
         import re
@@ -193,38 +237,10 @@ class AgentRunner:
                 break
 
             # Execute tool calls
-            tool_results: list[dict[str, Any]] = []
-            for tool_use in tool_use_blocks:
-                tool_name = tool_use["name"]
-                tool_input = dict(tool_use["input"])
-
-                # Inject user_id if provided and tool accepts it
-                if user_id and "user_id" not in tool_input:
-                    tool_input["user_id"] = user_id
-
-                try:
-                    result = await execute_tool(tool_name, tool_input)
-                    result_str = format_tool_result(result)
-
-                    all_tool_calls.append(ToolCall(
-                        id=tool_use["id"],
-                        name=tool_name,
-                        input=tool_input,
-                        output=result,
-                    ))
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use["id"],
-                        "content": result_str,
-                    })
-                except Exception as e:
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use["id"],
-                        "content": json.dumps({"error": str(e)}, ensure_ascii=False),
-                        "is_error": True,
-                    })
+            tool_results, new_tool_calls = await self._execute_tool_calls(
+                tool_use_blocks, user_id
+            )
+            all_tool_calls.extend(new_tool_calls)
 
             # Add tool results as user message
             history.add_tool_results(tool_results)
@@ -318,29 +334,9 @@ class AgentRunner:
                 break
 
             # Execute tool calls (not streamed)
-            tool_results: list[dict[str, Any]] = []
-            for tool_use in tool_use_blocks:
-                tool_name = tool_use["name"]
-                tool_input = dict(tool_use["input"])
-
-                if user_id and "user_id" not in tool_input:
-                    tool_input["user_id"] = user_id
-
-                try:
-                    result = await execute_tool(tool_name, tool_input)
-                    result_str = format_tool_result(result)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use["id"],
-                        "content": result_str,
-                    })
-                except Exception as e:
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use["id"],
-                        "content": json.dumps({"error": str(e)}, ensure_ascii=False),
-                        "is_error": True,
-                    })
+            tool_results, _ = await self._execute_tool_calls(
+                tool_use_blocks, user_id
+            )
 
             history.add_tool_results(tool_results)
 
@@ -423,9 +419,12 @@ class AgentRunner:
 
         outcome = "success"
         actual_turns = 0
+        tool_nudged = False   # Track if we've nudged to call any tools (turn 0)
+        write_nudged = False  # Track if we've nudged for write tools (turn 1+)
 
         prompt_sections = self._parse_prompt_sections(self.system_prompt)
         tool_names = [t["name"] for t in tools]
+        has_write_tools = any(not is_readonly_tool(tn) for tn in tool_names)
 
         logger.info(
             json.dumps({
@@ -567,6 +566,47 @@ class AgentRunner:
                         history.add_assistant_message(assistant_content)
 
                         if not tool_use_blocks:
+                            # Nudge the agent to actually call tools when it
+                            # responds with text-only despite having tools available.
+                            # Two cases:
+                            #  1. Turn 0: agent announced intent ("確認させてください")
+                            #     but didn't call any tools → nudge to call read tools
+                            #  2. Turn 1+: agent analysed data but didn't propose
+                            #     write actions → nudge to call write tools
+                            if turn == 0 and not tool_nudged and tool_names:
+                                tool_nudged = True
+                                history.add_user_message(
+                                    "ツールを直接呼び出して情報を取得・実行してください。"
+                                    "テキストでの予告は不要です。"
+                                )
+                                logger.info(
+                                    json.dumps({
+                                        "event": "agent.tool_nudge",
+                                        "conversation_id": conv_id,
+                                        "turn_number": turn + 1,
+                                        "reason": "text_only_on_turn_0",
+                                    }, ensure_ascii=False),
+                                )
+                                continue
+                            if (
+                                has_write_tools
+                                and not pending_actions
+                                and not write_nudged
+                                and turn > 0
+                            ):
+                                write_nudged = True
+                                history.add_user_message(
+                                    "上記の分析を踏まえて、具体的なアクション（タイムブロック作成、タスク作成・更新等）を"
+                                    "ツール呼び出しで提案してください。テキストでの説明は不要です。"
+                                )
+                                logger.info(
+                                    json.dumps({
+                                        "event": "agent.write_nudge",
+                                        "conversation_id": conv_id,
+                                        "turn_number": turn + 1,
+                                    }, ensure_ascii=False),
+                                )
+                                continue
                             break
 
                         # Process tool calls: readonly = execute, write = collect as proposals

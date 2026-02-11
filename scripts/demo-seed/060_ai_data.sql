@@ -697,6 +697,63 @@ SIerのDB設計経験 + モダンなPostgreSQL知識、テックリードとし�
 午後は家族との時間を大切に。良い週末を。',
  300, 200, 1200, CURRENT_DATE - 7),
 
+-- *** NEW: 直近のAI interactions ***
+('dd800029-0000-0000-0000-000000000000', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+ 'dd900029-0000-0000-0000-000000000000', 'dd900029-0000-0000-0000-000000000000',
+ 'chat',
+ '模擬試験2回目72%。コスト最適化が52%のまま。あと2週間でどう対策する？',
+ 'コスト最適化52%、ここが合否の鍵ですね。2週間で65%まで上げる具体的な計画を立てましょう。
+
+**弱点の内訳（推定）:**
+- RI vs Savings Plansの計算: 50%
+- S3ストレージクラスの選択: 55%
+- コンピューティング最適化（Spot, Graviton）: 55%
+
+**2週間の集中プラン:**
+
+### Week 1: インプット
+| 日 | 朝活テーマ | 具体的に |
+|----|----------|---------|
+| 月 | RI計算 | 損益分岐点の計算パターン3つを暗記 |
+| 火 | Savings Plans | Compute vs EC2 Instance の使い分け |
+| 水 | S3クラス | Standard/IA/Glacier/Intelligent-Tiering のコスト比較表作成 |
+| 木 | Spot | 中断時のハンドリングパターン |
+| 金 | Graviton | ARM移行の判断基準 |
+
+### Week 2: アウトプット
+- 毎日コスト最適化の問題を10問ずつ
+- 間違えた問題を翌朝復習
+- 金曜に模擬試験3回目
+
+**コスト計算のコツ:**
+「月額×12ヶ月」で年間コストに揃えて比較する習慣をつけましょう。
+
+田中さんの他の分野は合格レベルなので、ここだけ集中すれば75%は十分超えられます。',
+ 700, 450, 2500, CURRENT_DATE - 1),
+
+('dd800030-0000-0000-0000-000000000000', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+ 'dd900030-0000-0000-0000-000000000000', 'dd900030-0000-0000-0000-000000000000',
+ 'chat',
+ '昨日の本番障害、goroutineリークだった。context.WithTimeoutで解決できた。先月勉強した内容がそのまま活きた。',
+ '素晴らしい対応でしたね。学習→実践の最高の事例です。
+
+**技術的な振り返り:**
+1. **原因**: HTTPクライアントのレスポンス未close → goroutine蓄積 → OOM
+2. **解決**: context.WithTimeout + defer resp.Body.Close()
+3. **予防**: メモリ使用量アラートの追加
+
+**テックリード目標との関連:**
+この対応は3つの力を証明しています：
+- **診断力**: メモリリークの原因を30分で特定
+- **知識の応用**: 先月学んだGo並行処理パターンを実戦で使えた
+- **チーム貢献**: アラート追加で再発防止
+
+佐藤さんの「落ち着いて対応できてた」という言葉は重要です。テックリードに求められるのは、障害時にパニックにならず冷静に対処する能力です。
+
+**提案:**
+この事例を社内ポストモーテムにまとめませんか？「goroutineリークの発見と対策」というテーマで、改善提案3件目にもなります。',
+ 500, 400, 2200, CURRENT_DATE),
+
 ('dd800028-0000-0000-0000-000000000000', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
  'dd900028-0000-0000-0000-000000000000', 'dd900028-0000-0000-0000-000000000000',
  'chat',
@@ -731,7 +788,7 @@ SIerのDB設計経験 + モダンなPostgreSQL知識、テックリードとし�
 -- ==============================================================================
 -- AI Review Reports (4件 — 2週ごと)
 -- ==============================================================================
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 
 -- Week 2 review
 ('dd900101-0000-0000-0000-000000000000', 'dddddddd-dddd-dddd-dddd-dddddddddddd',

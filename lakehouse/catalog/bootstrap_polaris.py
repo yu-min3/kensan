@@ -67,12 +67,9 @@ def create_catalog(token: str) -> None:
             },
             "storageConfigInfo": {
                 "storageType": "S3",
-                "allowedLocations": [f"s3://{S3_BUCKET}/"],
-                "s3": {
-                    "endpoint": S3_ENDPOINT,
-                    "region": "us-east-1",
-                    "pathStyleAccess": True,
-                },
+                "endpoint": S3_ENDPOINT,
+                "endpointInternal": S3_ENDPOINT.replace("localhost", "kensan-minio"),
+                "pathStyleAccess": True,
             },
         }
     }

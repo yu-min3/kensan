@@ -1,4 +1,3 @@
-
 {
   "permissions": {
     "allow": [
@@ -61,7 +60,6 @@
       "Bash(git merge:*)",
       "Bash(sudo:*)",
       "Bash(su:*)",
-      "Bash(curl:*)",
       "Bash(wget:*)",
       "Bash(ssh:*)",
       "Bash(scp:*)",

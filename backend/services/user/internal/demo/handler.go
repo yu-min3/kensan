@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	user "github.com/kensan/backend/services/user/internal"
 	"github.com/kensan/backend/shared/auth"
@@ -37,6 +40,7 @@ var personas = map[string]Persona{
 			"040_notes.sql",
 			"050_entity_memos.sql",
 			"060_ai_data.sql",
+			"070_ai_challenges.sql",
 		},
 	},
 	"misaki": {
@@ -51,6 +55,7 @@ var personas = map[string]Persona{
 			"041_notes_misaki.sql",
 			"051_entity_memos_misaki.sql",
 			"061_ai_data_misaki.sql",
+			"071_ai_challenges_misaki.sql",
 		},
 	},
 	"takuya": {
@@ -65,6 +70,7 @@ var personas = map[string]Persona{
 			"042_notes_takuya.sql",
 			"052_entity_memos_takuya.sql",
 			"062_ai_data_takuya.sql",
+			"072_ai_challenges_takuya.sql",
 		},
 	},
 	"aya": {
@@ -79,6 +85,7 @@ var personas = map[string]Persona{
 			"043_notes_aya.sql",
 			"053_entity_memos_aya.sql",
 			"063_ai_data_aya.sql",
+			"073_ai_challenges_aya.sql",
 		},
 	},
 }
@@ -114,6 +121,8 @@ type demoLoginRequest struct {
 }
 
 // DemoLogin handles demo persona login.
+// Each call creates a brand-new user with unique UUIDs so that
+// multiple participants can use the same persona simultaneously.
 // POST /api/v1/auth/demo-login
 func (h *Handler) DemoLogin(w http.ResponseWriter, r *http.Request) {
 	var req demoLoginRequest
@@ -129,22 +138,18 @@ func (h *Handler) DemoLogin(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Delete existing persona data (CASCADE removes all related data)
-	if err := h.cleanupPersona(ctx, persona.UserID); err != nil {
-		slog.ErrorContext(ctx, "Failed to cleanup persona data", "persona", req.Persona, "error", err)
-		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to prepare demo data")
-		return
-	}
+	newUserID := uuid.New().String()
+	newEmail := fmt.Sprintf("demo-%s@kensan.dev", newUserID[:8])
 
-	// Execute seed SQL files
-	if err := h.seedPersona(ctx, persona); err != nil {
+	// Execute seed SQL files with UUID/email replacement
+	if err := h.seedPersonaWithNewIDs(ctx, persona, newUserID, newEmail); err != nil {
 		slog.ErrorContext(ctx, "Failed to seed persona data", "persona", req.Persona, "error", err)
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to prepare demo data")
 		return
 	}
 
-	// Generate JWT token
-	token, err := h.jwtManager.GenerateToken(persona.UserID, persona.Email)
+	// Generate JWT token for the new user
+	token, err := h.jwtManager.GenerateToken(newUserID, newEmail)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to generate token", "persona", req.Persona, "error", err)
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token")
@@ -154,15 +159,15 @@ func (h *Handler) DemoLogin(w http.ResponseWriter, r *http.Request) {
 	response := user.AuthResponse{
 		Token: token,
 		User: &user.User{
-			ID:        persona.UserID,
-			Email:     persona.Email,
+			ID:        newUserID,
+			Email:     newEmail,
 			Name:      persona.Name,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
 	}
 
-	slog.InfoContext(ctx, "Demo login successful", "persona", req.Persona, "user_id", persona.UserID)
+	slog.InfoContext(ctx, "Demo login successful", "persona", req.Persona, "user_id", newUserID, "email", newEmail)
 	middleware.JSON(w, r, http.StatusOK, response)
 }
 
@@ -185,4 +190,63 @@ func (h *Handler) seedPersona(ctx context.Context, persona Persona) error {
 		}
 	}
 	return nil
+}
+
+// seedPersonaWithNewIDs reads all seed SQL files, builds a single UUID mapping
+// across all files (so cross-file FK references stay consistent), then executes
+// the transformed SQL in order.
+func (h *Handler) seedPersonaWithNewIDs(ctx context.Context, persona Persona, newUserID, newEmail string) error {
+	// Read all files first to build a complete UUID map
+	contents := make([]string, 0, len(persona.SQLFiles))
+	for _, sqlFile := range persona.SQLFiles {
+		filePath := filepath.Join(h.seedDir, sqlFile)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read seed file %s: %w", sqlFile, err)
+		}
+		contents = append(contents, string(content))
+	}
+
+	// Build UUID map from all files
+	uuidMap := buildUUIDMap(strings.Join(contents, "\n"), persona.UserID, newUserID)
+
+	// Execute each file with the shared UUID map
+	for i, content := range contents {
+		transformed := applyUUIDMap(content, uuidMap, persona.Email, newEmail)
+		if _, err := h.pool.Exec(ctx, transformed); err != nil {
+			return fmt.Errorf("failed to execute seed file %s: %w", persona.SQLFiles[i], err)
+		}
+	}
+	return nil
+}
+
+var uuidRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+// buildUUIDMap scans all SQL content for UUIDs and creates a mapping from
+// each original UUID to a new unique UUID. personaUserID is explicitly
+// mapped to newUserID.
+func buildUUIDMap(allContent, personaUserID, newUserID string) map[string]string {
+	uuidMap := map[string]string{
+		personaUserID: newUserID,
+	}
+
+	matches := uuidRegex.FindAllString(allContent, -1)
+	for _, m := range matches {
+		if _, exists := uuidMap[m]; !exists {
+			uuidMap[m] = uuid.New().String()
+		}
+	}
+
+	return uuidMap
+}
+
+// applyUUIDMap replaces all UUIDs in content using the provided map,
+// and also replaces the persona email with the new email.
+func applyUUIDMap(content string, uuidMap map[string]string, personaEmail, newEmail string) string {
+	result := content
+	for oldUUID, newUUID := range uuidMap {
+		result = strings.ReplaceAll(result, oldUUID, newUUID)
+	}
+	result = strings.ReplaceAll(result, personaEmail, newEmail)
+	return result
 }

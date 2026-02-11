@@ -7,11 +7,12 @@ services:
       - "8182:8182"
     environment:
       POLARIS_BOOTSTRAP_CREDENTIALS: "POLARIS,root,s3cr3t"
-      POLARIS_FEATURES_DEFAULTS_CREDENTIAL_VENDING_ENABLED: "false"
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: kensan
       AWS_SECRET_ACCESS_KEY: kensan-minio
-      AWS_S3_ENDPOINT: http://kensan-minio:9000
+    volumes:
+      - ./polaris-config/application.properties:/deployments/config/application.properties:ro
+      - ./polaris-config/aws-config:/root/.aws/config:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8182/q/health"]
       interval: 10s

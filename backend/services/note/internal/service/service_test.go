@@ -23,14 +23,6 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) GetByID(ctx context.Context, id string) (*note.Note, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*note.Note), args.Error(1)
-}
-
 func (m *MockRepository) GetByIDAndUserID(ctx context.Context, id, userID string) (*note.Note, error) {
 	args := m.Called(ctx, id, userID)
 	if args.Get(0) == nil {
@@ -57,11 +49,6 @@ func (m *MockRepository) Update(ctx context.Context, n *note.Note) error {
 	return args.Error(0)
 }
 
-func (m *MockRepository) Delete(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
 func (m *MockRepository) DeleteByIDAndUserID(ctx context.Context, id, userID string) error {
 	args := m.Called(ctx, id, userID)
 	return args.Error(0)
@@ -73,19 +60,6 @@ func (m *MockRepository) Search(ctx context.Context, userID, query string, filte
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*note.SearchResult), args.Error(1)
-}
-
-func (m *MockRepository) UpdateTags(ctx context.Context, noteID string, tagIDs []string) error {
-	args := m.Called(ctx, noteID, tagIDs)
-	return args.Error(0)
-}
-
-func (m *MockRepository) GetTagIDs(ctx context.Context, noteID string) ([]string, error) {
-	args := m.Called(ctx, noteID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]string), args.Error(1)
 }
 
 func (m *MockRepository) ListNoteTypes(ctx context.Context, activeOnly bool) ([]*note.NoteTypeConfig, error) {

@@ -37,8 +37,7 @@ async def get_time_blocks(
             f"""
             SELECT
                 id, start_datetime, end_datetime, task_id, task_name,
-                milestone_id, milestone_name, goal_id, goal_name, goal_color,
-                is_routine
+                milestone_id, milestone_name, goal_id, goal_name, goal_color
             FROM time_blocks
             WHERE {where_clause}
             ORDER BY start_datetime
@@ -62,7 +61,6 @@ async def get_time_blocks(
                     "name": block["goal_name"],
                     "color": block["goal_color"],
                 } if block["goal_id"] else None,
-                "isRoutine": block["is_routine"],
             }
             for block in blocks
         ]
@@ -76,7 +74,6 @@ async def create_time_block(
     task_id: UUID | None = None,
     milestone_id: UUID | None = None,
     goal_id: UUID | None = None,
-    is_routine: bool = False,
 ) -> dict[str, Any]:
     """Create a new time block.
 
@@ -88,16 +85,15 @@ async def create_time_block(
             """
             INSERT INTO time_blocks (
                 user_id, start_datetime, end_datetime, task_id, task_name,
-                milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
+                milestone_id, milestone_name, goal_id, goal_name, goal_color
             )
             VALUES (
                 $1, $2, $3, $4, $5,
                 $6, (SELECT name FROM milestones WHERE id = $6),
-                $7, (SELECT name FROM goals WHERE id = $7), (SELECT color FROM goals WHERE id = $7),
-                $8
+                $7, (SELECT name FROM goals WHERE id = $7), (SELECT color FROM goals WHERE id = $7)
             )
             RETURNING id, start_datetime, end_datetime, task_id, task_name,
-                milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
+                milestone_id, milestone_name, goal_id, goal_name, goal_color
             """,
             user_id,
             start_datetime,
@@ -106,7 +102,6 @@ async def create_time_block(
             task_name,
             milestone_id,
             goal_id,
-            is_routine,
         )
 
         return {
@@ -124,7 +119,6 @@ async def create_time_block(
                 "name": block["goal_name"],
                 "color": block["goal_color"],
             } if block["goal_id"] else None,
-            "isRoutine": block["is_routine"],
         }
 
 
@@ -168,7 +162,7 @@ async def update_time_block(
             SET {set_clause}
             WHERE id = ${param_idx} AND user_id = ${param_idx + 1}
             RETURNING id, start_datetime, end_datetime, task_id, task_name,
-                milestone_id, milestone_name, goal_id, goal_name, goal_color, is_routine
+                milestone_id, milestone_name, goal_id, goal_name, goal_color
             """,
             *params,
         )
@@ -182,7 +176,6 @@ async def update_time_block(
             "endDatetime": block["end_datetime"].isoformat(),
             "taskId": str(block["task_id"]) if block["task_id"] else None,
             "taskName": block["task_name"],
-            "isRoutine": block["is_routine"],
         }
 
 

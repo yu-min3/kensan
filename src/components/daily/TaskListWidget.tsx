@@ -185,7 +185,7 @@ interface TaskListWidgetProps {
 }
 
 export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
-  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal, toggleTaskComplete } = useTaskManagerStore()
+  const { goals, tasks, milestones, error, fetchAll, getTasksByMilestone, getMilestonesByGoal, getStandaloneTasks, toggleTaskComplete } = useTaskManagerStore()
 
   // タスクデータを整理（今日やるべきタスク優先、期限順にソート）
   const taskData = useMemo(() => {
@@ -212,6 +212,19 @@ export function TaskListWidget({ onTaskClick }: TaskListWidgetProps = {}) {
           })
         }
       }
+    }
+
+    // 目標なしタスク（期限はタスク自体の dueDate を使用）
+    const standalone = getStandaloneTasks().filter(t => !t.parentTaskId && !t.completed)
+    for (const task of standalone) {
+      data.push({
+        task,
+        goal: undefined,
+        milestone: undefined,
+        daysUntil: getDaysUntil(task.dueDate),
+        isScheduledToday: isScheduledForToday(task),
+        frequencyLabel: getTaskFrequencyLabel(task),
+      })
     }
 
     // ソート:

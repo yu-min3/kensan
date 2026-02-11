@@ -47,7 +47,7 @@ export function useTaskManagement() {
     : []
   const standaloneTasks = getStandaloneTasks().filter(t => !t.parentTaskId)
 
-  // Task filtering and sorting
+  // Task filtering and sorting (default: due date ascending, no due date last)
   const filterTasks = useCallback((taskList: Task[]) => {
     return taskList
       .filter(task => {
@@ -55,7 +55,17 @@ export function useTaskManagement() {
         const matchesCompleted = !hideCompleted || !task.completed
         return matchesSearch && matchesCompleted
       })
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .sort((a, b) => {
+        // Completed tasks go to the bottom
+        if (a.completed !== b.completed) return a.completed ? 1 : -1
+        // Both have due dates: sort ascending (nearest deadline first)
+        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+        // Only one has a due date: it comes first
+        if (a.dueDate && !b.dueDate) return -1
+        if (!a.dueDate && b.dueDate) return 1
+        // Neither has a due date: fall back to sortOrder
+        return a.sortOrder - b.sortOrder
+      })
   }, [searchQuery, hideCompleted])
 
   const sortedMilestoneTasks = useMemo(

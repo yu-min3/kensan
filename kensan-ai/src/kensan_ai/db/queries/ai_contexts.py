@@ -9,34 +9,117 @@ from kensan_ai.db.connection import get_connection
 logger = logging.getLogger(__name__)
 
 
-async def list_contexts(situation: str | None = None) -> list[dict[str, Any]]:
-    """List all active AI contexts, optionally filtered by situation."""
+async def ensure_user_contexts(user_id: UUID) -> None:
+    """Lazily copy system template contexts to the user if they have none.
+
+    On first access, copies all active default system templates (user_id IS NULL)
+    into per-user rows with source_template_id set to the original.
+    Also copies initial versions into ai_context_versions.
+    """
     async with get_connection() as conn:
-        if situation:
-            rows = await conn.fetch(
-                """
-                SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
-                       c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
-                       c.created_at, c.updated_at,
-                       (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number
-                FROM ai_contexts c
-                WHERE c.situation = $1 AND c.is_active = true
-                ORDER BY c.situation, c.is_default DESC, c.created_at DESC
-                """,
-                situation,
+        # Check if user already has contexts
+        exists = await conn.fetchval(
+            "SELECT 1 FROM ai_contexts WHERE user_id = $1 LIMIT 1",
+            user_id,
+        )
+        if exists:
+            return
+
+        # Copy all active default system templates
+        rows = await conn.fetch(
+            """
+            INSERT INTO ai_contexts (
+                name, situation, version, is_active, is_default,
+                system_prompt, allowed_tools, max_turns, temperature,
+                description, user_id, source_template_id
             )
+            SELECT name, situation, version, is_active, is_default,
+                   system_prompt, allowed_tools, max_turns, temperature,
+                   description, $1, id
+            FROM ai_contexts
+            WHERE user_id IS NULL AND is_default = true AND is_active = true
+            ON CONFLICT DO NOTHING
+            RETURNING id, system_prompt, allowed_tools, max_turns, temperature
+            """,
+            user_id,
+        )
+
+        # Create initial version records for each copied context
+        for row in rows:
+            await conn.execute(
+                """
+                INSERT INTO ai_context_versions (
+                    context_id, version_number, system_prompt,
+                    allowed_tools, max_turns, temperature, changelog
+                )
+                VALUES ($1, 1, $2, $3, $4, $5, 'テンプレートからコピー')
+                """,
+                row["id"],
+                row["system_prompt"],
+                list(row["allowed_tools"]),
+                row["max_turns"],
+                row["temperature"],
+            )
+
+        logger.info("Copied %d system template contexts for user %s", len(rows), user_id)
+
+
+async def list_contexts(
+    situation: str | None = None,
+    user_id: UUID | None = None,
+) -> list[dict[str, Any]]:
+    """List all active AI contexts, optionally filtered by situation.
+
+    If user_id is provided, ensures user contexts exist (lazy copy)
+    and returns only that user's contexts.
+    If user_id is None, returns system templates.
+    """
+    if user_id:
+        await ensure_user_contexts(user_id)
+
+    async with get_connection() as conn:
+        conditions = ["c.is_active = true"]
+        params: list[Any] = []
+        idx = 1
+
+        if user_id:
+            conditions.append(f"c.user_id = ${idx}")
+            params.append(user_id)
+            idx += 1
         else:
-            rows = await conn.fetch(
-                """
-                SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
-                       c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
-                       c.created_at, c.updated_at,
-                       (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number
-                FROM ai_contexts c
-                WHERE c.is_active = true
-                ORDER BY c.situation, c.is_default DESC, c.created_at DESC
-                """,
-            )
+            conditions.append("c.user_id IS NULL")
+
+        if situation:
+            conditions.append(f"c.situation = ${idx}")
+            params.append(situation)
+            idx += 1
+
+        where_clause = " AND ".join(conditions)
+
+        rows = await conn.fetch(
+            f"""
+            SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
+                   c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
+                   c.description, c.created_at, c.updated_at,
+                   (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number,
+                   pe.id AS pending_experiment_id,
+                   pe.status AS pending_experiment_status,
+                   pe.win_rate AS pending_experiment_win_rate,
+                   pe.created_at AS pending_experiment_created_at
+            FROM ai_contexts c
+            LEFT JOIN LATERAL (
+                SELECT id, status, win_rate, created_at
+                FROM prompt_experiments
+                WHERE control_context_id = c.id
+                  AND status IN ('pending_review', 'in_challenge')
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) pe ON true
+            WHERE {where_clause}
+            ORDER BY c.situation, c.is_default DESC, c.created_at DESC
+            """,
+            *params,
+        )
 
         return [_context_row_to_dict(row) for row in rows]
 
@@ -48,7 +131,7 @@ async def get_context(context_id: UUID) -> dict[str, Any] | None:
             """
             SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
                    c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
-                   c.created_at, c.updated_at,
+                   c.description, c.created_at, c.updated_at,
                    (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number
             FROM ai_contexts c
             WHERE c.id = $1
@@ -243,7 +326,7 @@ async def rollback_to_version(context_id: UUID, version_number: int) -> dict[str
 
 def _context_row_to_dict(row: Any) -> dict[str, Any]:
     """Convert a context DB row to a dictionary."""
-    return {
+    result = {
         "id": str(row["id"]),
         "name": row["name"],
         "situation": row["situation"],
@@ -254,10 +337,24 @@ def _context_row_to_dict(row: Any) -> dict[str, Any]:
         "allowed_tools": list(row["allowed_tools"]) if row["allowed_tools"] else [],
         "max_turns": row["max_turns"],
         "temperature": row["temperature"],
+        "description": row["description"],
         "created_at": row["created_at"].isoformat(),
         "updated_at": row["updated_at"].isoformat(),
         "current_version_number": row["current_version_number"],
     }
+
+    # Add pending experiment info if present (from list_contexts LEFT JOIN)
+    if "pending_experiment_id" in row.keys() and row["pending_experiment_id"] is not None:
+        result["pending_experiment"] = {
+            "id": str(row["pending_experiment_id"]),
+            "status": row["pending_experiment_status"],
+            "win_rate": row["pending_experiment_win_rate"],
+            "created_at": row["pending_experiment_created_at"].isoformat(),
+        }
+    else:
+        result["pending_experiment"] = None
+
+    return result
 
 
 def _version_row_to_dict(row: Any) -> dict[str, Any]:

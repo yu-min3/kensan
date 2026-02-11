@@ -9,6 +9,7 @@ from kensan_ai.lib.parsers import parse_uuid
 
 
 @tool(
+    category="pattern",
     name="get_user_patterns",
     description="ユーザーの行動パターンを取得する（生産性ピーク時間、計画精度、目標トレンド等）。計画提案の根拠として使う。",
     input_schema={
