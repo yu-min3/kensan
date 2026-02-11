@@ -217,7 +217,7 @@ func (r *PostgresRepository) Update(ctx context.Context, n *note.Note) error {
 		SET title = $2, content = $3, format = $4, date = $5, task_id = $6,
 		    milestone_id = $7, milestone_name = $8, goal_id = $9, goal_name = $10, goal_color = $11,
 		    related_time_entry_ids = $12, file_url = $13, archived = $14, updated_at = $15
-		WHERE id = $1
+		WHERE id = $1 AND user_id = $16
 	`
 
 	result, err := r.pool.Exec(ctx, query,
@@ -236,6 +236,7 @@ func (r *PostgresRepository) Update(ctx context.Context, n *note.Note) error {
 		n.FileURL,
 		n.Archived,
 		n.UpdatedAt,
+		n.UserID,
 	)
 	if err != nil {
 		return err

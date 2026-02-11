@@ -16,6 +16,9 @@ from kensan_ai.config import get_settings
 def create_agent_runner(**kwargs) -> AgentRunner | GeminiAgentRunner:
     """Factory function to create the appropriate agent runner based on ai_provider setting."""
     settings = get_settings()
+    if settings.ai_provider == "google-adk":
+        from kensan_ai.agents.adk_runner import AdkAgentRunner
+        return AdkAgentRunner(**kwargs)
     if settings.ai_provider == "google":
         return GeminiAgentRunner(**kwargs)
     return AgentRunner(**kwargs)

@@ -1,115 +1,122 @@
-# Kensan
+# Kensan（研鑽）
 
 <p align="center">
   <img src="docs/design/kensan-logo-dark.svg" alt="Kensan Logo" width="200">
 </p>
 
 <p align="center">
-  <strong>AI-Powered Personal Productivity App for Engineers</strong>
+  <strong>使うほど賢くなる、エンジニアのためのAIエージェント</strong>
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> |
-  <a href="#features">Features</a> |
-  <a href="#tech-stack">Tech Stack</a> |
-  <a href="#getting-started">Getting Started</a> |
-  <a href="#architecture">Architecture</a> |
-  <a href="#project-structure">Project Structure</a>
+  日本語 | <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="#概要">概要</a> |
+  <a href="#機能">機能</a> |
+  <a href="#技術スタック">技術スタック</a> |
+  <a href="#はじめかた">はじめかた</a> |
+  <a href="#アーキテクチャ">アーキテクチャ</a> |
+  <a href="#claude-code-による開発">Claude Code</a> |
+  <a href="#プロジェクト構成">プロジェクト構成</a>
 </p>
 
 ---
 
-## Overview
+## 概要
 
-Kensan is a personal productivity application designed for software engineers. It integrates time management, task management, learning records, and AI-powered weekly reviews to help engineers achieve their goals through continuous self-improvement.
+Kensan は、エンジニアの自己研鑽を支援するパーソナル生産性プラットフォームです。目標管理・タイムブロック・学習ノート・AIチャットを統合し、39種類のツールを持つAIエージェントが進捗分析や計画提案を行います。
 
-**Kensan** は、エンジニア向けのパーソナル生産性アプリケーションです。時間管理、タスク管理、学習記録、AI週次レビューを統合し、目標達成と自己改善をサポートします。
-
----
-
-## Features
-
-- **Goal & Task Management** - Hierarchical goals with milestones and tasks, Kanban board view
-- **Time Block Planning** - Visual daily/weekly time block planning with drag & drop
-- **Rich Note Editor** - TipTap-based rich text editor with image support and semantic search
-- **AI Chat Agent** - Gemini-powered conversational agent with 39+ tools for direct DB operations
-- **AI Weekly Review** - Automated structured weekly review generation
-- **Fact Extraction** - Automatic extraction of user preferences, habits, and skills from conversations
-- **Analytics Dashboard** - Visualize productivity trends and goal progress
-- **Data Lakehouse** - Apache Iceberg + Dagster pipeline for advanced analytics
-- **Observability** - Full OpenTelemetry integration (Grafana, Prometheus, Loki, Tempo)
+最大の特徴は**共進化**の仕組みです。エージェントは週次バッチで自身のプロンプトを Gemini で自己評価し、改善案を生成。ユーザーがブラインド A/B テストで採否を判断することで、使うほど賢くなるフィードバックループを実現しています。
 
 ---
 
-## Tech Stack
+## 機能
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18, TypeScript, Vite, Zustand, Tailwind CSS 4, shadcn/ui, TipTap |
-| **Backend** | Go 1.24, Chi router, pgx, JWT authentication |
-| **AI Service** | Python 3.12, FastAPI, Google Gemini API (GenAI SDK) |
-| **Database** | PostgreSQL 16 + pgvector |
-| **Storage** | MinIO (S3-compatible object storage) |
-| **Data Pipeline** | Apache Iceberg, Dagster, Polaris REST Catalog |
-| **Observability** | OpenTelemetry, Grafana, Prometheus, Loki, Tempo |
-| **Infrastructure** | Docker Compose, GCE (Google Compute Engine) |
+- **目標・タスク管理** - 年間目標 → マイルストーン → タスクの階層管理、カンバンボード
+- **タイムブロック** - 日次・週次の時間計画をドラッグ&ドロップで作成
+- **学習ノート** - TipTap ベースのリッチエディタ。日記・学習メモ・読書レビュー
+- **AIチャット** - ADK ベースの Gemini エージェント。39ツール搭載、Read/Write 分離（読み取りは即実行、書き込みはユーザー承認）
+- **プロンプト自己評価** - Gemini がエージェント自身のプロンプトを週次評価し、弱点の特定と改善版を自動生成
+- **ブラインド A/B テスト** - 現行版と改善版を使い比べ、ユーザーが投票で採否を決定
+- **AI 週次レビュー** - 1週間の行動データから振り返りレポートを自動生成
+- **ファクト抽出** - 会話からユーザーの嗜好・習慣・スキルを自動抽出
+- **分析ダッシュボード** - 目標への時間投資や生産性トレンドを可視化
+- **データレイクハウス** - Medallion Architecture（Bronze/Silver/Gold）。Apache Iceberg + Dagster + Polaris REST Catalog
+- **可観測性** - OpenTelemetry 完全対応（Grafana, Prometheus, Loki, Tempo）+ AI インタラクション・エクスプローラー
 
 ---
 
-## Getting Started
+## 技術スタック
 
-### Prerequisites
+| レイヤー | 技術 |
+|----------|------|
+| **フロントエンド** | React 18, TypeScript, Vite, Zustand, Tailwind CSS 4, shadcn/ui, TipTap |
+| **バックエンド** | Go 1.24, Chi, pgx, JWT 認証 |
+| **AI サービス** | Python 3.12, FastAPI, Google ADK (Agent Development Kit), Gemini 2.0 Flash |
+| **データベース** | PostgreSQL 16 + pgvector |
+| **ストレージ** | MinIO（S3 互換オブジェクトストレージ） |
+| **データ基盤** | Apache Iceberg, Dagster, Polaris REST Catalog |
+| **可観測性** | OpenTelemetry, Grafana, Prometheus, Loki, Tempo |
+| **インフラ** | Docker Compose, GCE (Google Compute Engine) |
+
+---
+
+## はじめかた
+
+### 前提条件
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-- [Google AI Studio API Key](https://aistudio.google.com/apikey) (for Gemini)
+- [Google AI Studio API Key](https://aistudio.google.com/apikey)（Gemini 用）
 
-### 1. Clone the repository
+### 1. リポジトリをクローン
 
 ```bash
 git clone https://github.com/yu-min3/kensan-mockup.git
 cd kensan-mockup
 ```
 
-### 2. Configure environment variables
+### 2. 環境変数を設定
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set your Google API key:
+`.env` を編集して Google API キーを設定：
 
 ```bash
 GOOGLE_API_KEY=your-google-api-key-here
 ```
 
-### 3. Start all services
+### 3. 全サービスを起動
 
 ```bash
 make up
 ```
 
-This starts all services via Docker Compose:
-- Frontend: http://localhost:5173
-- Backend APIs: http://localhost:8081-8091
+Docker Compose で以下が起動します：
+- フロントエンド: http://localhost:5173
+- バックエンド API: http://localhost:8081-8091
 - Grafana: http://localhost:3000
 
-### 4. Login
+### 4. ログイン
 
-Use the demo account:
-- Email: `test@kensan.dev`
-- Password: `password123`
+デモアカウント：
+- メール: `test@kensan.dev`
+- パスワード: `password123`
 
-### Local Development (without Docker)
+### ローカル開発（Docker なし）
 
 ```bash
-# Frontend
+# フロントエンド
 npm install
 npm run dev
 
-# Backend
+# バックエンド
 cd backend && make build && make test
 
-# AI Service
+# AI サービス
 cd kensan-ai
 pip install -e .
 uvicorn kensan_ai.main:app --reload --port 8089
@@ -117,70 +124,132 @@ uvicorn kensan_ai.main:app --reload --port 8089
 
 ---
 
-## Architecture
+## アーキテクチャ
 
-Kensan follows a **React SPA + Go Microservices + Python AI Service** architecture.
+**React SPA + Go マイクロサービス + Python AI サービス** の構成です。
 
 ```
 Browser (React SPA)
-  ├── user-service     (Go, :8081) - Auth, Settings
-  ├── task-service     (Go, :8082) - Goals, Tasks
-  ├── timeblock-service(Go, :8084) - Time Planning
-  ├── analytics-service(Go, :8088) - Analytics
-  ├── memo-service     (Go, :8090) - Memo
-  ├── note-service     (Go, :8091) - Notes + MinIO
-  └── kensan-ai        (Py, :8089) - AI Chat + Gemini API
+  ├── user-service     (Go, :8081) - 認証, 設定
+  ├── task-service     (Go, :8082) - 目標, タスク
+  ├── timeblock-service(Go, :8084) - 時間計画
+  ├── analytics-service(Go, :8088) - 分析
+  ├── memo-service     (Go, :8090) - メモ
+  ├── note-service     (Go, :8091) - ノート + MinIO
+  └── kensan-ai        (Py, :8089) - AIチャット (ADK + Gemini 2.0 Flash)
                             │
                       PostgreSQL 16 + pgvector
 ```
 
-For detailed architecture documentation, see:
-- [Overall Architecture](ARCHITECTURE.md)
-- [Backend Architecture](backend/ARCHITECTURE.md)
-- [Frontend Architecture](src/ARCHITECTURE.md)
-- [AI Service Architecture](kensan-ai/ARCHITECTURE.md)
+### クリーンアーキテクチャ & マイクロサービス
+
+各 Go サービスは**レイヤードアーキテクチャ**を厳格に適用しています。
+
+```
+Handler (HTTP) → Service (ビジネスロジック) → Repository (データアクセス) → PostgreSQL
+```
+
+- 各サービスは **300〜500行**。AI コーディングエージェントのコンテキストウィンドウに収まるサイズ
+- 各境界に ISP ベースのインターフェースを配置し、テストと差し替えを容易に
+- 新しいサービスの追加はコマンド1つ: `claude /new-service <name>`（後述）
+- 共通関心事（認証ミドルウェア、エラーハンドリング、レスポンスエンベロープ）は `backend/shared/` に集約
+
+この構造は **AI との協働開発** を前提に設計しています。Claude Code がサービス全体を読み、コントラクトを理解し、他のサービスへの副作用なく安全に変更できます。
+
+### ドキュメント
+
+詳細なアーキテクチャドキュメント：
+- [全体アーキテクチャ](ARCHITECTURE.md)
+- [バックエンド](backend/ARCHITECTURE.md)
+- [フロントエンド](src/ARCHITECTURE.md)
+- [AI サービス](kensan-ai/ARCHITECTURE.md)
 
 ---
 
-## Project Structure
+## Claude Code による開発
+
+Kensan は **AI コーディングエージェントと共に開発する**ことを前提に構築されています。[Claude Code](https://docs.anthropic.com/en/docs/claude-code) の設定ファイルにより、コーディング規約の強制、定型作業の自動化、ドキュメントの同期を実現しています。
+
+### ルール（`.claude/rules/`）
+
+7つのルールファイルがプロジェクトの規約を定義。Claude Code が自動的に読み込み、全てのやり取りで遵守します。
+
+| ルール | 強制する内容 |
+|--------|-------------|
+| `backend-go.md` | レイヤードアーキテクチャ、サービスディレクトリ構造、ブートストラップパターン |
+| `frontend-react.md` | コンポーネント階層、Zustand ストア、タイムゾーン処理 |
+| `api-design.md` | レスポンスエンベロープ形式、エラーコード、URL パターン |
+| `database.md` | マルチテナンシー（全テーブルに `user_id`）、UUID 主キー、マイグレーション命名規則 |
+| `security.md` | JWT 認証、SQL パラメータ化、シークレットのハードコード禁止 |
+| `testing.md` | テーブルドリブンテスト、インターフェースによるモック、マルチテナンシーのテストケース |
+| `workflow.md` | 変更後のテスト自動実行、ARCHITECTURE.md の自動更新 |
+
+### スキル（`.claude/skills/`）
+
+6つのスラッシュコマンドで、プロジェクト規約に沿ったコードをスキャフォルド：
+
+| コマンド | 機能 |
+|---------|------|
+| `/new-service <name>` | Go マイクロサービスの雛形を生成（cmd, handler, service, repository, Dockerfile, Makefile） |
+| `/new-page <Page> <prefix>` | React ページをルート登録・ストア込みで作成 |
+| `/new-endpoint <svc> <method> <path>` | API エンドポイントを handler, service, repository のセットで追加 |
+| `/go-test` | Go テストを実行し、失敗時は自動修正 |
+| `/build-check` | フロントエンド + バックエンドのビルドを並列実行 |
+| `/code-review` | 未コミットの変更をプロジェクト規約に照らしてレビュー |
+
+### ワークフロー自動化
+
+`workflow.md` ルールにより、Claude Code は**指示がなくても**以下を自動実行します：
+
+1. **テスト自動実行** - Go コードの変更で `make test`、フロントエンドの変更で `npm run build` を実行。失敗時は修正してから完了を報告
+2. **ドキュメント自動更新** - 構造的な変更（新しいサービス、エンドポイント、ページ、スキーマ）があれば、該当する `ARCHITECTURE.md` を自動更新
+
+高速なイテレーション中でも、テストは通り、ドキュメントは最新で、規約は遵守された状態が維持されます。
+
+---
+
+## プロジェクト構成
 
 ```
 kensan-mockup/
-├── src/                  # React/TypeScript frontend
-├── backend/              # Go microservices
-│   ├── services/         # Individual service implementations
-│   ├── shared/           # Shared middleware, auth, errors
-│   └── migrations/       # Database migrations
-├── kensan-ai/            # Python AI service (FastAPI + Gemini)
-├── lakehouse/            # Data pipeline (Dagster + Iceberg)
-├── observability/        # Monitoring config (Grafana, Prometheus)
-├── docs/                 # Documentation
-│   ├── spec/             # API specifications
-│   ├── adr/              # Architecture Decision Records
-│   ├── guides/           # Setup & development guides
-│   └── design/           # Brand guidelines & logos
-├── e2e/                  # Playwright end-to-end tests
-├── k8s/                  # Kubernetes manifests
-├── docker-compose.yml    # Local development orchestration
-└── ARCHITECTURE.md       # Overall architecture documentation
+├── src/                  # React/TypeScript フロントエンド
+├── backend/              # Go マイクロサービス
+│   ├── services/         # 各サービスの実装
+│   ├── shared/           # 共有ミドルウェア、認証、エラー処理
+│   └── migrations/       # データベースマイグレーション
+├── kensan-ai/            # Python AI サービス (ADK + Gemini 2.0 Flash)
+├── lakehouse/            # データパイプライン (Dagster + Iceberg)
+├── observability/        # 監視設定 (Grafana, Prometheus)
+├── docs/                 # ドキュメント
+│   ├── spec/             # API 仕様書
+│   ├── adr/              # アーキテクチャ決定記録
+│   ├── guides/           # セットアップ・開発ガイド
+│   └── design/           # ブランドガイドライン・ロゴ
+├── .claude/              # Claude Code 設定
+│   ├── rules/            # 7つの規約ルールファイル
+│   └── skills/           # 6つのスラッシュコマンド
+├── e2e/                  # Playwright E2E テスト
+├── k8s/                  # Kubernetes マニフェスト
+├── docker-compose.yml    # ローカル開発オーケストレーション
+└── ARCHITECTURE.md       # 全体アーキテクチャドキュメント
 ```
 
 ---
 
-## Environment Variables
+## 環境変数
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GOOGLE_API_KEY` | Yes | - | Google GenAI API key for Gemini |
-| `AI_PROVIDER` | No | `google` | AI provider |
-| `GOOGLE_MODEL` | No | `gemini-2.0-flash` | Gemini model |
-| `JWT_SECRET` | Production | `dev-secret-key-...` | JWT signing key |
-| `DB_PASSWORD` | No | `kensan` | PostgreSQL password |
+| 変数 | 必須 | デフォルト | 説明 |
+|------|------|-----------|------|
+| `GOOGLE_API_KEY` | Yes | - | Google GenAI API キー（Gemini 用） |
+| `AI_PROVIDER` | No | `google` | AI プロバイダー |
+| `GOOGLE_MODEL` | No | `gemini-2.0-flash` | Gemini モデル |
+| `JWT_SECRET` | 本番のみ | `dev-secret-key-...` | JWT 署名鍵 |
+| `DB_PASSWORD` | No | `kensan` | PostgreSQL パスワード |
 
-See `.env.example` for the full list.
+全リストは `.env.example` を参照。
 
 ---
 
-## License
+## ライセンス
 
-This project is part of a hackathon submission. All rights reserved.
+本プロジェクトはハッカソン提出作品です。All rights reserved.

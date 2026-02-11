@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -197,8 +198,12 @@ func (s *Service) Close() {
 
 // corsMiddleware returns the CORS middleware with common configuration.
 func corsMiddleware() func(http.Handler) http.Handler {
+	origins := []string{"http://localhost:*", "https://*.kensan.dev"}
+	if extra := os.Getenv("CORS_ALLOWED_ORIGINS"); extra != "" {
+		origins = append(origins, strings.Split(extra, ",")...)
+	}
 	return cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:*", "https://*.kensan.dev"},
+		AllowedOrigins:   origins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "traceparent", "tracestate"},
 		ExposedHeaders:   []string{"X-Request-ID", "traceparent", "tracestate"},

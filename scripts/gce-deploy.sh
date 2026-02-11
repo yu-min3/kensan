@@ -1,36 +1,128 @@
 #!/bin/bash
 set -euo pipefail
 
-# === 設定 ===
+# =============================================================================
+# Kensan GCE Deploy Script
+# Deploys to existing GCE instance via SSH
+# =============================================================================
+
 INSTANCE_NAME="kensan-app"
 ZONE="asia-northeast1-a"
-MACHINE_TYPE="e2-standard-4"
+REPO_URL="https://github.com/yu-min3/kensan-mockup.git"
+BRANCH="hackathon/gch4"
 
-# === Step 1: GCEインスタンス作成 ===
-echo "=== Step 1: インスタンス作成 ==="
-gcloud compute instances create "$INSTANCE_NAME" \
-  --zone="$ZONE" \
-  --machine-type="$MACHINE_TYPE" \
-  --image-family=ubuntu-2404-lts-amd64 \
-  --image-project=ubuntu-os-cloud \
-  --boot-disk-size=50GB \
-  --tags=http-server,https-server
+# === Colors ===
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# === Step 2: ファイアウォール設定 ===
-echo "=== Step 2: ファイアウォール設定 ==="
-gcloud compute firewall-rules create allow-kensan \
-  --allow tcp:80,tcp:443,tcp:3000,tcp:5173,tcp:8081-8091 \
-  --target-tags=http-server || echo "ファイアウォールルールは既に存在します"
+info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-# === Step 3: 外部IP確認 ===
-echo "=== Step 3: 外部IP ==="
+# === Pre-flight checks ===
+command -v gcloud >/dev/null 2>&1 || error "gcloud CLI not found"
+
+# === Step 1: Firewall rules ===
+info "Step 1: Configuring firewall rules (port 80, 9000)"
+gcloud compute firewall-rules create allow-kensan-prod \
+  --allow tcp:80,tcp:9000 \
+  --target-tags=http-server \
+  --description="Kensan production: nginx(80) + MinIO S3(9000)" \
+  2>/dev/null || warn "Firewall rule already exists"
+
+# === Step 2: Get external IP ===
+info "Step 2: Getting external IP"
 GCE_IP=$(gcloud compute instances describe "$INSTANCE_NAME" \
   --zone="$ZONE" \
   --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-echo "外部IP: $GCE_IP"
+[ -z "$GCE_IP" ] && error "Could not get external IP for $INSTANCE_NAME"
+info "External IP: $GCE_IP"
 
+# === Step 3: Check required env vars ===
+if [ -z "${JWT_SECRET:-}" ] || [ -z "${GOOGLE_API_KEY:-}" ]; then
+  warn "JWT_SECRET and GOOGLE_API_KEY must be set"
+  warn "Example: JWT_SECRET=xxx GOOGLE_API_KEY=xxx bash scripts/gce-deploy.sh"
+  read -rp "Continue anyway? (y/N): " confirm
+  [ "$confirm" != "y" ] && exit 1
+fi
+
+# === Step 4: Remote setup via SSH ===
+info "Step 3: Deploying to GCE instance"
+gcloud compute ssh "$INSTANCE_NAME" --zone="$ZONE" --command="
+set -euo pipefail
+
+echo '=== Installing Docker (if needed) ==='
+if ! command -v docker &>/dev/null; then
+  sudo apt-get update
+  sudo apt-get install -y ca-certificates curl
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+  sudo chmod a+r /etc/apt/keyrings/docker.asc
+  echo \"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \$(. /etc/os-release && echo \$VERSION_CODENAME) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  sudo usermod -aG docker \$USER
+  echo 'Docker installed. You may need to re-run this script for group changes.'
+fi
+
+echo '=== Cloning/updating repository ==='
+if [ -d ~/kensan-mockup ]; then
+  cd ~/kensan-mockup
+  git fetch origin
+  git checkout $BRANCH
+  git pull origin $BRANCH
+else
+  git clone -b $BRANCH $REPO_URL ~/kensan-mockup
+  cd ~/kensan-mockup
+fi
+
+echo '=== Creating .env ==='
+cat > .env << ENVEOF
+GCE_IP=$GCE_IP
+JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.0-flash}
+ENVEOF
+
+echo '=== Starting main application ==='
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+echo '=== Waiting for services to be healthy ==='
+sleep 10
+
+echo '=== Starting lakehouse ==='
+cp .env lakehouse/.env
+cd lakehouse
+docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
+cd ..
+
+echo '=== Running demo seed ==='
+sleep 5
+# Wait for user-service to be ready
+for i in {1..30}; do
+  if curl -sf http://localhost:80/health/user-service > /dev/null 2>&1; then
+    break
+  fi
+  echo \"Waiting for user-service... (\$i/30)\"
+  sleep 2
+done
+
+# Trigger demo seed
+curl -sf -X POST http://localhost:80/api/v1/demo/seed || echo 'Demo seed skipped (may already exist)'
+
+echo ''
+echo '=== Deployment complete ==='
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+"
+
+# === Step 5: Summary ===
 echo ""
-echo "=== 次のステップ ==="
-echo "1. SSH接続:  gcloud compute ssh $INSTANCE_NAME --zone=$ZONE"
-echo "2. GCE上でDockerインストール・リポジトリ取得・.env作成・起動"
-echo "3. 確認: http://$GCE_IP:5173"
+info "=== Deployment Complete ==="
+info "Application: http://$GCE_IP"
+info "MinIO S3:    http://$GCE_IP:9000"
+info ""
+info "Test login: test@kensan.dev / password123"
+info ""
+info "To SSH: gcloud compute ssh $INSTANCE_NAME --zone=$ZONE"

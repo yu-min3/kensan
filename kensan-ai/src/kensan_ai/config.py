@@ -32,8 +32,8 @@ class Settings(BaseSettings):
             return self.database_url
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
-    # AI Provider ("anthropic" or "google")
-    ai_provider: str = "google"
+    # AI Provider ("anthropic", "google", or "google-adk")
+    ai_provider: str = "google-adk"
 
     # Anthropic API
     anthropic_api_key: str = ""
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
         if self.server_env == "production":
             if self.ai_provider == "anthropic" and not self.anthropic_api_key:
                 raise ValueError("ANTHROPIC_API_KEY is required in production with ai_provider=anthropic")
-            if self.ai_provider == "google" and not self.google_api_key:
+            if self.ai_provider in ("google", "google-adk") and not self.google_api_key:
                 raise ValueError("GOOGLE_API_KEY is required in production with ai_provider=google")
             if self.jwt_secret == "dev-secret-key-change-in-production":
                 raise ValueError("JWT_SECRET must be changed in production")
