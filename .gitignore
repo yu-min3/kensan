@@ -25,6 +25,8 @@ Thumbs.db
 
 # Claude
 .claude/settings.local.json
+backend/.claude/
+**/settings.local.json
 
 # Logs
 *.log
@@ -39,9 +41,11 @@ yarn-error.log*
 
 # Test
 coverage/
+test-results/
 e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
+todo.txt
 
 # Backend binaries (keep Dockerfiles)
 backend/bin/
@@ -55,6 +59,9 @@ backend/vendor/
 
 # Database backups
 backups/
+
+# Lakehouse state
+lakehouse/.ingestion_state.json
 
 # kensan-ai Python
 kensan-ai/.venv/

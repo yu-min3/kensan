@@ -1,6 +1,6 @@
 # Kensan AI
 
-Kensan アプリケーションの AI サービス。Python (FastAPI) + Claude/Gemini API によるエージェントベースの対話・レビュー機能を提供する。
+Kensan アプリケーションの AI サービス。Python (FastAPI) + Gemini API によるエージェントベースの対話・レビュー機能を提供する。
 
 詳細なアーキテクチャは [ARCHITECTURE.md](ARCHITECTURE.md) を参照。
 
@@ -69,12 +69,11 @@ pytest --cov=kensan_ai  # カバレッジ付き
 
 | 変数 | デフォルト | 説明 |
 |------|-----------|------|
-| `AI_PROVIDER` | `google` | AI プロバイダー (`anthropic` or `google`) |
-| `ANTHROPIC_API_KEY` | - | Anthropic API キー |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Anthropic モデル |
+| `AI_PROVIDER` | `google` | AI プロバイダー |
 | `GOOGLE_API_KEY` | - | Google GenAI API キー |
 | `GOOGLE_MODEL` | `gemini-2.0-flash` | Google モデル |
-| `OPENAI_API_KEY` | - | OpenAI API キー（埋め込み用） |
+| `EMBEDDING_PROVIDER` | `gemini` | 埋め込みプロバイダー |
+| `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Gemini 埋め込みモデル |
 | `DB_HOST` | `localhost` | PostgreSQL ホスト |
 | `DB_PORT` | `5432` | PostgreSQL ポート |
 | `DB_USER` | `kensan` | PostgreSQL ユーザー |

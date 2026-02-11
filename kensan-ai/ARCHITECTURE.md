@@ -27,7 +27,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 - **エージェントベース** アーキテクチャ（LLMのDirect Tools / Function Calling使用）
 - **コンテキスト認識** AI（状況別プロンプト選択 + A/Bテスト）
 - **メモリシステム**（ファクト自動抽出 + プロフィール要約）
-- **マルチプロバイダ**: Anthropic (Claude) / Google (Gemini) を `AI_PROVIDER` で切替
+- **AIプロバイダ**: Google Gemini API によるチャット・レビュー・埋め込み
 
 ### 技術スタック
 
@@ -35,8 +35,8 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 |--------------|------|
 | フレームワーク | FastAPI (非同期) |
 | ランタイム | Python 3.12+ |
-| AIモデル | Claude (Anthropic SDK) / Gemini (Google GenAI SDK) |
-| 埋め込み | OpenAI text-embedding-3-small / Gemini gemini-embedding-001 (1536次元、`EMBEDDING_PROVIDER` で切替) |
+| AIモデル | Gemini (Google GenAI SDK) |
+| 埋め込み | Gemini gemini-embedding-001 (1536次元) |
 | データベース | PostgreSQL 16 + pgvector (asyncpg) |
 | ストレージ | MinIO (S3互換、読み取り専用) |
 | 外部検索 | Tavily API (web_search / web_fetch) |
@@ -50,7 +50,7 @@ kensan-ai/src/kensan_ai/
 ├── config.py                  # Pydantic BaseSettings
 ├── errors.py                  # 統一エラー階層
 ├── agents/                    # エージェント実装
-│   ├── base.py               # AgentRunner (Anthropic, プロンプトキャッシング)
+│   ├── base.py               # AgentRunner (プロンプトキャッシング)
 │   ├── gemini_runner.py       # GeminiAgentRunner
 │   └── chat.py               # チャットエージェント（動的ツール選択）※DBマイグレーション元ネタ
 ├── tools/                     # Direct Tools (39+)
@@ -74,7 +74,7 @@ kensan-ai/src/kensan_ai/
 ├── logging/                   # インタラクションログ
 ├── lakehouse/                 # Iceberg Bronze書き込み + Gold読み取り
 ├── lib/                       # 共通ユーティリティ
-│   ├── ai_provider.py        # LLMClient (Anthropic/Google 統一ファクトリ)
+│   ├── ai_provider.py        # LLMClient (Google GenAI ファクトリ)
 │   ├── llm_utils.py          # LLMレスポンスからJSON抽出
 │   └── timezone_utils.py     # タイムゾーン変換ヘルパー
 ├── batch/                     # オフラインジョブ
@@ -147,15 +147,12 @@ graph TB
     end
 
     subgraph "基盤"
-        BaseAnth["AgentRunner<br/>(Anthropic SDK)"]
         BaseGemini["GeminiAgentRunner<br/>(Google GenAI SDK)"]
         History["MessageHistory<br/>会話管理"]
         Store["ConversationStore<br/>セッション管理"]
     end
 
-    Chat --> BaseAnth
     Chat --> BaseGemini
-    BaseAnth --> History
     BaseGemini --> History
 ```
 
@@ -193,7 +190,7 @@ sequenceDiagram
 
 | 手法 | 効果 |
 |------|------|
-| Anthropic Prompt Caching | Turn 2以降の入力トークンコスト90%削減 |
+| Prompt Caching | Turn 2以降の入力トークンコスト削減 |
 | ツール結果スリム化 | ネストIDの除外、descriptionの除外、コンテンツ切り詰め(300文字) |
 | 動的ツール選択 | 全39ツール→必要な7-15ツールのみ送信 |
 
@@ -265,7 +262,7 @@ graph TB
 
     subgraph "レジストリ"
         Registry["ToolRegistry<br/>get_tool, get_all_tools<br/>execute_tool"]
-        Schema["get_tools_api_schema<br/>→ Anthropic/Gemini形式"]
+        Schema["get_tools_api_schema<br/>→ Gemini形式"]
     end
 
     subgraph "実行"
@@ -535,7 +532,7 @@ sequenceDiagram
 graph TB
     subgraph "インデックスパイプライン"
         Note["ノートコンテンツ"] --> Chunker["Chunker<br/>テキスト分割"]
-        Chunker --> Embed["EmbeddingService<br/>OpenAI or Gemini<br/>(1536次元)"]
+        Chunker --> Embed["EmbeddingService<br/>Gemini<br/>(1536次元)"]
         Embed --> Store["note_content_chunks<br/>(pgvector)"]
     end
 
@@ -559,7 +556,7 @@ graph TB
 | `hybrid_search` | 上記2つを組み合わせ | `semantic_score * 0.7 + keyword_score * 0.3` |
 | `search_notes` | notesテーブル直接検索 | `ts_rank` on title + content |
 
-**Gemini task_type**: `EMBEDDING_PROVIDER=gemini` 時、検索クエリには `RETRIEVAL_QUERY`、ドキュメントインデックスには `RETRIEVAL_DOCUMENT` を自動適用。OpenAI では無視される。
+**Gemini task_type**: 検索クエリには `RETRIEVAL_QUERY`、ドキュメントインデックスには `RETRIEVAL_DOCUMENT` を自動適用。
 
 ---
 
@@ -652,11 +649,9 @@ flowchart TB
 
 | カテゴリ | 環境変数 | 説明 |
 |---------|---------|------|
-| **AIプロバイダ** | `AI_PROVIDER` | `anthropic` or `google` (デフォルト: `google`) |
-| **Anthropic** | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude API (デフォルト: `claude-sonnet-4-20250514`) |
+| **AIプロバイダ** | `AI_PROVIDER` | `google` (デフォルト: `google`) |
 | **Google** | `GOOGLE_API_KEY`, `GOOGLE_MODEL` | Gemini API (デフォルト: `gemini-2.0-flash`) |
-| **埋め込み** | `EMBEDDING_PROVIDER` | `openai` or `gemini` (デフォルト: `openai`) |
-| | `OPENAI_API_KEY` | OpenAI text-embedding-3-small |
+| **埋め込み** | `EMBEDDING_PROVIDER` | `gemini` (デフォルト: `gemini`) |
 | | `GEMINI_EMBEDDING_MODEL` | Gemini埋め込みモデル (デフォルト: `gemini-embedding-001`) |
 | **DB** | `DATABASE_URL` or `DB_HOST/PORT/USER/PASSWORD/NAME` | PostgreSQL 16 |
 | **ストレージ** | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | MinIO (ノートコンテンツ読み取り) |

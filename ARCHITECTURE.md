@@ -54,8 +54,7 @@ graph TB
     end
 
     subgraph "外部API"
-        Claude["Claude / Gemini API<br/>チャット・レビュー・抽出<br/>(AI_PROVIDERで切替)"]
-        OpenAI["OpenAI API<br/>テキスト埋め込み"]
+        Gemini["Gemini API<br/>チャット・レビュー・抽出・埋め込み"]
     end
 
     Browser -->|"REST API<br/>JWT認証"| US
@@ -77,14 +76,13 @@ graph TB
     NS --> MinIO
     AI --> PG
     AI -->|読み取り専用| MinIO
-    AI --> Claude
-    AI --> OpenAI
+    AI --> Gemini
 ```
 
 ### システムの特徴
 
 - **マイクロサービス構成**: ドメインごとに独立したGoサービス（共有DB）
-- **AIネイティブ**: Claude/Gemini APIによるチャット、週次レビュー、ファクト自動抽出（`AI_PROVIDER`環境変数で切替）
+- **AIネイティブ**: Gemini APIによるチャット、週次レビュー、ファクト自動抽出
 - **タイムゾーン対応**: DBはUTC保存、フロントエンドでローカル変換
 - **マルチテナント**: 全テーブルに`user_id`カラムでデータ完全分離
 
@@ -111,9 +109,7 @@ graph TB
 | **AIサービス** | Python | 3.12+ | AIサービス実装 |
 | | FastAPI | 0.115+ | Webフレームワーク |
 | | asyncpg | 0.30+ | 非同期DBドライバ |
-| | Anthropic SDK | 0.40+ | Claude API |
-| | Google GenAI SDK | 1.0+ | Gemini API |
-| | OpenAI SDK | 1.50+ | 埋め込みAPI |
+| | Google GenAI SDK | 1.0+ | Gemini API (チャット・埋め込み) |
 | **インフラ** | PostgreSQL | 16 | メインDB + pgvector |
 | | MinIO | - | オブジェクトストレージ (ノートコンテンツ) |
 | | Docker Compose | - | ローカル開発 |
@@ -296,7 +292,7 @@ sequenceDiagram
     participant AI as kensan-ai
     participant Ctx as コンテキスト解決
     participant Agent as AgentRunner
-    participant LLM as Claude/Gemini API
+    participant LLM as Gemini API
     participant Tools as ツールレジストリ
     participant DB as PostgreSQL
 
