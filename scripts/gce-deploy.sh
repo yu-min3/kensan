@@ -72,7 +72,7 @@ if [ -d ~/kensan-mockup ]; then
   cd ~/kensan-mockup
   git fetch origin
   git checkout $BRANCH
-  git pull origin $BRANCH
+  git reset --hard origin/$BRANCH
 else
   git clone -b $BRANCH $REPO_URL ~/kensan-mockup
   cd ~/kensan-mockup
@@ -92,6 +92,9 @@ sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --bui
 echo '=== Waiting for services to be healthy ==='
 sleep 10
 
+echo '=== Reloading nginx (refresh upstream DNS) ==='
+sudo docker exec kensan-nginx nginx -s reload
+
 echo '=== Starting lakehouse ==='
 cp .env lakehouse/.env
 cd lakehouse
@@ -100,17 +103,17 @@ cd ..
 
 echo '=== Running demo seed ==='
 sleep 5
-# Wait for user-service to be ready
+# Wait for user-service to be ready (direct container access, bypasses nginx HTTPS redirect)
 for i in {1..30}; do
-  if curl -sf http://localhost:80/health/user-service > /dev/null 2>&1; then
+  if sudo docker exec kensan-user-service wget -qO- http://localhost:8081/health > /dev/null 2>&1; then
     break
   fi
   echo \"Waiting for user-service... (\$i/30)\"
   sleep 2
 done
 
-# Trigger demo seed
-curl -sf -X POST http://localhost:80/api/v1/demo/seed || echo 'Demo seed skipped (may already exist)'
+# Trigger demo seed (direct container access)
+sudo docker exec kensan-user-service wget -qO- --post-data='' http://localhost:8081/api/v1/demo/seed || echo 'Demo seed skipped (may already exist)'
 
 echo ''
 echo '=== Deployment complete ==='

@@ -12,6 +12,8 @@ DECLARE
     week_num INT;
     seq INT := 0;
 
+    uid UUID := 'd2222222-2222-2222-2222-222222222222';
+
     todo_aws UUID := 'd20b0001-0000-0000-0000-000000000000';
     todo_article UUID := 'd20b0002-0000-0000-0000-000000000000';
     todo_ap UUID := 'd20b0003-0000-0000-0000-000000000000';
@@ -28,15 +30,15 @@ BEGIN
             -- Week 1-4: 40%
             IF day_offset % 5 < 2 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_aws, d, d + TIME '13:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_aws, d, d + TIME '13:00' + INTERVAL '9 hours');
             END IF;
         ELSE
             -- Week 5-8: 80%
             IF day_offset % 5 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_aws, d, d + TIME '06:30' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_aws, d, d + TIME '06:30' + INTERVAL '9 hours');
             END IF;
         END IF;
 
@@ -45,15 +47,15 @@ BEGIN
             -- 50%
             IF day_offset % 2 = 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_article, d, d + TIME '03:30' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_article, d, d + TIME '03:30' + INTERVAL '9 hours');
             END IF;
         ELSE
             -- 75%
             IF day_offset % 4 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_article, d, d + TIME '03:30' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_article, d, d + TIME '03:30' + INTERVAL '9 hours');
             END IF;
         END IF;
 
@@ -62,15 +64,15 @@ BEGIN
             -- 30%
             IF day_offset % 10 < 3 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_ap, d, d + TIME '13:30' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_ap, d, d + TIME '13:30' + INTERVAL '9 hours');
             END IF;
         ELSE
             -- 65%
             IF day_offset % 3 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_ap, d, d + TIME '06:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_ap, d, d + TIME '06:00' + INTERVAL '9 hours');
             END IF;
         END IF;
 

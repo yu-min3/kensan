@@ -12,6 +12,9 @@ DECLARE
     week_num INT;
     seq INT := 0;
 
+    -- User ID
+    uid UUID := 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
     -- Todo IDs
     todo_news UUID := 'dd0b0001-0000-0000-0000-000000000000';
     todo_eng UUID := 'dd0b0002-0000-0000-0000-000000000000';
@@ -29,8 +32,8 @@ BEGIN
         -- ============================================================
         IF day_offset % 11 <> 0 THEN  -- skip ~9%
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_news, d, d + TIME '03:30' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_news, d, d + TIME '03:30' + INTERVAL '9 hours');
         END IF;
 
         -- ============================================================

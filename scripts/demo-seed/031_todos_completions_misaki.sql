@@ -12,6 +12,8 @@ DECLARE
     week_num INT;
     seq INT := 0;
 
+    uid UUID := 'd1111111-1111-1111-1111-111111111111';
+
     todo_read UUID := 'd10b0001-0000-0000-0000-000000000000';
     todo_ts UUID := 'd10b0002-0000-0000-0000-000000000000';
     todo_stretch UUID := 'd10b0003-0000-0000-0000-000000000000';
@@ -26,8 +28,8 @@ BEGIN
         -- Zenn/Qiita記事読む (daily, 85%)
         IF day_offset % 7 <> 0 THEN
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_read, d, d + TIME '03:30' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_read, d, d + TIME '03:30' + INTERVAL '9 hours');
         END IF;
 
         -- TypeScript型パズル (daily, 70%)
@@ -49,15 +51,15 @@ BEGIN
         -- ストレッチ (daily, 60%)
         IF day_offset % 5 < 3 THEN
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_stretch, d, d + TIME '13:00' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_stretch, d, d + TIME '13:00' + INTERVAL '9 hours');
         END IF;
 
         -- ポートフォリオ更新 (Saturday, 50%)
         IF dow = 6 AND day_offset % 4 < 2 THEN
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_portfolio, d, d + TIME '04:00' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_portfolio, d, d + TIME '04:00' + INTERVAL '9 hours');
         END IF;
 
     END LOOP;
