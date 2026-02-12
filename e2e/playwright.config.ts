@@ -28,7 +28,7 @@ export default defineConfig({
     command: `npm run dev -- --port ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
     reuseExistingServer: !process.env.CI,
-    cwd: path.join(import.meta.dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..', 'frontend'),
     timeout: 30_000,
   },
   projects: [

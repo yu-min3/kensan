@@ -352,7 +352,7 @@ flowchart TB
     Input --> Convert --> Store --> Display --> Output
 ```
 
-DBはUTC保存、フロントエンドでローカル変換する設計。変換ユーティリティは `src/lib/timezone.ts` に集約。
+DBはUTC保存、フロントエンドでローカル変換する設計。変換ユーティリティは `frontend/src/lib/timezone.ts` に集約。
 
 ---
 
@@ -506,7 +506,7 @@ graph TB
 
 15のZustandストアが各ドメインの状態を管理。`createCrudStore` ファクトリで標準CRUDパターンを統一化。認証(useAuthStore)・設定(useSettingsStore)のみlocalStorage永続化。
 
-> 詳細: [src/ARCHITECTURE.md](src/ARCHITECTURE.md)
+> 詳細: [frontend/src/ARCHITECTURE.md](frontend/src/ARCHITECTURE.md)
 
 ---
 
@@ -713,7 +713,7 @@ Traces↔Logs が双方向リンクされ、トレースIDをキーにドリル�
 | ドキュメント | 内容 |
 |------------|------|
 | [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md) | Goマイクロサービス: 共通パッケージ、レイヤー設計、DBスキーマ、API仕様 |
-| [src/ARCHITECTURE.md](src/ARCHITECTURE.md) | フロントエンド: コンポーネント階層、Zustandストア、APIクライアント、タイムゾーン変換 |
+| [frontend/src/ARCHITECTURE.md](frontend/src/ARCHITECTURE.md) | フロントエンド: コンポーネント階層、Zustandストア、APIクライアント、タイムゾーン変換 |
 | [kensan-ai/ARCHITECTURE.md](kensan-ai/ARCHITECTURE.md) | AIサービス: Direct Tools、エージェント、コンテキスト管理、メモリシステム |
 | [observability/ARCHITECTURE.md](observability/ARCHITECTURE.md) | Observability: OTel, Grafana, Tempo, Loki, Prometheus |
 

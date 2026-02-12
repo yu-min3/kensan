@@ -108,6 +108,7 @@ Use the demo account:
 
 ```bash
 # Frontend
+cd frontend
 npm install
 npm run dev
 
@@ -159,7 +160,7 @@ This structure is intentionally designed for **AI-assisted development** — Cla
 For detailed architecture documentation, see:
 - [Overall Architecture](ARCHITECTURE.md)
 - [Backend Architecture](backend/ARCHITECTURE.md)
-- [Frontend Architecture](src/ARCHITECTURE.md)
+- [Frontend Architecture](frontend/src/ARCHITECTURE.md)
 - [AI Service Architecture](kensan-ai/ARCHITECTURE.md)
 
 ---
@@ -199,7 +200,7 @@ Kensan is built to be developed **with** AI coding agents. The project includes 
 
 The `workflow.md` rule enforces two automatic behaviors that Claude Code follows **without being asked**:
 
-1. **Auto-testing**: Any Go change triggers `make test`; any frontend change triggers `npm run build`. Failures are fixed before reporting completion.
+1. **Auto-testing**: Any Go change triggers `make test`; any frontend change triggers `cd frontend && npm run build`. Failures are fixed before reporting completion.
 2. **Auto-documentation**: Structural changes (new services, endpoints, pages, schema) automatically update the relevant `ARCHITECTURE.md`.
 
 This means the codebase stays consistent — tests pass, docs are current, and conventions are followed — even during rapid iteration.
@@ -210,7 +211,7 @@ This means the codebase stays consistent — tests pass, docs are current, and c
 
 ```
 kensan-mockup/
-├── src/                  # React/TypeScript frontend
+├── frontend/             # React/TypeScript frontend
 ├── backend/              # Go microservices
 │   ├── services/         # Individual service implementations
 │   ├── shared/           # Shared middleware, auth, errors

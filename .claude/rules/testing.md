@@ -32,12 +32,12 @@ func TestServiceCreate(t *testing.T) {
 
 ## Frontend (TypeScript)
 
-- `npm run build` で TypeScript 型チェック（テストスイートの代替）
-- MSW ハンドラ: `src/mocks/handlers/` でモック API
+- `cd frontend && npm run build` で TypeScript 型チェック（テストスイートの代替）
+- MSW ハンドラ: `frontend/src/mocks/handlers/` でモック API
 
 ## Test Commands
 
 ```bash
-cd backend && make test    # Go unit tests
-npm run build              # Frontend type check + build
+cd backend && make test              # Go unit tests
+cd frontend && npm run build         # Frontend type check + build
 ```

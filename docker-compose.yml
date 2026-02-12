@@ -144,7 +144,7 @@ services:
   # =============================================================================
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         - VITE_USER_SERVICE_URL=http://localhost:8081

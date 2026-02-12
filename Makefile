@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore \
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore storage-backup storage-restore \
        lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down \
        prod-up prod-down prod-logs prod-lakehouse deploy
 
@@ -101,7 +101,7 @@ dev:
 	@echo "Starting frontend with MSW enabled..."
 	@echo "All API requests will be mocked. No backend required."
 	@echo ""
-	npm run dev:mock
+	cd frontend && npm run dev:mock
 
 ## Start backend services only (for local frontend development)
 dev-backend: db backend
@@ -198,19 +198,19 @@ health:
 
 ## Install Playwright browsers (chromium)
 e2e-install:
-	npx playwright install chromium
+	cd frontend && npx playwright install chromium
 
 ## Run E2E tests
 e2e:
-	npx playwright test --config=e2e/playwright.config.ts
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts
 
 ## Run E2E tests in UI mode
 e2e-ui:
-	npx playwright test --config=e2e/playwright.config.ts --ui
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts --ui
 
 ## Run E2E tests headed (visible browser)
 e2e-headed:
-	npx playwright test --config=e2e/playwright.config.ts --headed
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts --headed
 
 # =============================================================================
 # Demo Data

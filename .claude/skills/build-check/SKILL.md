@@ -2,7 +2,7 @@
 name: build-check
 description: Run both frontend and backend builds to verify everything compiles
 disable-model-invocation: true
-allowed-tools: Bash(npm *), Bash(cd backend *), Bash(make *), Read, Edit, Grep, Glob
+allowed-tools: Bash(cd frontend *), Bash(cd backend *), Bash(make *), Read, Edit, Grep, Glob
 ---
 
 # Full Build Check
@@ -13,7 +13,7 @@ Run frontend and backend builds to verify compilation.
 
 1. **Frontend build**:
    ```bash
-   npm run build
+   cd frontend && npm run build
    ```
    This runs TypeScript type checking + Vite production build.
 

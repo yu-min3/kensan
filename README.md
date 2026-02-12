@@ -110,6 +110,7 @@ Docker Compose で以下が起動します：
 
 ```bash
 # フロントエンド
+cd frontend
 npm install
 npm run dev
 
@@ -165,7 +166,7 @@ Handler (HTTP) → Service (ビジネスロジック) → Repository (データ�
 詳細なアーキテクチャドキュメント：
 - [全体アーキテクチャ](ARCHITECTURE.md)
 - [バックエンド](backend/ARCHITECTURE.md)
-- [フロントエンド](src/ARCHITECTURE.md)
+- [フロントエンド](frontend/src/ARCHITECTURE.md)
 - [AI サービス](kensan-ai/ARCHITECTURE.md)
 
 ---
@@ -205,7 +206,7 @@ Kensan は **AI コーディングエージェントと共に開発する**こ�
 
 `workflow.md` ルールにより、Claude Code は**指示がなくても**以下を自動実行します：
 
-1. **テスト自動実行** - Go コードの変更で `make test`、フロントエンドの変更で `npm run build` を実行。失敗時は修正してから完了を報告
+1. **テスト自動実行** - Go コードの変更で `make test`、フロントエンドの変更で `cd frontend && npm run build` を実行。失敗時は修正してから完了を報告
 2. **ドキュメント自動更新** - 構造的な変更（新しいサービス、エンドポイント、ページ、スキーマ）があれば、該当する `ARCHITECTURE.md` を自動更新
 
 高速なイテレーション中でも、テストは通り、ドキュメントは最新で、規約は遵守された状態が維持されます。
@@ -216,7 +217,7 @@ Kensan は **AI コーディングエージェントと共に開発する**こ�
 
 ```
 kensan-mockup/
-├── src/                  # React/TypeScript フロントエンド
+├── frontend/             # React/TypeScript フロントエンド
 ├── backend/              # Go マイクロサービス
 │   ├── services/         # 各サービスの実装
 │   ├── shared/           # 共有ミドルウェア、認証、エラー処理
