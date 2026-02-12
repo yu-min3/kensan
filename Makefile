@@ -1,5 +1,6 @@
 .PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore \
-       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down
+       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down \
+       prod-up prod-down prod-logs prod-lakehouse deploy
 
 # Default target
 .DEFAULT_GOAL := help
@@ -106,6 +107,38 @@ dev:
 dev-backend: db backend
 	@echo ""
 	@echo "Backend services started. Now run 'npm run dev' for frontend."
+
+# =============================================================================
+# Production (GCE)
+# =============================================================================
+# ローカル (make up) は docker-compose.yml のみ → 各ポートが直接公開される
+# 本番 (make prod-up) は docker-compose.prod.yml を overlay → nginx :443 経由、内部ポート非公開
+
+## Start production stack (nginx + HTTPS, internal ports hidden)
+prod-up:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+	@echo ""
+	@echo "🚀 Kensan (production) is starting..."
+	@echo "   App: https://kensan.yu-min3.com"
+	@echo "   MinIO S3: port 9000"
+	@echo ""
+	@echo "All other ports are internal only (nginx proxy)."
+
+## Stop production stack
+prod-down:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+## View production logs
+prod-logs:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+## Start production lakehouse (ports hidden)
+prod-lakehouse:
+	$(MAKE) -C lakehouse prod-up
+
+## Deploy to GCE (requires JWT_SECRET and GOOGLE_API_KEY)
+deploy:
+	@bash scripts/gce-deploy.sh
 
 # =============================================================================
 # Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
@@ -271,6 +304,13 @@ help:
 	@echo "  lakehouse-down    Stop all lakehouse services"
 	@echo "  openmetadata      OpenMetadata + Airflow"
 	@echo "  openmetadata-down Stop OpenMetadata"
+	@echo ""
+	@echo "Production (GCE):"
+	@echo "  prod-up        Start with nginx reverse proxy (HTTPS, ports hidden)"
+	@echo "  prod-down      Stop production stack"
+	@echo "  prod-logs      View production logs"
+	@echo "  prod-lakehouse Start lakehouse (prod, ports hidden)"
+	@echo "  deploy         Deploy to GCE via SSH"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

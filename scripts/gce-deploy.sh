@@ -87,7 +87,7 @@ GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.0-flash}
 ENVEOF
 
 echo '=== Starting main application ==='
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 echo '=== Waiting for services to be healthy ==='
 sleep 10
@@ -95,7 +95,7 @@ sleep 10
 echo '=== Starting lakehouse ==='
 cp .env lakehouse/.env
 cd lakehouse
-docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
+sudo docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
 cd ..
 
 echo '=== Running demo seed ==='
@@ -114,7 +114,7 @@ curl -sf -X POST http://localhost:80/api/v1/demo/seed || echo 'Demo seed skipped
 
 echo ''
 echo '=== Deployment complete ==='
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 "
 
 # === Step 5: Summary ===

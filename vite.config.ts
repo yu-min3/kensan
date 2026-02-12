@@ -34,8 +34,10 @@ export default defineConfig({
   },
   server: {
     proxy: observabilityProxy,
+    allowedHosts: true,
   },
   preview: {
     proxy: observabilityProxy,
+    allowedHosts: true,
   },
 })

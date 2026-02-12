@@ -128,17 +128,21 @@ uvicorn kensan_ai.main:app --reload --port 8089
 
 **React SPA + Go マイクロサービス + Python AI サービス** の構成です。
 
+ローカル開発では各サービスのポートに直接アクセスします。本番 (GCE) では nginx リバースプロキシが HTTPS で統一し、内部ポートは非公開です。
+
 ```
-Browser (React SPA)
-  ├── user-service     (Go, :8081) - 認証, 設定
-  ├── task-service     (Go, :8082) - 目標, タスク
-  ├── timeblock-service(Go, :8084) - 時間計画
-  ├── analytics-service(Go, :8088) - 分析
-  ├── memo-service     (Go, :8090) - メモ
-  ├── note-service     (Go, :8091) - ノート + MinIO
-  └── kensan-ai        (Py, :8089) - AIチャット (ADK + Gemini 2.0 Flash)
-                            │
-                      PostgreSQL 16 + pgvector
+ローカル (make up)                    本番 GCE (make prod-up)
+─────────────────                     ──────────────────────
+Browser                               Browser
+  ├── :5173  frontend                   └── :443 nginx (HTTPS)
+  ├── :8081  user-service                     ├── /          → frontend
+  ├── :8082  task-service                     ├── /api/v1/*  → Go services ×6
+  ├── :8084  timeblock-service                └── /api/v1/agent/ → kensan-ai (SSE)
+  ├── :8088  analytics-service
+  ├── :8089  kensan-ai                 内部のみ: PostgreSQL, MinIO, Grafana,
+  ├── :8090  memo-service                      Polaris, Dagster, OTel stack
+  ├── :8091  note-service
+  └── :3000  Grafana
 ```
 
 ### クリーンアーキテクチャ & マイクロサービス
@@ -230,7 +234,12 @@ kensan-mockup/
 │   └── skills/           # 6つのスラッシュコマンド
 ├── e2e/                  # Playwright E2E テスト
 ├── k8s/                  # Kubernetes マニフェスト
+├── deploy/               # 本番デプロイ設定
+│   ├── nginx.conf        # nginx リバースプロキシ (HTTPS)
+│   └── .env.prod.example # 本番環境変数テンプレート
+├── scripts/gce-deploy.sh # GCE デプロイスクリプト
 ├── docker-compose.yml    # ローカル開発オーケストレーション
+├── docker-compose.prod.yml # 本番 overlay (nginx, ポート非公開, CORS)
 └── ARCHITECTURE.md       # 全体アーキテクチャドキュメント
 ```
 

@@ -24,6 +24,8 @@ make up              # Start all services
 make down            # Stop all services
 make logs            # View logs
 make dev-backend     # Backend only (for local frontend dev)
+make prod-up         # Production: nginx HTTPS proxy, internal ports hidden
+make deploy          # Deploy to GCE via SSH
 ```
 
 ---
@@ -89,7 +91,6 @@ make dev-backend     # Backend only (for local frontend dev)
 
 | Document | Location |
 |----------|----------|
-| Project Proposal | `docs/spec/kensan_proposal_v0.5.md` |
+| Project Proposal | `docs/spec/kensan_proposal_v1.0.md` |
 | API Specification | `docs/spec/api_specification.md` |
-| Development Status | `docs/status/DEVELOPMENT_STATUS.md` |
 | ADRs | `docs/adr/` |
