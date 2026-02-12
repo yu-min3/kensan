@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore storage-backup storage-restore \
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean backup restore db-backup db-restore storage-backup storage-restore \
        lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down \
        prod-up prod-down prod-logs prod-lakehouse deploy
 
@@ -233,6 +233,12 @@ demo-clean:
 BACKUP_DIR := backups
 BACKUP_FILE := $(BACKUP_DIR)/kensan_$(shell date +%Y%m%d_%H%M%S).sql
 
+## Backup database + MinIO storage
+backup: db-backup storage-backup
+
+## Restore database + MinIO storage
+restore: db-restore storage-restore
+
 ## Backup database to backups/ directory
 db-backup:
 	@mkdir -p $(BACKUP_DIR)
@@ -251,6 +257,29 @@ ifndef FILE
 endif
 	@echo "Restoring from $(FILE)..."
 	@docker exec -i kensan-postgres psql -U kensan -d kensan < $(FILE)
+	@echo "Restore complete."
+
+STORAGE_BACKUP_DIR := $(BACKUP_DIR)/minio
+
+## Backup MinIO storage to backups/minio/
+storage-backup:
+	@mkdir -p $(STORAGE_BACKUP_DIR)
+	@echo "Backing up MinIO buckets..."
+	@docker exec kensan-minio mc alias set local http://localhost:9000 kensan kensan-minio 2>/dev/null
+	@docker exec kensan-minio mkdir -p /tmp/minio-backup/kensan-notes
+	@docker exec kensan-minio mc mirror --overwrite local/kensan-notes /tmp/minio-backup/kensan-notes
+	@docker cp kensan-minio:/tmp/minio-backup/kensan-notes $(STORAGE_BACKUP_DIR)/
+	@docker exec kensan-minio rm -rf /tmp/minio-backup
+	@echo "Saved to $(STORAGE_BACKUP_DIR)/kensan-notes ($$(du -sh $(STORAGE_BACKUP_DIR)/kensan-notes | cut -f1))"
+
+## Restore MinIO storage from backup
+storage-restore:
+	@if [ ! -d "$(STORAGE_BACKUP_DIR)/kensan-notes" ]; then echo "No backup found at $(STORAGE_BACKUP_DIR)/kensan-notes"; exit 1; fi
+	@echo "Restoring MinIO buckets..."
+	@docker cp $(STORAGE_BACKUP_DIR)/kensan-notes kensan-minio:/tmp/minio-restore/kensan-notes
+	@docker exec kensan-minio mc alias set local http://localhost:9000 kensan kensan-minio 2>/dev/null
+	@docker exec kensan-minio mc mirror --overwrite /tmp/minio-restore/kensan-notes local/kensan-notes
+	@docker exec kensan-minio rm -rf /tmp/minio-restore
 	@echo "Restore complete."
 
 # =============================================================================
@@ -292,9 +321,13 @@ help:
 	@echo "  demo-seed   Apply demo seed data (Tanaka Shota persona)"
 	@echo "  demo-clean  Remove demo seed data only"
 	@echo ""
-	@echo "Database:"
-	@echo "  db-backup              Backup database to backups/"
-	@echo "  db-restore FILE=x.sql  Restore database from backup"
+	@echo "Backup:"
+	@echo "  backup                 Backup database + MinIO storage"
+	@echo "  restore FILE=x.sql    Restore database + MinIO storage"
+	@echo "  db-backup              Backup database only"
+	@echo "  db-restore FILE=x.sql  Restore database only"
+	@echo "  storage-backup         Backup MinIO buckets to backups/minio/"
+	@echo "  storage-restore        Restore MinIO buckets from backup"
 	@echo ""
 	@echo "Lakehouse:"
 	@echo "  lakehouse         Base stack (Nessie + Dagster)"
