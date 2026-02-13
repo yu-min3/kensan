@@ -41,18 +41,18 @@ Read the target service's existing code:
 
 ## Frontend Steps
 
-6. **API Service** (`src/api/services/`):
+6. **API Service** (`frontend/src/api/services/`):
    - Add method to the corresponding API service
    - Use `httpClient.get/post/patch/delete()`
 
-7. **Store** (`src/stores/`):
+7. **Store** (`frontend/src/stores/`):
    - Add action to Zustand store if state management needed
 
-8. **MSW Handler** (`src/mocks/handlers/`):
+8. **MSW Handler** (`frontend/src/mocks/handlers/`):
    - Add mock handler for development
 
 ## Verification
 
 - Run `cd backend && make test`
-- Run `npm run build`
+- Run `cd frontend && npm run build`
 - Update `backend/ARCHITECTURE.md` if new endpoint pattern

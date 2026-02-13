@@ -1,5 +1,6 @@
-.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean db-backup db-restore \
-       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down
+.PHONY: up down build logs ps clean frontend backend db storage help dev dev-backend e2e-install e2e e2e-ui e2e-headed demo-seed demo-clean backup restore db-backup db-restore storage-backup storage-restore \
+       lakehouse lakehouse-dremio lakehouse-trino lakehouse-all lakehouse-down openmetadata openmetadata-down \
+       prod-up prod-down prod-logs prod-lakehouse deploy
 
 # Default target
 .DEFAULT_GOAL := help
@@ -100,7 +101,7 @@ dev:
 	@echo "Starting frontend with MSW enabled..."
 	@echo "All API requests will be mocked. No backend required."
 	@echo ""
-	npm run dev:mock
+	cd frontend && npm run dev:mock
 
 ## Start backend services only (for local frontend development)
 dev-backend: db backend
@@ -108,12 +109,64 @@ dev-backend: db backend
 	@echo "Backend services started. Now run 'npm run dev' for frontend."
 
 # =============================================================================
+# Production (GCE)
+# =============================================================================
+# ローカル (make up) は docker-compose.yml のみ → 各ポートが直接公開される
+# 本番 (make prod-up) は docker-compose.prod.yml を overlay → nginx :443 経由、内部ポート非公開
+
+## Start production stack (nginx + HTTPS, internal ports hidden)
+prod-up:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+	@echo ""
+	@echo "🚀 Kensan (production) is starting..."
+	@echo "   App: https://kensan.yu-min3.com"
+	@echo "   MinIO S3: port 9000"
+	@echo ""
+	@echo "All other ports are internal only (nginx proxy)."
+
+## Stop production stack
+prod-down:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+## View production logs
+prod-logs:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+## Start production lakehouse (ports hidden)
+prod-lakehouse:
+	$(MAKE) -C lakehouse prod-up
+
+## Deploy to GCE (requires JWT_SECRET and GOOGLE_API_KEY)
+deploy:
+	@bash scripts/gce-deploy.sh
+
+# =============================================================================
 # Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
 # =============================================================================
 
-## Start lakehouse base (Nessie + Dagster)
+## Start lakehouse (Polaris + Dagster), init catalog, restart ai-service
 lakehouse:
 	$(MAKE) -C lakehouse up
+	@echo ""
+	@echo "Waiting for Polaris to be healthy..."
+	@for i in $$(seq 1 20); do \
+		curl -sf http://localhost:8182/q/health > /dev/null 2>&1 && break; \
+		sleep 3; \
+	done
+	@curl -sf http://localhost:8182/q/health > /dev/null 2>&1 || { echo "ERROR: Polaris did not become healthy within 60s"; exit 1; }
+	@echo "Polaris is healthy."
+	@echo ""
+	@echo "Initializing Iceberg catalog..."
+	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
+	@echo ""
+	@echo "Restarting ai-service to connect to Polaris..."
+	@docker compose up -d --force-recreate ai-service
+	@echo ""
+	@echo "Lakehouse is ready!"
+	@echo "  Polaris API:      http://localhost:8181"
+	@echo "  Dagster UI:       http://localhost:3070"
+	@echo ""
+	@echo "AI Explorer data will appear after Dagster pipelines run."
 
 ## Start lakehouse + Dremio
 lakehouse-dremio:
@@ -165,19 +218,19 @@ health:
 
 ## Install Playwright browsers (chromium)
 e2e-install:
-	npx playwright install chromium
+	cd frontend && npx playwright install chromium
 
 ## Run E2E tests
 e2e:
-	npx playwright test --config=e2e/playwright.config.ts
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts
 
 ## Run E2E tests in UI mode
 e2e-ui:
-	npx playwright test --config=e2e/playwright.config.ts --ui
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts --ui
 
 ## Run E2E tests headed (visible browser)
 e2e-headed:
-	npx playwright test --config=e2e/playwright.config.ts --headed
+	cd frontend && npx playwright test --config=../e2e/playwright.config.ts --headed
 
 # =============================================================================
 # Demo Data
@@ -185,12 +238,12 @@ e2e-headed:
 
 ## Apply demo seed data (Tanaka Shota persona)
 demo-seed:
-	@bash scripts/demo-seed/apply.sh
+	@bash backend/migrations-v2/apply.sh tanaka_shota
 
 ## Remove demo seed data only
 demo-clean:
 	@echo "Removing demo user data..."
-	@docker exec -i kensan-postgres psql -U kensan -d kensan < scripts/demo-seed/000_cleanup.sql
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < backend/migrations-v2/seeds/tanaka_shota/000_cleanup.sql
 	@echo "Demo data removed."
 
 # =============================================================================
@@ -199,6 +252,12 @@ demo-clean:
 
 BACKUP_DIR := backups
 BACKUP_FILE := $(BACKUP_DIR)/kensan_$(shell date +%Y%m%d_%H%M%S).sql
+
+## Backup database + MinIO storage
+backup: db-backup storage-backup
+
+## Restore database + MinIO storage
+restore: db-restore storage-restore
 
 ## Backup database to backups/ directory
 db-backup:
@@ -218,6 +277,29 @@ ifndef FILE
 endif
 	@echo "Restoring from $(FILE)..."
 	@docker exec -i kensan-postgres psql -U kensan -d kensan < $(FILE)
+	@echo "Restore complete."
+
+STORAGE_BACKUP_DIR := $(BACKUP_DIR)/minio
+
+## Backup MinIO storage to backups/minio/
+storage-backup:
+	@mkdir -p $(STORAGE_BACKUP_DIR)
+	@echo "Backing up MinIO buckets..."
+	@docker exec kensan-minio mc alias set local http://localhost:9000 kensan kensan-minio 2>/dev/null
+	@docker exec kensan-minio mkdir -p /tmp/minio-backup/kensan-notes
+	@docker exec kensan-minio mc mirror --overwrite local/kensan-notes /tmp/minio-backup/kensan-notes
+	@docker cp kensan-minio:/tmp/minio-backup/kensan-notes $(STORAGE_BACKUP_DIR)/
+	@docker exec kensan-minio rm -rf /tmp/minio-backup
+	@echo "Saved to $(STORAGE_BACKUP_DIR)/kensan-notes ($$(du -sh $(STORAGE_BACKUP_DIR)/kensan-notes | cut -f1))"
+
+## Restore MinIO storage from backup
+storage-restore:
+	@if [ ! -d "$(STORAGE_BACKUP_DIR)/kensan-notes" ]; then echo "No backup found at $(STORAGE_BACKUP_DIR)/kensan-notes"; exit 1; fi
+	@echo "Restoring MinIO buckets..."
+	@docker cp $(STORAGE_BACKUP_DIR)/kensan-notes kensan-minio:/tmp/minio-restore/kensan-notes
+	@docker exec kensan-minio mc alias set local http://localhost:9000 kensan kensan-minio 2>/dev/null
+	@docker exec kensan-minio mc mirror --overwrite /tmp/minio-restore/kensan-notes local/kensan-notes
+	@docker exec kensan-minio rm -rf /tmp/minio-restore
 	@echo "Restore complete."
 
 # =============================================================================
@@ -259,18 +341,29 @@ help:
 	@echo "  demo-seed   Apply demo seed data (Tanaka Shota persona)"
 	@echo "  demo-clean  Remove demo seed data only"
 	@echo ""
-	@echo "Database:"
-	@echo "  db-backup              Backup database to backups/"
-	@echo "  db-restore FILE=x.sql  Restore database from backup"
+	@echo "Backup:"
+	@echo "  backup                 Backup database + MinIO storage"
+	@echo "  restore FILE=x.sql    Restore database + MinIO storage"
+	@echo "  db-backup              Backup database only"
+	@echo "  db-restore FILE=x.sql  Restore database only"
+	@echo "  storage-backup         Backup MinIO buckets to backups/minio/"
+	@echo "  storage-restore        Restore MinIO buckets from backup"
 	@echo ""
 	@echo "Lakehouse:"
-	@echo "  lakehouse         Base stack (Nessie + Dagster)"
+	@echo "  lakehouse         Polaris + Dagster + catalog init + ai-service restart"
 	@echo "  lakehouse-dremio  Base + Dremio"
 	@echo "  lakehouse-trino   Base + Trino + Superset"
 	@echo "  lakehouse-all     Base + all query engines"
 	@echo "  lakehouse-down    Stop all lakehouse services"
 	@echo "  openmetadata      OpenMetadata + Airflow"
 	@echo "  openmetadata-down Stop OpenMetadata"
+	@echo ""
+	@echo "Production (GCE):"
+	@echo "  prod-up        Start with nginx reverse proxy (HTTPS, ports hidden)"
+	@echo "  prod-down      Stop production stack"
+	@echo "  prod-logs      View production logs"
+	@echo "  prod-lakehouse Start lakehouse (prod, ports hidden)"
+	@echo "  deploy         Deploy to GCE via SSH"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"

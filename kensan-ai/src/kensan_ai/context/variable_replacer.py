@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from kensan_ai.db.connection import get_connection
 from kensan_ai.db.queries.patterns import get_user_patterns as db_get_user_patterns
 from kensan_ai.db.queries.user_settings import get_user_timezone
-from kensan_ai.lib.timezone_utils import DEFAULT_TZ as _DEFAULT_TZ, local_date_to_utc_range
+from kensan_ai.lib.timezone_utils import DEFAULT_TZ as _DEFAULT_TZ, local_date_to_utc_range, local_today
 
 
 class VariableReplacer:
@@ -226,7 +226,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_today_schedule(user_id: UUID) -> str:
         """Get today's time blocks."""
-        today = date.today()
+        today = local_today()
         start_utc, end_utc = local_date_to_utc_range(today)
 
         async with get_connection() as conn:
@@ -260,7 +260,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_tomorrow_schedule(user_id: UUID) -> str:
         """Get tomorrow's time blocks."""
-        tomorrow = date.today() + timedelta(days=1)
+        tomorrow = local_today() + timedelta(days=1)
         start_utc, end_utc = local_date_to_utc_range(tomorrow)
 
         async with get_connection() as conn:
@@ -297,7 +297,7 @@ class VariableReplacer:
 
         Non-routine tasks only. Due dates shown as "あとN日" for clarity.
         """
-        today = date.today()
+        today = local_today()
         async with get_connection() as conn:
             rows = await conn.fetch(
                 """
@@ -350,7 +350,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_today_entries(user_id: UUID) -> str:
         """Get today's actual time entries."""
-        today = date.today()
+        today = local_today()
         start_utc, end_utc = local_date_to_utc_range(today)
 
         async with get_connection() as conn:
@@ -384,7 +384,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_weekly_summary(user_id: UUID) -> str:
         """Get this week's analytics summary (Mon-Sun)."""
-        today = date.today()
+        today = local_today()
         # Monday of this week
         week_start = today - timedelta(days=today.weekday())
         # Sunday of this week
@@ -811,7 +811,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_yesterday_entries(user_id: UUID) -> str:
         """Get yesterday's actual time entries."""
-        yesterday = date.today() - timedelta(days=1)
+        yesterday = local_today() - timedelta(days=1)
         start_utc, end_utc = local_date_to_utc_range(yesterday)
 
         async with get_connection() as conn:
@@ -851,7 +851,7 @@ class VariableReplacer:
     @staticmethod
     async def _get_recent_learning_notes(user_id: UUID, days: int = 3) -> str:
         """Get recent learning/diary notes from the last N days."""
-        cutoff = date.today() - timedelta(days=days)
+        cutoff = local_today() - timedelta(days=days)
         start_utc, _ = local_date_to_utc_range(cutoff)
 
         async with get_connection() as conn:

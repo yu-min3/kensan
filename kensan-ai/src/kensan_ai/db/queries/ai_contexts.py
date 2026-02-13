@@ -1,5 +1,6 @@
 """AI context and version queries."""
 
+import json
 import logging
 from typing import Any
 from uuid import UUID
@@ -31,11 +32,11 @@ async def ensure_user_contexts(user_id: UUID) -> None:
             INSERT INTO ai_contexts (
                 name, situation, version, is_active, is_default,
                 system_prompt, allowed_tools, max_turns, temperature,
-                description, user_id, source_template_id
+                description, user_id, source_template_id, active_version
             )
             SELECT name, situation, version, is_active, is_default,
                    system_prompt, allowed_tools, max_turns, temperature,
-                   description, $1, id
+                   description, $1, id, 1
             FROM ai_contexts
             WHERE user_id IS NULL AND is_default = true AND is_active = true
             ON CONFLICT DO NOTHING
@@ -50,9 +51,10 @@ async def ensure_user_contexts(user_id: UUID) -> None:
                 """
                 INSERT INTO ai_context_versions (
                     context_id, version_number, system_prompt,
-                    allowed_tools, max_turns, temperature, changelog
+                    allowed_tools, max_turns, temperature, changelog,
+                    source, candidate_status
                 )
-                VALUES ($1, 1, $2, $3, $4, $5, 'テンプレートからコピー')
+                VALUES ($1, 1, $2, $3, $4, $5, 'テンプレートからコピー', 'manual', NULL)
                 """,
                 row["id"],
                 row["system_prompt"],
@@ -100,21 +102,15 @@ async def list_contexts(
             f"""
             SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
                    c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
-                   c.description, c.created_at, c.updated_at,
+                   c.description, c.created_at, c.updated_at, c.active_version,
                    (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number,
-                   pe.id AS pending_experiment_id,
-                   pe.status AS pending_experiment_status,
-                   pe.win_rate AS pending_experiment_win_rate,
-                   pe.created_at AS pending_experiment_created_at
+                   pc.pending_candidate_count
             FROM ai_contexts c
             LEFT JOIN LATERAL (
-                SELECT id, status, win_rate, created_at
-                FROM prompt_experiments
-                WHERE control_context_id = c.id
-                  AND status IN ('pending_review', 'in_challenge')
-                ORDER BY created_at DESC
-                LIMIT 1
-            ) pe ON true
+                SELECT COUNT(*) AS pending_candidate_count
+                FROM ai_context_versions
+                WHERE context_id = c.id AND candidate_status = 'pending'
+            ) pc ON true
             WHERE {where_clause}
             ORDER BY c.situation, c.is_default DESC, c.created_at DESC
             """,
@@ -131,7 +127,7 @@ async def get_context(context_id: UUID) -> dict[str, Any] | None:
             """
             SELECT c.id, c.name, c.situation, c.version, c.is_active, c.is_default,
                    c.system_prompt, c.allowed_tools, c.max_turns, c.temperature,
-                   c.description, c.created_at, c.updated_at,
+                   c.description, c.created_at, c.updated_at, c.active_version,
                    (SELECT MAX(version_number) FROM ai_context_versions WHERE context_id = c.id) AS current_version_number
             FROM ai_contexts c
             WHERE c.id = $1
@@ -180,8 +176,11 @@ async def update_context(
         # Save current state as new version (before applying changes)
         await conn.execute(
             """
-            INSERT INTO ai_context_versions (context_id, version_number, system_prompt, allowed_tools, max_turns, temperature, changelog)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO ai_context_versions (
+                context_id, version_number, system_prompt, allowed_tools,
+                max_turns, temperature, changelog, source, candidate_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', NULL)
             """,
             context_id,
             next_version,
@@ -193,7 +192,7 @@ async def update_context(
         )
 
         # Build UPDATE query dynamically
-        updates = []
+        updates = [f"active_version = {next_version}"]
         params: list[Any] = []
         param_idx = 1
 
@@ -217,13 +216,12 @@ async def update_context(
             params.append(temperature)
             param_idx += 1
 
-        if updates:
-            params.append(context_id)
-            set_clause = ", ".join(updates)
-            await conn.execute(
-                f"UPDATE ai_contexts SET {set_clause} WHERE id = ${param_idx}",
-                *params,
-            )
+        params.append(context_id)
+        set_clause = ", ".join(updates)
+        await conn.execute(
+            f"UPDATE ai_contexts SET {set_clause} WHERE id = ${param_idx}",
+            *params,
+        )
 
         # Return updated context
         return await get_context(context_id)
@@ -235,7 +233,8 @@ async def list_versions(context_id: UUID) -> list[dict[str, Any]]:
         rows = await conn.fetch(
             """
             SELECT id, context_id, version_number, system_prompt, allowed_tools,
-                   max_turns, temperature, changelog, created_at
+                   max_turns, temperature, changelog, created_at,
+                   source, eval_summary, candidate_status
             FROM ai_context_versions
             WHERE context_id = $1
             ORDER BY version_number DESC
@@ -251,7 +250,8 @@ async def get_version(context_id: UUID, version_number: int) -> dict[str, Any] |
         row = await conn.fetchrow(
             """
             SELECT id, context_id, version_number, system_prompt, allowed_tools,
-                   max_turns, temperature, changelog, created_at
+                   max_turns, temperature, changelog, created_at,
+                   source, eval_summary, candidate_status
             FROM ai_context_versions
             WHERE context_id = $1 AND version_number = $2
             """,
@@ -295,8 +295,11 @@ async def rollback_to_version(context_id: UUID, version_number: int) -> dict[str
         # Save rollback as a new version
         await conn.execute(
             """
-            INSERT INTO ai_context_versions (context_id, version_number, system_prompt, allowed_tools, max_turns, temperature, changelog)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO ai_context_versions (
+                context_id, version_number, system_prompt, allowed_tools,
+                max_turns, temperature, changelog, source, candidate_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'rollback', NULL)
             """,
             context_id,
             next_version,
@@ -311,15 +314,88 @@ async def rollback_to_version(context_id: UUID, version_number: int) -> dict[str
         await conn.execute(
             """
             UPDATE ai_contexts
-            SET system_prompt = $1, allowed_tools = $2, max_turns = $3, temperature = $4
-            WHERE id = $5
+            SET system_prompt = $1, allowed_tools = $2, max_turns = $3, temperature = $4,
+                active_version = $5
+            WHERE id = $6
             """,
             target["system_prompt"],
             list(target["allowed_tools"]),
             target["max_turns"],
             target["temperature"],
+            next_version,
             context_id,
         )
+
+        return await get_context(context_id)
+
+
+async def adopt_version(context_id: UUID, version_number: int) -> dict[str, Any] | None:
+    """Adopt a candidate version.
+
+    Sets candidate_status to 'adopted', updates ai_contexts system_prompt
+    and active_version to the adopted version.
+    """
+    async with get_connection() as conn:
+        # Get the target version
+        target = await conn.fetchrow(
+            """
+            SELECT system_prompt, allowed_tools, max_turns, temperature, candidate_status
+            FROM ai_context_versions
+            WHERE context_id = $1 AND version_number = $2
+            """,
+            context_id,
+            version_number,
+        )
+        if target is None:
+            return None
+
+        # Update candidate_status to 'adopted'
+        await conn.execute(
+            """
+            UPDATE ai_context_versions
+            SET candidate_status = 'adopted'
+            WHERE context_id = $1 AND version_number = $2
+            """,
+            context_id,
+            version_number,
+        )
+
+        # Update ai_contexts with adopted version data
+        await conn.execute(
+            """
+            UPDATE ai_contexts
+            SET system_prompt = $1, allowed_tools = $2, max_turns = $3, temperature = $4,
+                active_version = $5
+            WHERE id = $6
+            """,
+            target["system_prompt"],
+            list(target["allowed_tools"]),
+            target["max_turns"],
+            target["temperature"],
+            version_number,
+            context_id,
+        )
+
+        return await get_context(context_id)
+
+
+async def reject_version(context_id: UUID, version_number: int) -> dict[str, Any] | None:
+    """Reject a candidate version.
+
+    Sets candidate_status to 'rejected'. Does not change ai_contexts.
+    """
+    async with get_connection() as conn:
+        result = await conn.execute(
+            """
+            UPDATE ai_context_versions
+            SET candidate_status = 'rejected'
+            WHERE context_id = $1 AND version_number = $2
+            """,
+            context_id,
+            version_number,
+        )
+        if result == "UPDATE 0":
+            return None
 
         return await get_context(context_id)
 
@@ -341,24 +417,24 @@ def _context_row_to_dict(row: Any) -> dict[str, Any]:
         "created_at": row["created_at"].isoformat(),
         "updated_at": row["updated_at"].isoformat(),
         "current_version_number": row["current_version_number"],
+        "active_version": row.get("active_version"),
     }
 
-    # Add pending experiment info if present (from list_contexts LEFT JOIN)
-    if "pending_experiment_id" in row.keys() and row["pending_experiment_id"] is not None:
-        result["pending_experiment"] = {
-            "id": str(row["pending_experiment_id"]),
-            "status": row["pending_experiment_status"],
-            "win_rate": row["pending_experiment_win_rate"],
-            "created_at": row["pending_experiment_created_at"].isoformat(),
-        }
+    # Add pending candidate count if present (from list_contexts LEFT JOIN)
+    if "pending_candidate_count" in row.keys():
+        result["pending_candidate_count"] = row["pending_candidate_count"] or 0
     else:
-        result["pending_experiment"] = None
+        result["pending_candidate_count"] = 0
 
     return result
 
 
 def _version_row_to_dict(row: Any) -> dict[str, Any]:
     """Convert a version DB row to a dictionary."""
+    eval_summary = row.get("eval_summary")
+    if isinstance(eval_summary, str):
+        eval_summary = json.loads(eval_summary)
+
     return {
         "id": str(row["id"]),
         "context_id": str(row["context_id"]),
@@ -369,4 +445,7 @@ def _version_row_to_dict(row: Any) -> dict[str, Any]:
         "temperature": row["temperature"],
         "changelog": row["changelog"],
         "created_at": row["created_at"].isoformat(),
+        "source": row.get("source", "manual"),
+        "eval_summary": eval_summary,
+        "candidate_status": row.get("candidate_status"),
     }

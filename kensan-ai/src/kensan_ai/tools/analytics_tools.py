@@ -11,6 +11,7 @@ from kensan_ai.db.queries.analytics import (
 )
 from kensan_ai.db.queries.user_settings import get_user_timezone
 from kensan_ai.lib.parsers import parse_uuid, parse_date
+from kensan_ai.lib.timezone_utils import local_today
 
 
 def _local_date_to_utc_range(
@@ -105,7 +106,7 @@ async def get_daily_summary(args: dict[str, Any]) -> dict[str, Any]:
 
     target_date = parse_date(args.get("date"))
     if not target_date:
-        target_date = date.today()
+        target_date = local_today(user_tz)
 
     # Convert local date to UTC datetime range
     start_dt, end_dt = _local_date_to_utc_range(target_date, user_tz)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,74 +20,38 @@ import (
 	"github.com/kensan/backend/shared/middleware"
 )
 
-// Persona defines a demo persona with its user data and seed SQL files.
+// Persona defines a demo persona with its user data and seed directory.
 type Persona struct {
-	UserID   string
-	Email    string
-	Name     string
-	SQLFiles []string
+	UserID  string
+	Email   string
+	Name    string
+	SeedDir string // subdirectory under seedDir containing 0*.sql files
 }
 
 var personas = map[string]Persona{
 	"tanaka": {
-		UserID: "dddddddd-dddd-dddd-dddd-dddddddddddd",
-		Email:  "demo@kensan.dev",
-		Name:   "田中翔太",
-		SQLFiles: []string{
-			"001_user_and_master.sql",
-			"010_time_blocks.sql",
-			"020_time_entries.sql",
-			"030_todos_completions.sql",
-			"040_notes.sql",
-			"050_entity_memos.sql",
-			"060_ai_data.sql",
-			"070_ai_challenges.sql",
-		},
+		UserID:  "dddddddd-dddd-dddd-dddd-dddddddddddd",
+		Email:   "demo@kensan.dev",
+		Name:    "田中翔太",
+		SeedDir: "tanaka_shota",
 	},
 	"misaki": {
-		UserID: "d1111111-1111-1111-1111-111111111111",
-		Email:  "misaki@kensan.dev",
-		Name:   "鈴木美咲",
-		SQLFiles: []string{
-			"002_user_misaki.sql",
-			"011_time_blocks_misaki.sql",
-			"021_time_entries_misaki.sql",
-			"031_todos_completions_misaki.sql",
-			"041_notes_misaki.sql",
-			"051_entity_memos_misaki.sql",
-			"061_ai_data_misaki.sql",
-			"071_ai_challenges_misaki.sql",
-		},
+		UserID:  "d1111111-1111-1111-1111-111111111111",
+		Email:   "misaki@kensan.dev",
+		Name:    "鈴木美咲",
+		SeedDir: "suzuki_misaki",
 	},
 	"takuya": {
-		UserID: "d2222222-2222-2222-2222-222222222222",
-		Email:  "takuya@kensan.dev",
-		Name:   "山田拓也",
-		SQLFiles: []string{
-			"003_user_takuya.sql",
-			"012_time_blocks_takuya.sql",
-			"022_time_entries_takuya.sql",
-			"032_todos_completions_takuya.sql",
-			"042_notes_takuya.sql",
-			"052_entity_memos_takuya.sql",
-			"062_ai_data_takuya.sql",
-			"072_ai_challenges_takuya.sql",
-		},
+		UserID:  "d2222222-2222-2222-2222-222222222222",
+		Email:   "takuya@kensan.dev",
+		Name:    "山田拓也",
+		SeedDir: "yamada_takuya",
 	},
 	"aya": {
-		UserID: "d3333333-3333-3333-3333-333333333333",
-		Email:  "aya@kensan.dev",
-		Name:   "高橋彩",
-		SQLFiles: []string{
-			"004_user_aya.sql",
-			"013_time_blocks_aya.sql",
-			"023_time_entries_aya.sql",
-			"033_todos_completions_aya.sql",
-			"043_notes_aya.sql",
-			"053_entity_memos_aya.sql",
-			"063_ai_data_aya.sql",
-			"073_ai_challenges_aya.sql",
-		},
+		UserID:  "d3333333-3333-3333-3333-333333333333",
+		Email:   "aya@kensan.dev",
+		Name:    "高橋彩",
+		SeedDir: "takahashi_aya",
 	},
 }
 
@@ -101,7 +66,7 @@ type Handler struct {
 func NewHandler(pool *pgxpool.Pool, jwtManager *auth.JWTManager) *Handler {
 	seedDir := os.Getenv("DEMO_SEED_DIR")
 	if seedDir == "" {
-		seedDir = "/app/demo-seed"
+		seedDir = "/app/seeds"
 	}
 	return &Handler{
 		pool:       pool,
@@ -177,32 +142,35 @@ func (h *Handler) cleanupPersona(ctx context.Context, userID string) error {
 	return err
 }
 
-// seedPersona executes the seed SQL files for a persona.
-func (h *Handler) seedPersona(ctx context.Context, persona Persona) error {
-	for _, sqlFile := range persona.SQLFiles {
-		filePath := filepath.Join(h.seedDir, sqlFile)
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("failed to read seed file %s: %w", sqlFile, err)
-		}
-		if _, err := h.pool.Exec(ctx, string(content)); err != nil {
-			return fmt.Errorf("failed to execute seed file %s: %w", sqlFile, err)
-		}
+// getSeedFiles returns sorted SQL file paths for a persona's seed directory.
+func (h *Handler) getSeedFiles(persona Persona) ([]string, error) {
+	pattern := filepath.Join(h.seedDir, persona.SeedDir, "0*.sql")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to glob seed files: %w", err)
 	}
-	return nil
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no seed files found in %s", filepath.Join(h.seedDir, persona.SeedDir))
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 // seedPersonaWithNewIDs reads all seed SQL files, builds a single UUID mapping
 // across all files (so cross-file FK references stay consistent), then executes
 // the transformed SQL in order.
 func (h *Handler) seedPersonaWithNewIDs(ctx context.Context, persona Persona, newUserID, newEmail string) error {
+	files, err := h.getSeedFiles(persona)
+	if err != nil {
+		return err
+	}
+
 	// Read all files first to build a complete UUID map
-	contents := make([]string, 0, len(persona.SQLFiles))
-	for _, sqlFile := range persona.SQLFiles {
-		filePath := filepath.Join(h.seedDir, sqlFile)
+	contents := make([]string, 0, len(files))
+	for _, filePath := range files {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to read seed file %s: %w", sqlFile, err)
+			return fmt.Errorf("failed to read seed file %s: %w", filepath.Base(filePath), err)
 		}
 		contents = append(contents, string(content))
 	}
@@ -214,7 +182,7 @@ func (h *Handler) seedPersonaWithNewIDs(ctx context.Context, persona Persona, ne
 	for i, content := range contents {
 		transformed := applyUUIDMap(content, uuidMap, persona.Email, newEmail)
 		if _, err := h.pool.Exec(ctx, transformed); err != nil {
-			return fmt.Errorf("failed to execute seed file %s: %w", persona.SQLFiles[i], err)
+			return fmt.Errorf("failed to execute seed file %s: %w", filepath.Base(files[i]), err)
 		}
 	}
 	return nil

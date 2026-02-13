@@ -185,6 +185,7 @@ class GeminiAgentRunner:
         context_name: str | None = None,
         context_version: str | None = None,
         experiment_id: str | None = None,
+        deferred_tools: list[str] | None = None,
     ):
         self.system_prompt = system_prompt
         self.allowed_tools = allowed_tools
@@ -195,9 +196,16 @@ class GeminiAgentRunner:
         self.context_name = context_name
         self.context_version = context_version
         self.experiment_id = experiment_id
+        self.deferred_tools = deferred_tools
 
         settings = get_settings()
         self.client = genai.Client(api_key=settings.google_api_key)
+
+    def _unlock_deferred_tools(self) -> None:
+        """Merge deferred_tools into allowed_tools (one-shot)."""
+        if self.deferred_tools and self.allowed_tools is not None:
+            self.allowed_tools = list(set(self.allowed_tools + self.deferred_tools))
+            self.deferred_tools = None
 
     @staticmethod
     def _parse_prompt_sections(prompt: str) -> dict[str, int]:
@@ -228,11 +236,6 @@ class GeminiAgentRunner:
         Returns:
             AgentResult with text response, tool calls, and token usage
         """
-        anthropic_tools = self._get_tools_schema()
-        gemini_tools = _convert_tools_to_gemini(anthropic_tools)
-        # Build a tool name lookup for later
-        tool_name_set = {t["name"] for t in anthropic_tools}
-
         all_tool_calls: list[ToolCall] = []
         total_input_tokens = 0
         total_output_tokens = 0
@@ -244,6 +247,10 @@ class GeminiAgentRunner:
         ]
 
         for turn in range(self.max_turns):
+            # Recompute tools each turn (deferred unlock may change allowed_tools)
+            anthropic_tools = self._get_tools_schema()
+            gemini_tools = _convert_tools_to_gemini(anthropic_tools)
+
             response = await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
@@ -315,6 +322,11 @@ class GeminiAgentRunner:
                         response={"error": str(e)},
                     ))
 
+            # Deferred unlock: if readonly tools were called, unlock write tools
+            has_readonly = any(is_readonly_tool(fc["name"]) for fc in function_calls)
+            if has_readonly and self.deferred_tools:
+                self._unlock_deferred_tools()
+
             contents.append(types.Content(role="user", parts=response_parts))
 
         return AgentResult(
@@ -348,9 +360,6 @@ class GeminiAgentRunner:
         if history is None:
             history = MessageHistory()
         history.add_user_message(user_message)
-
-        anthropic_tools = self._get_tools_schema()
-        gemini_tools = _convert_tools_to_gemini(anthropic_tools)
 
         conv_id = conversation_id or str(uuid_module.uuid4())
         pending_actions: list[dict[str, Any]] = []
@@ -399,7 +408,8 @@ class GeminiAgentRunner:
         actual_turns = 0
 
         prompt_sections = self._parse_prompt_sections(self.system_prompt)
-        tool_names = [t["name"] for t in anthropic_tools]
+        initial_tools = self._get_tools_schema()
+        initial_tool_names = [t["name"] for t in initial_tools]
 
         logger.info(json.dumps({
             "event": "agent.prompt",
@@ -413,9 +423,10 @@ class GeminiAgentRunner:
             "experiment_id": self.experiment_id or "",
             "system_prompt_length": len(self.system_prompt),
             "system_prompt_sections": prompt_sections,
-            "tool_count": len(anthropic_tools),
-            "tool_names": tool_names,
-            "tool_definitions_length": len(json.dumps(anthropic_tools, ensure_ascii=False)),
+            "tool_count": len(initial_tools),
+            "tool_names": initial_tool_names,
+            "deferred_tools": self.deferred_tools or [],
+            "tool_definitions_length": len(json.dumps(initial_tools, ensure_ascii=False)),
         }, ensure_ascii=False))
 
         logger.info(json.dumps({
@@ -444,6 +455,10 @@ class GeminiAgentRunner:
                         turn_token = None
 
                     try:
+                        # Recompute tools each turn (deferred unlock may change allowed_tools)
+                        anthropic_tools = self._get_tools_schema()
+                        gemini_tools = _convert_tools_to_gemini(anthropic_tools)
+
                         # Build Gemini contents from history
                         contents = _build_gemini_contents(history)
 
@@ -674,6 +689,10 @@ class GeminiAgentRunner:
                             })
 
                         _stop_keepalive()
+
+                        # Deferred unlock: readonly tool execution signals write intent
+                        if has_readonly_tools and self.deferred_tools:
+                            self._unlock_deferred_tools()
 
                         if tool_results:
                             history.add_tool_results(tool_results)

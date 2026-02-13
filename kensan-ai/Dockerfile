@@ -10,11 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install dependencies only (cached when pyproject.toml unchanged)
 COPY pyproject.toml README.md ./
-COPY src/ ./src/
+RUN mkdir -p src/kensan_ai && touch src/kensan_ai/__init__.py
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system .
+
+# Copy actual source code (doesn't invalidate dependency layer)
+COPY src/ ./src/
 
 # Runtime stage
 FROM python:3.12-slim

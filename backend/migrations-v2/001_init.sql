@@ -1,8 +1,8 @@
 -- ============================================================================
 -- Kensan Database Schema (Consolidated)
 -- ============================================================================
--- This is the consolidated schema from migrations 001-040.
--- Use this for fresh setups instead of running 40+ incremental migrations.
+-- This is the consolidated schema from migrations 001-070.
+-- Use this for fresh setups instead of running 70+ incremental migrations.
 -- ============================================================================
 
 -- Extensions
@@ -89,15 +89,17 @@ CREATE TABLE tags (
     type VARCHAR(10) NOT NULL DEFAULT 'task' CHECK (type IN ('task', 'note')),
     pinned BOOLEAN NOT NULL DEFAULT FALSE,
     usage_count INTEGER NOT NULL DEFAULT 0,
+    category VARCHAR(20) DEFAULT 'general' CHECK (category IN ('general', 'trait', 'tech', 'project')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, name)
+    UNIQUE(user_id, name, type)
 );
 
 CREATE INDEX idx_tags_user_id ON tags(user_id);
 CREATE INDEX idx_tags_pinned ON tags(user_id, pinned) WHERE pinned = TRUE;
 CREATE INDEX idx_tags_usage_count ON tags(user_id, usage_count DESC);
 CREATE INDEX idx_tags_type ON tags(user_id, type);
+CREATE INDEX idx_tags_category ON tags(user_id, category);
 
 -- ============================================
 -- Tasks
@@ -152,8 +154,6 @@ CREATE TABLE time_blocks (
     goal_name VARCHAR(255),
     goal_color VARCHAR(7),
     tag_ids UUID[] DEFAULT '{}',
-    is_routine BOOLEAN DEFAULT FALSE,
-    routine_task_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -210,26 +210,6 @@ CREATE TABLE running_timers (
 CREATE INDEX idx_running_timers_user_id ON running_timers(user_id);
 
 -- ============================================
--- Routine Tasks (legacy — data also in todos)
--- ============================================
-CREATE TABLE routine_tasks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly', 'custom')),
-    days_of_week INTEGER[],
-    estimated_minutes INTEGER NOT NULL,
-    default_start_time TIME,
-    tag_ids UUID[] DEFAULT '{}',
-    enabled BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_routine_tasks_user_id ON routine_tasks(user_id);
-CREATE INDEX idx_routine_tasks_enabled ON routine_tasks(enabled);
-
--- ============================================
 -- Todos (unified: one-off + recurring)
 -- ============================================
 CREATE TABLE todos (
@@ -256,6 +236,7 @@ CREATE INDEX idx_todos_frequency ON todos(frequency);
 -- ============================================
 CREATE TABLE todo_completions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     todo_id UUID NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
     completed_date DATE NOT NULL,
     completed_at TIMESTAMPTZ DEFAULT NOW(),
@@ -264,6 +245,7 @@ CREATE TABLE todo_completions (
 
 CREATE INDEX idx_todo_completions_todo_id ON todo_completions(todo_id);
 CREATE INDEX idx_todo_completions_date ON todo_completions(completed_date);
+CREATE INDEX idx_todo_completions_user_id ON todo_completions(user_id);
 
 -- ============================================
 -- Note Types (data-driven)
@@ -442,8 +424,8 @@ CREATE INDEX idx_memos_archived ON memos(archived);
 CREATE TABLE ai_review_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    week_start DATE NOT NULL,
-    week_end DATE NOT NULL,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
     summary TEXT,
     good_points TEXT[],
     improvement_points TEXT[],
@@ -454,7 +436,7 @@ CREATE TABLE ai_review_reports (
 );
 
 CREATE INDEX idx_ai_review_reports_user_id ON ai_review_reports(user_id);
-CREATE INDEX idx_ai_review_reports_week ON ai_review_reports(week_start, week_end);
+CREATE INDEX idx_ai_review_reports_period ON ai_review_reports(period_start, period_end);
 
 -- ============================================
 -- AI Interactions (conversation logs)
@@ -466,6 +448,7 @@ CREATE TABLE ai_interactions (
     conversation_id UUID,
     situation VARCHAR(50) NOT NULL DEFAULT 'chat',
     context_id UUID,
+    persona_context_id UUID,
     user_input TEXT NOT NULL,
     ai_output TEXT NOT NULL,
     tool_calls JSONB DEFAULT '[]',
@@ -484,6 +467,7 @@ CREATE INDEX idx_ai_interactions_created_at ON ai_interactions(created_at);
 CREATE INDEX idx_ai_interactions_context_id ON ai_interactions(context_id);
 CREATE INDEX idx_ai_interactions_conversation_id ON ai_interactions(conversation_id) WHERE conversation_id IS NOT NULL;
 CREATE INDEX idx_ai_interactions_user_conversation ON ai_interactions(user_id, conversation_id, created_at DESC) WHERE conversation_id IS NOT NULL;
+CREATE INDEX idx_ai_interactions_persona ON ai_interactions(persona_context_id) WHERE persona_context_id IS NOT NULL;
 
 -- ============================================
 -- AI Contexts (situation-specific prompts)
@@ -496,11 +480,14 @@ CREATE TABLE ai_contexts (
     is_active BOOLEAN DEFAULT TRUE,
     is_default BOOLEAN DEFAULT FALSE,
     system_prompt TEXT NOT NULL,
+    description TEXT,
     allowed_tools TEXT[] NOT NULL DEFAULT '{}',
     max_turns INTEGER DEFAULT 10,
     temperature FLOAT DEFAULT 0.7,
     experiment_id UUID,
     traffic_weight INTEGER DEFAULT 100,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    source_template_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -509,7 +496,107 @@ CREATE INDEX idx_ai_contexts_situation ON ai_contexts(situation);
 CREATE INDEX idx_ai_contexts_is_active ON ai_contexts(is_active);
 CREATE INDEX idx_ai_contexts_is_default ON ai_contexts(is_default);
 CREATE INDEX idx_ai_contexts_experiment_id ON ai_contexts(experiment_id);
-CREATE UNIQUE INDEX idx_ai_contexts_default_per_situation ON ai_contexts(situation) WHERE is_default = TRUE AND is_active = TRUE;
+CREATE INDEX idx_ai_contexts_user_id ON ai_contexts(user_id) WHERE user_id IS NOT NULL;
+-- System template default: one per situation
+CREATE UNIQUE INDEX idx_ai_contexts_default_per_situation_system
+    ON ai_contexts(situation) WHERE user_id IS NULL AND is_default = TRUE AND is_active = TRUE;
+-- Per-user default: one per user+situation
+CREATE UNIQUE INDEX idx_ai_contexts_default_per_situation_user
+    ON ai_contexts(user_id, situation) WHERE user_id IS NOT NULL AND is_default = TRUE AND is_active = TRUE;
+
+-- FK for source_template_id (self-ref, added after table creation)
+ALTER TABLE ai_contexts ADD CONSTRAINT fk_ai_contexts_source_template
+    FOREIGN KEY (source_template_id) REFERENCES ai_contexts(id);
+
+-- ============================================
+-- AI Context Versions (prompt version history)
+-- ============================================
+CREATE TABLE ai_context_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    context_id UUID NOT NULL REFERENCES ai_contexts(id) ON DELETE CASCADE,
+    version_number INTEGER NOT NULL,
+    system_prompt TEXT NOT NULL,
+    allowed_tools TEXT[] NOT NULL DEFAULT '{}',
+    max_turns INTEGER NOT NULL,
+    temperature FLOAT NOT NULL,
+    changelog TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_ai_context_versions_unique
+    ON ai_context_versions(context_id, version_number);
+CREATE INDEX idx_ai_context_versions_context
+    ON ai_context_versions(context_id, version_number DESC);
+
+-- ============================================
+-- Prompt Evaluations (periodic quality assessment)
+-- ============================================
+CREATE TABLE prompt_evaluations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    context_id UUID NOT NULL REFERENCES ai_contexts(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    interaction_count INT NOT NULL DEFAULT 0,
+    avg_rating FLOAT,
+    rated_count INT NOT NULL DEFAULT 0,
+    tool_success_rate FLOAT,
+    avg_turns FLOAT,
+    avg_tokens FLOAT,
+    strengths TEXT[] DEFAULT '{}',
+    weaknesses TEXT[] DEFAULT '{}',
+    improvement_suggestions TEXT[] DEFAULT '{}',
+    sample_analysis JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_prompt_evaluations_unique
+    ON prompt_evaluations(context_id, period_start, COALESCE(user_id, '00000000-0000-0000-0000-000000000000'::UUID));
+CREATE INDEX idx_prompt_evaluations_context_id ON prompt_evaluations(context_id);
+
+-- ============================================
+-- Prompt Experiments (A/B testing)
+-- ============================================
+CREATE TABLE prompt_experiments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    situation TEXT NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    evaluation_id UUID NOT NULL REFERENCES prompt_evaluations(id) ON DELETE CASCADE,
+    control_context_id UUID NOT NULL REFERENCES ai_contexts(id) ON DELETE CASCADE,
+    variant_context_id UUID NOT NULL REFERENCES ai_contexts(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK (status IN ('pending_review', 'in_challenge', 'promoted', 'rejected')),
+    challenge_type TEXT NOT NULL DEFAULT 'side_by_side',
+    challenge_config JSONB NOT NULL DEFAULT '{}',
+    challenge_results JSONB NOT NULL DEFAULT '[]',
+    win_rate FLOAT,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_prompt_experiments_status ON prompt_experiments(status);
+CREATE INDEX idx_prompt_experiments_situation ON prompt_experiments(situation);
+CREATE INDEX idx_prompt_experiments_user_id ON prompt_experiments(user_id) WHERE user_id IS NOT NULL;
+
+-- ============================================
+-- Prompt Comparisons (version-based A/B comparison)
+-- ============================================
+CREATE TABLE prompt_comparisons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    context_id UUID NOT NULL REFERENCES ai_contexts(id) ON DELETE CASCADE,
+    version_a INTEGER NOT NULL,
+    version_b INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'adopted_a', 'adopted_b', 'dismissed')),
+    rounds JSONB NOT NULL DEFAULT '[]'::jsonb,
+    win_rate_b REAL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_prompt_comparisons_user_status ON prompt_comparisons(user_id, status);
+CREATE INDEX idx_prompt_comparisons_context ON prompt_comparisons(context_id);
 
 -- ============================================
 -- User Memory (aggregated user profile for AI)
@@ -543,39 +630,6 @@ CREATE INDEX idx_user_facts_fact_type ON user_facts(fact_type);
 CREATE INDEX idx_user_facts_created_at ON user_facts(created_at);
 CREATE INDEX idx_user_facts_expires_at ON user_facts(expires_at) WHERE expires_at IS NOT NULL;
 CREATE INDEX idx_user_facts_source_interaction ON user_facts(source_interaction_id);
-
--- ============================================
--- Deprecated tables (kept for backward compat)
--- ============================================
-CREATE TABLE learning_records (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    format VARCHAR(20) NOT NULL CHECK (format IN ('markdown', 'drawio')),
-    milestone_id UUID REFERENCES milestones(id) ON DELETE SET NULL,
-    milestone_name VARCHAR(255),
-    goal_id UUID REFERENCES goals(id) ON DELETE SET NULL,
-    goal_name VARCHAR(255),
-    goal_color VARCHAR(7),
-    tag_ids UUID[] DEFAULT '{}',
-    related_time_entry_ids UUID[],
-    file_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE diary_entries (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    tags TEXT[],
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, date)
-);
 
 -- ============================================
 -- Analytics Views (read-only)
@@ -614,10 +668,7 @@ CREATE TRIGGER update_milestones_updated_at BEFORE UPDATE ON milestones FOR EACH
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_time_blocks_updated_at BEFORE UPDATE ON time_blocks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_time_entries_updated_at BEFORE UPDATE ON time_entries FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_routine_tasks_updated_at BEFORE UPDATE ON routine_tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_memos_updated_at BEFORE UPDATE ON memos FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_learning_records_updated_at BEFORE UPDATE ON learning_records FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_diary_entries_updated_at BEFORE UPDATE ON diary_entries FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_notes_updated_at BEFORE UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_note_contents_updated_at BEFORE UPDATE ON note_contents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_note_metadata_updated_at BEFORE UPDATE ON note_metadata FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

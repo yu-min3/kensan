@@ -42,7 +42,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 
 	// Start PostgreSQL container
 	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+		"pgvector/pgvector:pg16",
 		postgres.WithDatabase("kensan_test"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),
@@ -266,6 +266,7 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 
 	migrationFiles := []string{
 		"001_init.sql",
+		"002_master.sql",
 	}
 
 	for _, file := range migrationFiles {
@@ -287,10 +288,10 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 // findMigrationsDir finds the migrations directory
 func findMigrationsDir() string {
 	paths := []string{
-		"../migrations",
-		"../../migrations",
-		"migrations",
-		"backend/migrations",
+		"../migrations-v2",
+		"../../migrations-v2",
+		"migrations-v2",
+		"backend/migrations-v2",
 	}
 
 	for _, p := range paths {

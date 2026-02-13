@@ -9,6 +9,15 @@ DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
 _UTC = ZoneInfo("UTC")
 
 
+def local_today(tz: ZoneInfo = DEFAULT_TZ) -> date:
+    """Return today's date in the given timezone (default: Asia/Tokyo).
+
+    Unlike ``date.today()`` which uses the server's system timezone,
+    this always returns the correct local date regardless of the host TZ.
+    """
+    return datetime.now(tz).date()
+
+
 def local_date_to_utc_range(
     target_date: date,
     tz: ZoneInfo = DEFAULT_TZ,

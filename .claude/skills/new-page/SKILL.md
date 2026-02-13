@@ -11,7 +11,7 @@ Create a new page `$ARGUMENTS[0]` with domain prefix `$ARGUMENTS[1]`.
 
 ## Prerequisites
 
-Read `src/ARCHITECTURE.md` and an existing page for reference.
+Read `frontend/src/ARCHITECTURE.md` and an existing page for reference.
 
 ## Naming Convention
 
@@ -28,33 +28,33 @@ Example: `/new-page GoalDashboard A` → creates `A03_GoalDashboard`
 
 ## Steps
 
-1. **Determine page number**: Check existing pages in `src/pages/` for the next available number in the prefix.
+1. **Determine page number**: Check existing pages in `frontend/src/pages/` for the next available number in the prefix.
 
-2. **Create page component** in `src/pages/{Prefix}{NN}_{PageName}.tsx`:
+2. **Create page component** in `frontend/src/pages/{Prefix}{NN}_{PageName}.tsx`:
    - Import from `@/components/ui/` and `@/stores/`
    - Use Zustand stores for state
    - Follow existing page patterns
 
-3. **Add route** in `src/App.tsx`:
+3. **Add route** in `frontend/src/App.tsx`:
    - Add inside the protected route group
    - Use lowercase kebab-case path
 
-4. **Add sidebar navigation** in `src/components/layout/Sidebar.tsx`:
+4. **Add sidebar navigation** in `frontend/src/components/layout/Sidebar.tsx`:
    - Add navigation item with Lucide icon
 
 5. **Create/update Zustand store** if new state is needed:
-   - Place in `src/stores/`
+   - Place in `frontend/src/stores/`
    - Use `createCrudStore` factory for standard CRUD
    - Or create custom store following existing patterns
 
 6. **Create API service** if new endpoints:
-   - Place in `src/api/services/`
+   - Place in `frontend/src/api/services/`
    - Use `createApiService` factory
    - Follow response envelope unwrapping pattern
 
-7. **Add MSW handler** in `src/mocks/handlers/` for development
+7. **Add MSW handler** in `frontend/src/mocks/handlers/` for development
 
 ## After Creation
 
-- Run `npm run build` to verify TypeScript compilation
-- Update `src/ARCHITECTURE.md` routing section and page naming table
+- Run `cd frontend && npm run build` to verify TypeScript compilation
+- Update `frontend/src/ARCHITECTURE.md` routing section and page naming table

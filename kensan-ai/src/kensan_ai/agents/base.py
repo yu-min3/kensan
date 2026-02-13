@@ -65,6 +65,7 @@ class AgentRunner:
         context_name: str | None = None,
         context_version: str | None = None,
         experiment_id: str | None = None,
+        deferred_tools: list[str] | None = None,
     ):
         """Initialize the agent runner.
 
@@ -78,6 +79,9 @@ class AgentRunner:
             context_name: AI context name for identification
             context_version: AI context version string
             experiment_id: A/B test experiment ID
+            deferred_tools: Write tools to unlock after first readonly tool execution.
+                           These are added to allowed_tools dynamically when the LLM
+                           calls a readonly tool, signaling write intent.
         """
         self.system_prompt = system_prompt
         self.allowed_tools = allowed_tools
@@ -88,6 +92,7 @@ class AgentRunner:
         self.context_name = context_name
         self.context_version = context_version
         self.experiment_id = experiment_id
+        self.deferred_tools = deferred_tools
 
         # Initialize client
         settings = get_settings()
@@ -173,6 +178,12 @@ class AgentRunner:
             }
         ]
 
+    def _unlock_deferred_tools(self) -> None:
+        """Merge deferred_tools into allowed_tools (one-shot)."""
+        if self.deferred_tools and self.allowed_tools is not None:
+            self.allowed_tools = list(set(self.allowed_tools + self.deferred_tools))
+            self.deferred_tools = None
+
     async def run(self, prompt: str, user_id: str | None = None) -> AgentResult:
         """Run the agent with the given prompt and return the response.
 
@@ -185,7 +196,6 @@ class AgentRunner:
         """
         history = MessageHistory()
         history.add_user_message(prompt)
-        tools = self._get_tools_schema()
 
         all_tool_calls: list[ToolCall] = []
         total_input_tokens = 0
@@ -193,6 +203,9 @@ class AgentRunner:
         final_text_parts: list[str] = []
 
         for turn in range(self.max_turns):
+            # Recompute tools each turn (deferred unlock may change allowed_tools)
+            tools = self._get_tools_schema()
+
             # Make API call
             response = await self.client.messages.create(
                 model=self.model,
@@ -242,6 +255,11 @@ class AgentRunner:
             )
             all_tool_calls.extend(new_tool_calls)
 
+            # Deferred unlock: if readonly tools were called, unlock write tools
+            has_readonly = any(is_readonly_tool(tc["name"]) for tc in tool_use_blocks)
+            if has_readonly and self.deferred_tools:
+                self._unlock_deferred_tools()
+
             # Add tool results as user message
             history.add_tool_results(tool_results)
 
@@ -271,9 +289,11 @@ class AgentRunner:
         """
         history = MessageHistory()
         history.add_user_message(prompt)
-        tools = self._get_tools_schema()
 
         for turn in range(self.max_turns):
+            # Recompute tools each turn (deferred unlock may change allowed_tools)
+            tools = self._get_tools_schema()
+
             # Collect response using streaming
             assistant_content: list[dict[str, Any]] = []
             tool_use_blocks: list[dict[str, Any]] = []
@@ -338,6 +358,11 @@ class AgentRunner:
                 tool_use_blocks, user_id
             )
 
+            # Deferred unlock: if readonly tools were called, unlock write tools
+            has_readonly = any(is_readonly_tool(tc["name"]) for tc in tool_use_blocks)
+            if has_readonly and self.deferred_tools:
+                self._unlock_deferred_tools()
+
             history.add_tool_results(tool_results)
 
             if final_message.stop_reason == "end_turn":
@@ -370,7 +395,6 @@ class AgentRunner:
         if history is None:
             history = MessageHistory()
         history.add_user_message(user_message)
-        tools = self._get_tools_schema()
 
         conv_id = conversation_id or str(uuid_module.uuid4())
         pending_actions: list[dict[str, Any]] = []
@@ -423,8 +447,13 @@ class AgentRunner:
         write_nudged = False  # Track if we've nudged for write tools (turn 1+)
 
         prompt_sections = self._parse_prompt_sections(self.system_prompt)
-        tool_names = [t["name"] for t in tools]
-        has_write_tools = any(not is_readonly_tool(tn) for tn in tool_names)
+        initial_tools = self._get_tools_schema()
+        initial_tool_names = [t["name"] for t in initial_tools]
+        # has_write_tools considers deferred tools that may be unlocked later
+        has_write_tools = (
+            any(not is_readonly_tool(tn) for tn in initial_tool_names)
+            or bool(self.deferred_tools)
+        )
 
         logger.info(
             json.dumps({
@@ -439,9 +468,10 @@ class AgentRunner:
                 "experiment_id": self.experiment_id or "",
                 "system_prompt_length": len(self.system_prompt),
                 "system_prompt_sections": prompt_sections,
-                "tool_count": len(tools),
-                "tool_names": tool_names,
-                "tool_definitions_length": len(json.dumps(tools, ensure_ascii=False)),
+                "tool_count": len(initial_tools),
+                "tool_names": initial_tool_names,
+                "deferred_tools": self.deferred_tools or [],
+                "tool_definitions_length": len(json.dumps(initial_tools, ensure_ascii=False)),
             }, ensure_ascii=False),
         )
 
@@ -479,6 +509,10 @@ class AgentRunner:
                         tool_use_blocks: list[dict[str, Any]] = []
                         current_tool_use: dict[str, Any] | None = None
                         current_tool_input_json = ""
+
+                        # Recompute tools each turn (deferred unlock may have changed allowed_tools)
+                        tools = self._get_tools_schema()
+                        tool_names = [t["name"] for t in tools]
 
                         # Start keepalive during API call (covers initial wait)
                         _start_keepalive()
@@ -716,6 +750,10 @@ class AgentRunner:
                             })
 
                         _stop_keepalive()
+
+                        # Deferred unlock: readonly tool execution signals write intent
+                        if has_readonly_tools and self.deferred_tools:
+                            self._unlock_deferred_tools()
 
                         if tool_results:
                             history.add_tool_results(tool_results)

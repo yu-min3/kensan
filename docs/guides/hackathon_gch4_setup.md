@@ -8,8 +8,7 @@
 
 ## 変更概要
 
-Anthropic Claude → Google Gemini への AI プロバイダー切り替え。
-`AI_PROVIDER` 環境変数で制御。既存の Anthropic コードは残しており、`AI_PROVIDER=anthropic` に戻すだけで元通り。
+Google Gemini を AI プロバイダーとして使用。
 
 ---
 
@@ -31,8 +30,6 @@ GOOGLE_API_KEY=AIza...
 AI_PROVIDER=google              # デフォルト: google
 GOOGLE_MODEL=gemini-2.0-flash   # デフォルト: gemini-2.0-flash
 ```
-
-> Anthropic に戻す場合は `AI_PROVIDER=anthropic` と `ANTHROPIC_API_KEY` を設定するだけ。
 
 ### 1-3. 起動
 
@@ -147,11 +144,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 | 変数名 | 必須 | デフォルト | 説明 |
 |--------|------|-----------|------|
 | `GOOGLE_API_KEY` | ローカル/本番 | (なし) | Google GenAI API キー |
-| `AI_PROVIDER` | いいえ | `google` | `google` or `anthropic` |
+| `AI_PROVIDER` | いいえ | `google` | AI プロバイダー |
 | `GOOGLE_MODEL` | いいえ | `gemini-2.0-flash` | 使用する Gemini モデル |
 | `JWT_SECRET` | 本番のみ | `dev-secret-key-...` | JWT 署名キー（本番は必ず変更） |
 | `GCE_IP` | 本番のみ | `localhost` | フロントのビルド時 API URL に使用 |
-| `ANTHROPIC_API_KEY` | Anthropic 使用時 | (なし) | Anthropic に戻す場合に必要 |
 
 ---
 
@@ -172,13 +168,3 @@ docker logs -f kensan-ai-service
 - `GCE_IP` が正しく設定されているか確認
 - フロントの再ビルドが必要: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend`
 
-### Anthropic に戻す
-
-```bash
-# .env を変更
-AI_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-
-# 再起動
-docker compose restart ai-service
-```

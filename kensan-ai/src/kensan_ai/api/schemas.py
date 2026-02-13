@@ -103,15 +103,6 @@ class PromptMetadataResponse(BaseModel):
 # Prompt Management
 # =============================================================================
 
-class PendingExperiment(BaseModel):
-    """Pending experiment info attached to a context."""
-
-    id: str
-    status: str
-    win_rate: float | None = None
-    created_at: str
-
-
 class AIContextResponse(BaseModel):
     """Response for an AI context."""
 
@@ -129,7 +120,8 @@ class AIContextResponse(BaseModel):
     created_at: str
     updated_at: str
     current_version_number: int | None = None
-    pending_experiment: PendingExperiment | None = None
+    active_version: int | None = None
+    pending_candidate_count: int = 0
 
 
 class AIContextUpdateRequest(BaseModel):
@@ -154,32 +146,9 @@ class AIContextVersionResponse(BaseModel):
     temperature: float
     changelog: str | None = None
     created_at: str
-
-
-# =============================================================================
-# Prompt Challenges
-# =============================================================================
-
-class ChallengeGenerateRequest(BaseModel):
-    """Request to generate a challenge round."""
-
-    custom_message: str | None = Field(
-        None,
-        description="Optional custom message to use instead of sampling from past conversations",
-    )
-
-
-class ChallengeVoteRequest(BaseModel):
-    """Request to vote on a challenge round."""
-
-    round_id: str = Field(..., description="Round ID to vote on")
-    winner: Literal["A", "B", "tie"] = Field(..., description="Which response won: A, B, or tie")
-
-
-class ChallengeResolveRequest(BaseModel):
-    """Request to resolve (promote or reject) an experiment."""
-
-    action: Literal["promote", "reject"] = Field(..., description="Promote variant or reject it")
+    source: str = "manual"
+    eval_summary: dict | None = None
+    candidate_status: str | None = None
 
 
 class ConversationRateRequest(BaseModel):
@@ -187,30 +156,3 @@ class ConversationRateRequest(BaseModel):
 
     rating: int = Field(..., ge=1, le=5, description="Rating from 1-5")
     feedback: str | None = Field(None, description="Optional text feedback")
-
-
-# =============================================================================
-# Prompt Comparisons (Version-based A/B)
-# =============================================================================
-
-class ComparisonCreateRequest(BaseModel):
-    """Request to create a version comparison session."""
-
-    context_id: str = Field(..., description="Context ID to compare versions of")
-    version_a: int = Field(..., description="First version number")
-    version_b: int = Field(..., description="Second version number")
-
-
-class ComparisonVoteRequest(BaseModel):
-    """Request to vote on a comparison round."""
-
-    round_id: str = Field(..., description="Round ID to vote on")
-    winner: Literal["A", "B", "tie"] = Field(..., description="Which response won: A, B, or tie")
-
-
-class ComparisonResolveRequest(BaseModel):
-    """Request to resolve a comparison."""
-
-    action: Literal["adopt_a", "adopt_b", "dismiss"] = Field(
-        ..., description="Adopt version A, adopt version B, or dismiss"
-    )

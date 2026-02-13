@@ -11,6 +11,7 @@ DECLARE
     dow INT;
     week_num INT;
     seq INT := 0;
+    uid UUID := 'd3333333-3333-3333-3333-333333333333';
 
     todo_1on1 UUID := 'd30b0001-0000-0000-0000-000000000000';
     todo_read UUID := 'd30b0002-0000-0000-0000-000000000000';
@@ -27,24 +28,24 @@ BEGIN
         IF dow IN (1, 3, 5) THEN
             IF day_offset % 10 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_1on1, d, d + TIME '21:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_1on1, d, d + TIME '21:00' + INTERVAL '9 hours');
             END IF;
         END IF;
 
         -- ビジネス書読書 (daily, 85%)
         IF day_offset % 7 <> 0 THEN
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_read, d, d + TIME '03:45' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_read, d, d + TIME '03:45' + INTERVAL '9 hours');
         END IF;
 
         -- チーム日報確認 (Mon-Fri, 95%)
         IF dow BETWEEN 1 AND 5 THEN
             IF day_offset % 20 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_daily, d, d + TIME '00:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_daily, d, d + TIME '00:00' + INTERVAL '9 hours');
             END IF;
         END IF;
 
@@ -52,8 +53,8 @@ BEGIN
         IF dow IN (1, 3, 5) THEN
             IF day_offset % 5 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_yoga, d, d + TIME '21:30' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_yoga, d, d + TIME '21:30' + INTERVAL '9 hours');
             END IF;
         END IF;
 

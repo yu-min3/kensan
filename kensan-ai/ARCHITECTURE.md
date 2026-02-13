@@ -25,9 +25,9 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 
 - **FastAPI** アプリケーション（非同期サポート）
 - **エージェントベース** アーキテクチャ（LLMのDirect Tools / Function Calling使用）
-- **コンテキスト認識** AI（状況別プロンプト選択 + A/Bテスト）
+- **コンテキスト認識** AI（状況別プロンプト選択 + バージョン管理）
 - **メモリシステム**（ファクト自動抽出 + プロフィール要約）
-- **マルチプロバイダ**: Anthropic (Claude) / Google (Gemini) を `AI_PROVIDER` で切替
+- **AIプロバイダ**: Google Gemini API によるチャット・レビュー・埋め込み
 
 ### 技術スタック
 
@@ -35,8 +35,8 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 |--------------|------|
 | フレームワーク | FastAPI (非同期) |
 | ランタイム | Python 3.12+ |
-| AIモデル | Claude (Anthropic SDK) / Gemini (Google GenAI SDK) |
-| 埋め込み | OpenAI text-embedding-3-small / Gemini gemini-embedding-001 (1536次元、`EMBEDDING_PROVIDER` で切替) |
+| AIモデル | Gemini (Google GenAI SDK) |
+| 埋め込み | Gemini gemini-embedding-001 (1536次元) |
 | データベース | PostgreSQL 16 + pgvector (asyncpg) |
 | ストレージ | MinIO (S3互換、読み取り専用) |
 | 外部検索 | Tavily API (web_search / web_fetch) |
@@ -50,7 +50,7 @@ kensan-ai/src/kensan_ai/
 ├── config.py                  # Pydantic BaseSettings
 ├── errors.py                  # 統一エラー階層
 ├── agents/                    # エージェント実装
-│   ├── base.py               # AgentRunner (Anthropic, プロンプトキャッシング)
+│   ├── base.py               # AgentRunner (プロンプトキャッシング)
 │   ├── gemini_runner.py       # GeminiAgentRunner
 │   └── chat.py               # チャットエージェント（動的ツール選択）※DBマイグレーション元ネタ
 ├── tools/                     # Direct Tools (39+)
@@ -66,7 +66,6 @@ kensan-ai/src/kensan_ai/
 │   ├── detector.py           # 状況検出
 │   ├── resolver.py           # コンテキスト読み込み
 │   ├── variable_replacer.py  # 動的プロンプト変数
-│   └── ab_selector.py        # A/Bテスト
 ├── db/queries/                # ドメインクエリ
 ├── extraction/                # ファクト抽出
 ├── embeddings/                # ベクトル埋め込み
@@ -74,7 +73,7 @@ kensan-ai/src/kensan_ai/
 ├── logging/                   # インタラクションログ
 ├── lakehouse/                 # Iceberg Bronze書き込み + Gold読み取り
 ├── lib/                       # 共通ユーティリティ
-│   ├── ai_provider.py        # LLMClient (Anthropic/Google 統一ファクトリ)
+│   ├── ai_provider.py        # LLMClient (Google GenAI ファクトリ)
 │   ├── llm_utils.py          # LLMレスポンスからJSON抽出
 │   └── timezone_utils.py     # タイムゾーン変換ヘルパー
 ├── batch/                     # オフラインジョブ
@@ -99,8 +98,6 @@ flowchart TB
     subgraph "コンテキスト解決"
         Detect["状況検出<br/>(chat/review/daily_advice/persona)"]
         Load["DBからAIコンテキスト読込"]
-        AB{"A/Bテスト?"}
-        ABSelect["重みでバリアント選択"]
         Replace["{変数}をユーザーデータで置換"]
     end
 
@@ -120,9 +117,7 @@ flowchart TB
     end
 
     Request --> JWT --> Detect --> Load
-    Load --> AB
-    AB -->|Yes| ABSelect --> Replace
-    AB -->|No| Replace
+    Load --> Replace
     Replace --> Call
 
     Call --> Check
@@ -147,15 +142,12 @@ graph TB
     end
 
     subgraph "基盤"
-        BaseAnth["AgentRunner<br/>(Anthropic SDK)"]
         BaseGemini["GeminiAgentRunner<br/>(Google GenAI SDK)"]
         History["MessageHistory<br/>会話管理"]
         Store["ConversationStore<br/>セッション管理"]
     end
 
-    Chat --> BaseAnth
     Chat --> BaseGemini
-    BaseAnth --> History
     BaseGemini --> History
 ```
 
@@ -193,38 +185,41 @@ sequenceDiagram
 
 | 手法 | 効果 |
 |------|------|
-| Anthropic Prompt Caching | Turn 2以降の入力トークンコスト90%削減 |
+| Prompt Caching | Turn 2以降の入力トークンコスト削減 |
 | ツール結果スリム化 | ネストIDの除外、descriptionの除外、コンテンツ切り詰め(300文字) |
 | 動的ツール選択 | 全39ツール→必要な7-15ツールのみ送信 |
 
-### 動的ツール選択
+### 動的ツール選択 + Deferred Write Tool Injection
 
 ```mermaid
 flowchart TB
-    Msg["ユーザーメッセージ"] --> Intent["意図分析"]
+    Msg["ユーザーメッセージ"] --> Select["select_tools()<br/>Read グループのみ選択"]
 
-    Intent --> ReadWrite{"書込キーワード?<br/>(作って/追加して/削除して)"}
+    Select --> Topic["トピック分析<br/>(キーワードマッチ)"]
 
-    ReadWrite -->|No| ReadOnly["Readグループのみ"]
-    ReadWrite -->|Yes| ReadAndWrite["Read + Writeグループ"]
-
-    Intent --> Topic["トピック分析<br/>(キーワードマッチ)"]
-
-    Topic -->|予定の話題| PlanGroup["planning グループ"]
-    Topic -->|目標の話題| GoalGroup["goals_read グループ"]
+    Topic -->|予定の話題| PlanGroup["goals_read グループ"]
+    Topic -->|目標の話題| GoalGroup["goals_read + analytics"]
     Topic -->|ノートの話題| NoteGroup["notes_read グループ"]
-    Topic -->|分析の話題| AnalGroup["analytics グループ"]
+    Topic -->|分析の話題| AnalGroup["analytics + review"]
     Topic -->|検索の話題| SearchGroup["search グループ"]
     Topic -->|Web検索| WebGroup["web グループ"]
+    Topic -->|マッチなし| Default["core + goals_read"]
 
     Core["core グループ<br/>(常に含む)"]
 
-    Core --> Final["選択されたツールのみ送信"]
-    PlanGroup --> Final
-    GoalGroup --> Final
-    NoteGroup --> Final
-    AnalGroup --> Final
+    Select --> Deferred["get_deferred_write_tools()<br/>Read→Write マッピング"]
+    Deferred -->|get_tasks| TaskW["task write"]
+    Deferred -->|get_time_blocks| PlanW["planning write"]
+    Deferred -->|get_goals| GoalW["goals_write"]
+    Deferred -->|get_notes| NoteW["notes_write"]
+
+    Core --> Turn1["Turn 1: Read ツールのみ"]
+    Turn1 -->|LLM が read 呼出| Unlock["Deferred unlock:<br/>Write ツール追加"]
+    Unlock --> Turn2["Turn 2: Read + Write ツール"]
+    Turn1 -->|テキスト応答のみ| Done["完了<br/>(Write 不要だった)"]
 ```
+
+**設計意図:** `select_tools()` は read ツールのみ返す。Write ツールは LLM が read ツールを呼んだ後に動的追加される（deferred injection）。read ツール呼び出し自体が write 意図のシグナルとなるため、キーワードベースの write 意図判定の限界（「予定よろしく」「スケジュールお願い」等）を解消する。追加 API コストなし（read クエリは既に 2 ターン）。
 
 **ツールグループ一覧:**
 
@@ -243,6 +238,17 @@ flowchart TB
 | `memory` | Read/Write | get_user_memory, get_user_facts, add_user_fact |
 | `patterns` | Read | get_user_patterns |
 | `web` | Read | web_search, web_fetch |
+
+**Deferred Write マッピング (READ_TOOL_TO_WRITE_GROUPS):**
+
+| Read ツール | Unlock する Write グループ |
+|------------|------------------------|
+| get_tasks | task |
+| get_time_blocks, get_time_entries | planning |
+| get_goals_and_milestones | goals_write |
+| get_notes, get_memos | notes_write |
+| get_reviews, get_review | review |
+| get_user_facts, get_user_memory | memory |
 
 **Situationベース静的選択:**
 
@@ -265,7 +271,7 @@ graph TB
 
     subgraph "レジストリ"
         Registry["ToolRegistry<br/>get_tool, get_all_tools<br/>execute_tool"]
-        Schema["get_tools_api_schema<br/>→ Anthropic/Gemini形式"]
+        Schema["get_tools_api_schema<br/>→ Gemini形式"]
     end
 
     subgraph "実行"
@@ -391,8 +397,6 @@ flowchart TB
 
     subgraph "コンテキスト読込"
         Query["ai_contextsテーブルをクエリ<br/>(situation + is_active)"]
-        HasExp{"experiment_id?"}
-        ABSelect["SHA256ハッシュで<br/>決定論的バケット選択"]
         DefaultCtx["is_default=trueを取得"]
     end
 
@@ -410,9 +414,7 @@ flowchart TB
 
     Explicit --> Query
     Default --> Query
-    Query --> HasExp
-    HasExp -->|Yes| ABSelect --> Variables
-    HasExp -->|No| DefaultCtx --> Variables
+    Query --> DefaultCtx --> Variables
     Variables --> Persona --> Context
 ```
 
@@ -436,20 +438,17 @@ flowchart TB
 | `{user_traits}` | Lakehouse Gold (gold.user_trait_profile) | 仕事/学習スタイル、強み、課題 |
 | `{communication_style}` | interest_profile + trait_profile 合成 | AIコミュニケーション指針（技術深度、提案スタイル） |
 
-### A/Bテスト
+### バージョン管理
 
-同一situationに複数のコンテキストを紐付け、`experiment_id` + `traffic_weight` で分割:
+`ai_context_versions` テーブルでプロンプトの全変更履歴を管理:
 
-```mermaid
-flowchart LR
-    UserID["user_id + experiment_id"] --> Hash["SHA256ハッシュ"]
-    Hash --> Bucket["バケット 0-99"]
-    Bucket --> Select{"累積重みで<br/>コンテキスト選択"}
-    Select -->|0-49| CtxA["コンテキストA<br/>(weight: 50)"]
-    Select -->|50-99| CtxB["コンテキストB<br/>(weight: 50)"]
-```
+| カラム | 説明 |
+|-------|------|
+| `source` | `manual` (手動編集) / `ai` (AI最適化) / `rollback` (ロールバック) |
+| `candidate_status` | NULL (通常) / `pending` (AI候補、レビュー待ち) / `adopted` (採用) / `rejected` (却下) |
+| `eval_summary` | AI評価データ JSONB (interaction_count, avg_rating, strengths, weaknesses) |
 
-同一ユーザー+実験には常に同じバリアントが割り当てられる（決定論的）。
+`ai_contexts.active_version` で現在有効なバージョン番号を追跡。A/Bテストはフロントエンドのエフェメラル機能として実装（DB永続化不要）。
 
 ---
 
@@ -535,7 +534,7 @@ sequenceDiagram
 graph TB
     subgraph "インデックスパイプライン"
         Note["ノートコンテンツ"] --> Chunker["Chunker<br/>テキスト分割"]
-        Chunker --> Embed["EmbeddingService<br/>OpenAI or Gemini<br/>(1536次元)"]
+        Chunker --> Embed["EmbeddingService<br/>Gemini<br/>(1536次元)"]
         Embed --> Store["note_content_chunks<br/>(pgvector)"]
     end
 
@@ -559,7 +558,7 @@ graph TB
 | `hybrid_search` | 上記2つを組み合わせ | `semantic_score * 0.7 + keyword_score * 0.3` |
 | `search_notes` | notesテーブル直接検索 | `ts_rank` on title + content |
 
-**Gemini task_type**: `EMBEDDING_PROVIDER=gemini` 時、検索クエリには `RETRIEVAL_QUERY`、ドキュメントインデックスには `RETRIEVAL_DOCUMENT` を自動適用。OpenAI では無視される。
+**Gemini task_type**: 検索クエリには `RETRIEVAL_QUERY`、ドキュメントインデックスには `RETRIEVAL_DOCUMENT` を自動適用。
 
 ---
 
@@ -579,24 +578,14 @@ graph TB
 | POST | `/admin/reindex-pending` | pending ノートの一括チャンクインデックス（内部用、JWT不要、`?batch_size=50`） |
 | POST | `/admin/generate-weekly-reviews` | 全アクティブユーザーの週次レビュー自動生成（内部用、JWT不要） |
 | POST | `/admin/run-prompt-optimization` | プロンプト品質評価＋自動最適化バッチ（内部用、JWT不要） |
-| GET | `/prompts` | AIコンテキスト一覧（per-user、`?situation=chat` フィルタ対応、各コンテキストに `pending_experiment` 情報を付与） |
+| GET | `/prompts` | AIコンテキスト一覧（per-user、`?situation=chat` フィルタ対応、各コンテキストに `active_version` + `pending_candidate_count` を付与） |
 | GET | `/prompts/{id}` | AIコンテキスト詳細 + 現在のバージョン番号 |
 | PATCH | `/prompts/{id}` | AIコンテキスト更新 → 自動バージョン作成 |
 | GET | `/prompts/{id}/versions` | バージョン履歴一覧 |
 | GET | `/prompts/{id}/versions/{version_number}` | 特定バージョン取得 |
 | POST | `/prompts/{id}/rollback/{version_number}` | 指定バージョンにロールバック |
-| GET | `/prompts/challenges` | プロンプト実験一覧 (レガシー、`?status=&situation=` フィルタ対応) |
-| GET | `/prompts/challenges/{id}` | プロンプト実験詳細 (レガシー) |
-| POST | `/prompts/challenges/{id}/init-round` | マルチターンA/Bラウンド初期化 (レガシー) |
-| POST | `/prompts/challenges/{id}/generate` | 単発チャレンジラウンド生成 (レガシー) |
-| POST | `/prompts/challenges/{id}/vote` | A/B/tie で投票 (レガシー) |
-| POST | `/prompts/challenges/{id}/resolve` | promote or reject (レガシー) |
-| POST | `/prompts/comparisons` | バージョン比較セッション作成 |
-| GET | `/prompts/comparisons` | 比較セッション一覧 (`?context_id=&status=` フィルタ対応) |
-| GET | `/prompts/comparisons/{id}` | 比較セッション詳細 |
-| POST | `/prompts/comparisons/{id}/init-round` | ブラインドA/Bラウンド初期化（バージョンランダム配置、version_number返却） |
-| POST | `/prompts/comparisons/{id}/vote` | A/B/tie で投票、win_rate_b 再計算 |
-| POST | `/prompts/comparisons/{id}/resolve` | adopt_a / adopt_b / dismiss |
+| POST | `/prompts/{id}/versions/{version_number}/adopt` | AI候補バージョンを採用（active_versionを更新） |
+| POST | `/prompts/{id}/versions/{version_number}/reject` | AI候補バージョンを却下 |
 
 認証: `Authorization: Bearer <token>` → JWT (HS256) から `user_id` を抽出。
 
@@ -607,37 +596,34 @@ flowchart TB
     subgraph "週次バッチ (月曜 3:10 AM)"
         Eval["PromptEvaluator<br/>定量メトリクス + LLM定性分析"]
         Optimize["PromptOptimizer<br/>改善プロンプト生成"]
-        Experiment["ExperimentManager<br/>実験作成 → バージョン作成"]
+        Experiment["ExperimentManager<br/>候補バージョン作成"]
     end
 
-    subgraph "バージョン比較UI (ユーザー操作)"
-        Create["POST /comparisons<br/>比較セッション作成"]
-        InitRound["POST /comparisons/{id}/init-round<br/>A/Bマッピング初期化"]
-        Stream["POST /agent/stream (context_id + version_number)<br/>マルチターン会話 x2"]
-        Vote["POST /comparisons/{id}/vote<br/>投票"]
-        Resolve["POST /comparisons/{id}/resolve<br/>adopt_a / adopt_b / dismiss"]
+    subgraph "バージョン管理UI (ユーザー操作)"
+        Review["VersionDetail<br/>候補バージョンレビュー"]
+        Adopt["POST /prompts/{id}/versions/{v}/adopt<br/>候補採用"]
+        Reject["POST /prompts/{id}/versions/{v}/reject<br/>候補却下"]
+        ABTest["ABTestPanel (エフェメラル)<br/>POST /agent/stream x2"]
     end
 
     Eval -->|needs_improvement| Optimize
     Optimize --> Experiment
-    Experiment --> Create
-    Create --> InitRound
-    InitRound --> Stream
-    Stream --> Vote
-    Vote --> Resolve
+    Experiment -->|candidate_status=pending| Review
+    Review --> Adopt
+    Review --> Reject
+    Review --> ABTest
+    ABTest --> Adopt
 ```
 
-バージョン比較は `prompt_comparisons` テーブルで管理。同一コンテキストの任意の2バージョンを
-`version_number` 指定で `/agent/stream` に送信し、ブラインドA/Bチャットで比較する。
+AI最適化は `ai_context_versions` にメタデータ付きで候補バージョンを作成する（`source='ai'`, `candidate_status='pending'`, `eval_summary` JSONB）。
+ユーザーはバージョン詳細画面で採用/却下を判断、またはエフェメラルA/Bテスト（フロントエンドインメモリ、DB永続化不要）で比較可能。
 
 | コンポーネント | ファイル | 役割 |
 |--------------|--------|------|
 | PromptEvaluator | `batch/prompt_evaluator.py` | 会話品質の定量・定性評価（過去データ分析） |
-| PromptOptimizer | `batch/prompt_optimizer.py` | LLMによる改善プロンプト生成 |
-| ExperimentManager | `batch/experiment_manager.py` | バッチオーケストレーション |
+| PromptOptimizer | `batch/prompt_optimizer.py` | LLMによる改善プロンプト生成 → 候補バージョン作成 (source='ai', eval_summary付き) |
+| ExperimentManager | `batch/experiment_manager.py` | バッチオーケストレーション（評価→最適化→候補バージョン作成） |
 | **AgentEvaluator** | `batch/agent_evaluator.py` | **アクティブテスト型の品質評価。テストシナリオ（chat 10件、daily_advice 3件、review 2件）を各エージェントに送信し、6軸（frontend_fit / insight_depth / actionability / efficiency / japanese_quality / user_value）で1-5点評価。situation別チェックリスト違反検出＋改善提案（priority/before/after付き）を出力** |
-| Comparison API | `api/routes.py` | バージョン比較セッション作成・投票・解決 |
-| Comparison Queries | `db/queries/prompt_comparisons.py` | 比較セッションCRUD操作 |
 
 **改善判定基準:**
 - 平均評価 < 3.5
@@ -652,11 +638,9 @@ flowchart TB
 
 | カテゴリ | 環境変数 | 説明 |
 |---------|---------|------|
-| **AIプロバイダ** | `AI_PROVIDER` | `anthropic` or `google` (デフォルト: `google`) |
-| **Anthropic** | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude API (デフォルト: `claude-sonnet-4-20250514`) |
+| **AIプロバイダ** | `AI_PROVIDER` | `google` (デフォルト: `google`) |
 | **Google** | `GOOGLE_API_KEY`, `GOOGLE_MODEL` | Gemini API (デフォルト: `gemini-2.0-flash`) |
-| **埋め込み** | `EMBEDDING_PROVIDER` | `openai` or `gemini` (デフォルト: `openai`) |
-| | `OPENAI_API_KEY` | OpenAI text-embedding-3-small |
+| **埋め込み** | `EMBEDDING_PROVIDER` | `gemini` (デフォルト: `gemini`) |
 | | `GEMINI_EMBEDDING_MODEL` | Gemini埋め込みモデル (デフォルト: `gemini-embedding-001`) |
 | **DB** | `DATABASE_URL` or `DB_HOST/PORT/USER/PASSWORD/NAME` | PostgreSQL 16 |
 | **ストレージ** | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | MinIO (ノートコンテンツ読み取り) |

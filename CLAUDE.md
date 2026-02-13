@@ -9,9 +9,9 @@ React/TypeScript SPA + Go マイクロサービス + PostgreSQL 16。
 
 ```bash
 # Frontend
-npm run dev          # Dev server (localhost:5173)
-npm run build        # TypeScript check + production build
-npm run lint         # ESLint
+cd frontend && npm run dev          # Dev server (localhost:5173)
+cd frontend && npm run build        # TypeScript check + production build
+cd frontend && npm run lint         # ESLint
 
 # Backend
 cd backend && make build    # Build all services
@@ -24,6 +24,8 @@ make up              # Start all services
 make down            # Stop all services
 make logs            # View logs
 make dev-backend     # Backend only (for local frontend dev)
+make prod-up         # Production: nginx HTTPS proxy, internal ports hidden
+make deploy          # Deploy to GCE via SSH
 ```
 
 ---
@@ -35,7 +37,7 @@ make dev-backend     # Backend only (for local frontend dev)
 | Document | Location | Content |
 |----------|----------|---------|
 | Backend | `backend/ARCHITECTURE.md` | Go services, API spec, DB schema, auth flow |
-| Frontend | `src/ARCHITECTURE.md` | React/TS, Zustand, components, API client |
+| Frontend | `frontend/src/ARCHITECTURE.md` | React/TS, Zustand, components, API client |
 | AI Service | `kensan-ai/ARCHITECTURE.md` | Agents, tools, context, memory |
 | Observability | `observability/ARCHITECTURE.md` | Monitoring setup |
 
@@ -60,7 +62,7 @@ make dev-backend     # Backend only (for local frontend dev)
 タスクを「完了」と報告する前に、以下をすべて満たさなければならない。満たさずに完了を報告することは禁止。
 
 1. **Go コード変更時**: `cd backend && make test` が全て pass している
-2. **フロントエンド変更時**: `npm run build` が成功している
+2. **フロントエンド変更時**: `cd frontend && npm run build` が成功している
 3. **構造的変更時**: 影響を受ける ARCHITECTURE.md が更新されている
 4. **Plan モード時**: 計画の最終ステップにテスト実行・ドキュメント更新が含まれている
 
@@ -89,7 +91,6 @@ make dev-backend     # Backend only (for local frontend dev)
 
 | Document | Location |
 |----------|----------|
-| Project Proposal | `docs/spec/kensan_proposal_v0.5.md` |
+| Project Proposal | `docs/spec/kensan_proposal_v1.0.md` |
 | API Specification | `docs/spec/api_specification.md` |
-| Development Status | `docs/status/DEVELOPMENT_STATUS.md` |
 | ADRs | `docs/adr/` |

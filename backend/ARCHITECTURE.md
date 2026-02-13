@@ -331,8 +331,6 @@ erDiagram
 
     ai_contexts ||--o{ ai_context_versions : "has versions"
     ai_contexts ||--o{ prompt_evaluations : "evaluated by"
-    ai_contexts ||--o{ prompt_experiments : "tested in"
-    ai_contexts ||--o{ prompt_comparisons : "compared in"
     note_types ||--o{ notes : "defines type"
     goals ||--o{ milestones : "contains"
     milestones ||--o{ tasks : "contains"
@@ -381,14 +379,14 @@ AIエージェントのシステムプロンプトを管理。`user_id = NULL` �
 
 | カラム | 説明 |
 |-------|------|
-| `situation` | 使用場面（`chat`, `persona`, `morning`, `weekly`, etc.） |
+| `situation` | 使用場面（`chat`, `persona`, `review`, `daily_advice`, `briefing`） |
 | `system_prompt` | システムプロンプト本文 |
 | `allowed_tools` | 使用可能なツール一覧 (`TEXT[]`) |
 | `user_id` | NULL=システムテンプレート、UUID=ユーザー固有 |
 | `source_template_id` | コピー元テンプレートへの参照 |
 | `is_default` / `is_active` | デフォルト・有効フラグ |
 
-関連テーブル: `ai_context_versions`（バージョン履歴）、`prompt_evaluations`（定期評価）、`prompt_experiments`（A/Bテスト実験、レガシー）、`prompt_comparisons`（バージョンベースA/B比較）。いずれも `user_id` カラムを持つ。
+関連テーブル: `ai_context_versions`（バージョン履歴、source/candidate_status/eval_summaryメタデータ付き）、`prompt_evaluations`（定期評価）。`active_version` カラムで現在有効なバージョン番号を追跡。
 
 ### 非正規化フィールド自動同期トリガー
 
@@ -430,6 +428,21 @@ flowchart LR
 | 全文検索 | `to_tsvector('simple', title \|\| ' ' \|\| content)` | ノート検索 |
 | ベクトル | `embedding vector(1536)` | セマンティック検索 |
 | 外部キー | 各テーブル | `ON DELETE CASCADE` |
+
+### マイグレーション・初期データ
+
+スキーマは `backend/migrations-v2/` で管理。v1 (64個の増分マイグレーション) を2ファイルに統合。
+
+| ファイル | 内容 |
+|----------|------|
+| `001_init.sql` | 全テーブル・インデックス・トリガー・Extension |
+| `002_master.sql` | AIコンテキスト (システムプロンプト) + ノートタイプ等のマスターデータ |
+| `apply.sh` | スキーマ + ペルソナシード適用スクリプト |
+| `seeds/<persona>/0*.sql` | 4ペルソナ分のデモデータ (tanaka_shota, suzuki_misaki, yamada_takuya, takahashi_aya) |
+
+**Docker初期化**: `docker-compose.yml` で `001_init.sql` と `002_master.sql` を `/docker-entrypoint-initdb.d/` にマウント。
+
+**デモログイン**: `user-service` の `POST /api/v1/auth/demo-login` が `seeds/<persona>/` 配下の SQL を読み込み、UUID を動的に置換して毎回新規ユーザーを作成。
 
 ---
 

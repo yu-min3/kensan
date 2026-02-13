@@ -158,67 +158,67 @@ class PromptOptimizer:
             logger.error("Prompt optimization failed: %s", e)
             return None
 
-    async def create_variant_context(
+    async def create_candidate_version(
         self,
-        source_context_id: UUID,
+        context_id: UUID,
         improved_prompt: str,
         changelog: str,
-    ) -> UUID | None:
-        """Create a new ai_context as a variant (is_active=false, is_default=false).
+        eval_summary: dict | None = None,
+    ) -> int | None:
+        """Create a new candidate version in ai_context_versions.
 
-        Returns the new context ID, or None on failure.
+        Does NOT update ai_contexts (the candidate is not yet adopted).
+        Sets source='ai' and candidate_status='pending'.
+
+        Returns the new version number, or None on failure.
         """
         async with get_connection() as conn:
-            # Get source context
+            # Get source context to copy settings
             source = await conn.fetchrow(
                 """
-                SELECT name, situation, allowed_tools, max_turns, temperature, description, user_id
+                SELECT allowed_tools, max_turns, temperature
                 FROM ai_contexts
                 WHERE id = $1
                 """,
-                source_context_id,
+                context_id,
             )
             if source is None:
-                logger.error("Source context %s not found", source_context_id)
+                logger.error("Context %s not found", context_id)
                 return None
 
-            # Insert variant context (preserving user_id from source)
-            variant_row = await conn.fetchrow(
-                """
-                INSERT INTO ai_contexts (
-                    name, situation, system_prompt, allowed_tools, max_turns,
-                    temperature, is_active, is_default, description, user_id
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, false, false, $7, $8)
-                RETURNING id
-                """,
-                f"{source['name']} (自動改善)",
-                source["situation"],
-                improved_prompt,
-                list(source["allowed_tools"]),
-                source["max_turns"],
-                source["temperature"],
-                source["description"],
-                source["user_id"],
+            # Determine next version number
+            latest_version = await conn.fetchval(
+                "SELECT COALESCE(MAX(version_number), 0) FROM ai_context_versions WHERE context_id = $1",
+                context_id,
             )
-            variant_id = variant_row["id"]
+            next_version = latest_version + 1
 
-            # Create initial version record
+            # Insert candidate version with metadata
+            import json
+            eval_summary_json = json.dumps(eval_summary, ensure_ascii=False) if eval_summary else None
+
             await conn.execute(
                 """
                 INSERT INTO ai_context_versions (
                     context_id, version_number, system_prompt, allowed_tools,
-                    max_turns, temperature, changelog
+                    max_turns, temperature, changelog,
+                    source, eval_summary, candidate_status
                 )
-                VALUES ($1, 1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai', $8, 'pending')
                 """,
-                variant_id,
+                context_id,
+                next_version,
                 improved_prompt,
                 list(source["allowed_tools"]),
                 source["max_turns"],
                 source["temperature"],
-                changelog,
+                f"AI最適化: {changelog}",
+                eval_summary_json,
             )
 
-            logger.info("Created variant context %s from source %s", variant_id, source_context_id)
-            return variant_id
+            logger.info(
+                "Created candidate version %d for context %s",
+                next_version,
+                context_id,
+            )
+            return next_version

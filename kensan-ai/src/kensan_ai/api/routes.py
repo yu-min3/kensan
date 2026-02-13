@@ -34,16 +34,10 @@ from kensan_ai.api.schemas import (
     PromptMetadataResponse,
     VariableMetadataItem,
     ToolMetadataItem,
-    ChallengeGenerateRequest,
-    ChallengeVoteRequest,
-    ChallengeResolveRequest,
-    ComparisonCreateRequest,
-    ComparisonVoteRequest,
-    ComparisonResolveRequest,
     ConversationRateRequest,
 )
 from kensan_ai.api.sse import sse_event
-from kensan_ai.agents.chat import select_tools
+from kensan_ai.agents.chat import select_tools, get_deferred_write_tools
 from kensan_ai.context import Situation, ContextResolver, detect_situation
 from kensan_ai.db.connection import get_connection
 from kensan_ai.tools import execute_tool
@@ -52,8 +46,6 @@ from kensan_ai.extraction.fact_extractor import get_fact_extractor
 from kensan_ai.batch.profile_summarizer import ProfileSummarizer
 from kensan_ai.db.queries import interactions as interactions_queries
 from kensan_ai.db.queries import ai_contexts as ai_contexts_queries
-from kensan_ai.db.queries import prompt_experiments as exp_queries
-from kensan_ai.db.queries import prompt_comparisons as comp_queries
 from kensan_ai.lib.parsers import parse_uuid as lib_parse_uuid, parse_date as lib_parse_date
 from kensan_ai.lakehouse import get_reader
 from kensan_ai.telemetry import get_tracer
@@ -214,7 +206,7 @@ async def agent_stream(
         ctx_span.set_attribute("gen_ai.user.id", str(user_id))
 
         if request.context_id:
-            # Direct context_id: load by ID (used by challenge A/B comparison)
+            # Direct context_id: load by ID (used by A/B comparison)
             direct_ctx_id = _parse_uuid(request.context_id)
             context = await ContextResolver.get_context_by_id(
                 direct_ctx_id,
@@ -293,10 +285,7 @@ async def agent_stream(
         conversation_store.set(state)
 
     # 3.6. Select tools based on message intent.
-    # If continuing a proposal conversation (user sent message instead of
-    # approving), use all allowed tools so write tools remain available
-    # for the modified proposal — even if the message text doesn't contain
-    # explicit write keywords like "作って" or "相談".
+    deferred_tools: list[str] | None = None
     if continuing_proposal:
         allowed_tools = list(context.allowed_tools)
     else:
@@ -304,6 +293,8 @@ async def agent_stream(
             request.message, context.allowed_tools, request.situation, context_keys,
             prompt_variables=context.prompt_variables,
         )
+        # Compute deferred write tools: these will be unlocked after readonly tool execution
+        deferred_tools = get_deferred_write_tools(allowed_tools, context.allowed_tools) or None
 
     # 4. Create agent runner (Anthropic or Gemini based on ai_provider setting)
     agent = create_agent_runner(
@@ -314,7 +305,7 @@ async def agent_stream(
         context_id=str(context.id),
         context_name=context.name,
         context_version=context.version,
-        experiment_id=str(context.experiment_id) if context.experiment_id else None,
+        deferred_tools=deferred_tools,
     )
 
     # 5. Stream SSE events
@@ -398,11 +389,7 @@ async def agent_approve(
     request: AgentApproveRequest,
     authorization: str | None = Header(None),
 ) -> StreamingResponse:
-    """Execute approved actions from a previous agent proposal.
-
-    Executes only the actions whose IDs are in action_ids.
-    Returns results as SSE events.
-    """
+    """Execute approved actions from a previous agent proposal."""
     user_id = _get_user_id_from_header(authorization)
     state = conversation_store.get(request.conversation_id)
 
@@ -455,8 +442,7 @@ async def agent_approve(
             "tokens": {"input": 0, "output": 0},
         })
 
-        # Record execution results in conversation history so the agent
-        # knows what was approved/rejected/succeeded/failed in subsequent turns
+        # Record execution results in conversation history
         history_parts = results_summary.copy()
         if rejected:
             rejected_names = [a.tool_name for a in rejected]
@@ -483,11 +469,7 @@ async def agent_reject(
     request: AgentRejectRequest,
     authorization: str | None = Header(None),
 ) -> dict:
-    """Record rejection of proposed actions in conversation history.
-
-    Updates the conversation history so the agent knows what was rejected
-    in subsequent turns, preventing it from re-proposing the same actions.
-    """
+    """Record rejection of proposed actions in conversation history."""
     user_id = _get_user_id_from_header(authorization)
     state = conversation_store.get(request.conversation_id)
 
@@ -557,13 +539,11 @@ async def rate_conversation(
     request: ConversationRateRequest,
     authorization: str | None = Header(None),
 ) -> dict:
-    """Rate a conversation. Finds the latest interaction for this conversation and saves the rating."""
+    """Rate a conversation."""
     user_id = _get_user_id_from_header(authorization)
     conv_uuid = _parse_uuid(conversation_id)
 
-    # Find the latest interaction for this conversation + user
     async with get_connection() as conn:
-        # Retry up to 3 times with 1s delay (interaction may still be saving via background pipeline)
         interaction_row = None
         for attempt in range(3):
             interaction_row = await conn.fetchrow(
@@ -643,11 +623,7 @@ async def list_prompts(
 async def get_prompt_metadata(
     authorization: str | None = Header(None),
 ) -> PromptMetadataResponse:
-    """Get metadata for all available variables and tools.
-
-    Returns static data (no DB queries). Used by the prompt editor UI
-    to show descriptions and examples for variables and tools.
-    """
+    """Get metadata for all available variables and tools."""
     _get_user_id_from_header(authorization)
 
     from kensan_ai.context.variable_replacer import VariableReplacer
@@ -670,442 +646,40 @@ async def get_prompt_metadata(
     return PromptMetadataResponse(variables=variables, tools=tools)
 
 
-# NOTE: Challenge routes MUST be defined before /prompts/{context_id}
-# to avoid FastAPI matching "challenges" as a context_id parameter.
-
-@router.get("/prompts/challenges")
-async def list_challenges(
+@router.post("/prompts/run-optimization")
+async def run_optimization_for_user(
     authorization: str | None = Header(None),
-    status: str | None = Query(None),
-    situation: str | None = Query(None),
+    force: bool = Query(False),
 ) -> dict:
-    """List prompt experiments (challenges) for the current user."""
+    """Run prompt optimization for the current user.
+
+    Evaluates conversation quality, generates improved prompts,
+    and creates candidate versions. JWT-authenticated (per-user).
+    """
+    from kensan_ai.batch.experiment_manager import _process_user_contexts, _last_week_range
+    from kensan_ai.batch.prompt_evaluator import PromptEvaluator
+    from kensan_ai.batch.prompt_optimizer import PromptOptimizer
+
     user_id = _get_user_id_from_header(authorization)
-    experiments = await exp_queries.list_experiments(status=status, situation=situation, user_id=user_id)
-    return {"challenges": experiments}
+    period_start, period_end = _last_week_range()
 
+    evaluator = PromptEvaluator()
+    optimizer = PromptOptimizer()
 
-@router.get("/prompts/challenges/{challenge_id}")
-async def get_challenge(
-    challenge_id: str,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Get a single prompt experiment (challenge) by ID."""
-    _get_user_id_from_header(authorization)
-    exp_uuid = _parse_uuid(challenge_id)
-    experiment = await exp_queries.get_experiment(exp_uuid)
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-    return experiment
-
-
-@router.post("/prompts/challenges/{challenge_id}/init-round")
-async def init_challenge_round(
-    challenge_id: str,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Initialize a multi-turn A/B comparison round.
-
-    Randomizes control/variant assignment to A/B labels,
-    stores mapping server-side, and returns context_ids for
-    the frontend to stream via /agent/stream with context_id.
-    """
-    _get_user_id_from_header(authorization)
-    exp_uuid = _parse_uuid(challenge_id)
-    experiment = await exp_queries.get_experiment(exp_uuid)
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-
-    if experiment["status"] not in ("pending_review", "in_challenge"):
-        raise HTTPException(status_code=400, detail="Challenge is already resolved")
-
-    # Update status to in_challenge if needed
-    if experiment["status"] == "pending_review":
-        await exp_queries.update_experiment_status(exp_uuid, "in_challenge")
-
-    # Randomize A/B assignment
-    round_id = str(uuid_module.uuid4())
-    control_id = experiment["control_context_id"]
-    variant_id = experiment["variant_context_id"]
-
-    if random.random() < 0.5:
-        context_id_a, context_id_b = control_id, variant_id
-        mapping = {"A": "control", "B": "variant"}
-    else:
-        context_id_a, context_id_b = variant_id, control_id
-        mapping = {"A": "variant", "B": "control"}
-
-    # Store mapping server-side
-    round_data = {
-        "round_id": round_id,
-        "message": "(multi-turn)",
-        "mapping": mapping,
-        "winner": None,
-    }
-    await exp_queries.append_challenge_result(exp_uuid, round_data)
-
-    return {
-        "round_id": round_id,
-        "context_id_a": context_id_a,
-        "context_id_b": context_id_b,
-    }
-
-
-@router.post("/prompts/challenges/{challenge_id}/generate")
-async def generate_challenge_round(
-    challenge_id: str,
-    request: ChallengeGenerateRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Generate a challenge round: same message answered by control and variant prompts.
-
-    Selects a past conversation message (or uses custom_message),
-    generates responses from both control and variant prompts,
-    and returns them as A/B with randomized assignment.
-    """
-    _get_user_id_from_header(authorization)
-    exp_uuid = _parse_uuid(challenge_id)
-    experiment = await exp_queries.get_experiment(exp_uuid)
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-
-    if experiment["status"] not in ("pending_review", "in_challenge"):
-        raise HTTPException(status_code=400, detail="Challenge is already resolved")
-
-    # Update status to in_challenge if needed
-    if experiment["status"] == "pending_review":
-        await exp_queries.update_experiment_status(exp_uuid, "in_challenge")
-
-    # Get the message to test
-    if request.custom_message:
-        test_message = request.custom_message
-    else:
-        # Sample from past conversations
-        async with get_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT user_input FROM ai_interactions
-                WHERE context_id = $1 AND user_input IS NOT NULL
-                ORDER BY RANDOM()
-                LIMIT 1
-                """,
-                UUID(experiment["control_context_id"]),
-            )
-        if not row:
-            raise HTTPException(status_code=404, detail="No past conversations found to sample")
-        test_message = row["user_input"]
-
-    # Generate responses from both prompts (direct LLM calls, no tools)
-    settings = get_settings()
-    control_response = await _generate_llm_response(
-        settings, experiment["control_prompt"], test_message
-    )
-    variant_response = await _generate_llm_response(
-        settings, experiment["variant_prompt"], test_message
-    )
-
-    # Randomize A/B assignment
-    round_id = str(uuid_module.uuid4())
-    if random.random() < 0.5:
-        response_a, response_b = control_response, variant_response
-        mapping = {"A": "control", "B": "variant"}
-    else:
-        response_a, response_b = variant_response, control_response
-        mapping = {"A": "variant", "B": "control"}
-
-    # Store mapping server-side in challenge_results
-    round_data = {
-        "round_id": round_id,
-        "message": test_message,
-        "mapping": mapping,
-        "winner": None,
-    }
-    await exp_queries.append_challenge_result(exp_uuid, round_data)
-
-    return {
-        "round_id": round_id,
-        "message": test_message,
-        "response_a": response_a,
-        "response_b": response_b,
-    }
-
-
-@router.post("/prompts/challenges/{challenge_id}/vote")
-async def vote_challenge_round(
-    challenge_id: str,
-    request: ChallengeVoteRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Vote on a challenge round result. Recalculates win_rate."""
-    _get_user_id_from_header(authorization)
-    exp_uuid = _parse_uuid(challenge_id)
-    experiment = await exp_queries.get_experiment(exp_uuid)
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-
-    if experiment["status"] != "in_challenge":
-        raise HTTPException(status_code=400, detail="Challenge is not in voting phase")
-
-    # Find the round and update winner
-    results = experiment["challenge_results"]
-    round_found = False
-    for r in results:
-        if r.get("round_id") == request.round_id:
-            r["winner"] = request.winner
-            round_found = True
-            break
-
-    if not round_found:
-        raise HTTPException(status_code=404, detail="Round not found")
-
-    # Calculate win_rate (variant wins / total decided rounds)
-    decided = [r for r in results if r.get("winner") and r["winner"] != "tie"]
-    variant_wins = sum(
-        1 for r in decided
-        if r.get("mapping", {}).get(r["winner"]) == "variant"
-    )
-    win_rate = variant_wins / len(decided) if decided else 0.5
-
-    await exp_queries.update_experiment_status(
-        exp_uuid,
-        "in_challenge",
-        challenge_results=results,
-        win_rate=win_rate,
-    )
-
-    return {
-        "round_id": request.round_id,
-        "winner": request.winner,
-        "total_rounds": len(results),
-        "decided_rounds": len(decided),
-        "variant_win_rate": win_rate,
-    }
-
-
-@router.post("/prompts/challenges/{challenge_id}/resolve")
-async def resolve_challenge(
-    challenge_id: str,
-    request: ChallengeResolveRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Resolve a challenge: promote variant or reject it.
-
-    Promote: copy variant's system_prompt to control context, create version history.
-    Reject: deactivate variant context.
-    """
-    _get_user_id_from_header(authorization)
-    exp_uuid = _parse_uuid(challenge_id)
-    experiment = await exp_queries.get_experiment(exp_uuid)
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Challenge not found")
-
-    if experiment["status"] in ("promoted", "rejected"):
-        raise HTTPException(status_code=400, detail="Challenge already resolved")
-
-    control_id = UUID(experiment["control_context_id"])
-    variant_id = UUID(experiment["variant_context_id"])
-
-    if request.action == "promote":
-        # Copy variant prompt to control context (preserving control context_id)
-        await ai_contexts_queries.update_context(
-            context_id=control_id,
-            system_prompt=experiment["variant_prompt"],
-            changelog=f"自動最適化プロモート (experiment: {challenge_id})",
-        )
-        # Deactivate variant
-        async with get_connection() as conn:
-            await conn.execute(
-                "UPDATE ai_contexts SET is_active = false WHERE id = $1",
-                variant_id,
-            )
-        await exp_queries.update_experiment_status(exp_uuid, "promoted")
-        return {"status": "promoted", "message": "改善版プロンプトが採用されました"}
-
-    else:
-        # Reject: deactivate variant
-        async with get_connection() as conn:
-            await conn.execute(
-                "UPDATE ai_contexts SET is_active = false WHERE id = $1",
-                variant_id,
-            )
-        await exp_queries.update_experiment_status(exp_uuid, "rejected")
-        return {"status": "rejected", "message": "改善版プロンプトは却下されました"}
-
-
-# =============================================================================
-# Prompt Comparisons (Version-based A/B)
-# =============================================================================
-
-@router.post("/prompts/comparisons")
-async def create_comparison(
-    request: ComparisonCreateRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Create a new version comparison session."""
-    user_id = _get_user_id_from_header(authorization)
-    ctx_uuid = _parse_uuid(request.context_id)
-    comparison_id = await comp_queries.create_comparison(
-        context_id=ctx_uuid,
-        version_a=request.version_a,
-        version_b=request.version_b,
+    result = await _process_user_contexts(
         user_id=user_id,
+        period_start=period_start,
+        period_end=period_end,
+        evaluator=evaluator,
+        optimizer=optimizer,
+        force=force,
     )
-    comparison = await comp_queries.get_comparison(comparison_id)
-    return comparison
-
-
-@router.get("/prompts/comparisons")
-async def list_comparisons(
-    authorization: str | None = Header(None),
-    context_id: str | None = Query(None),
-    status: str | None = Query(None),
-) -> dict:
-    """List comparison sessions for the current user."""
-    user_id = _get_user_id_from_header(authorization)
-    ctx_uuid = _parse_uuid(context_id) if context_id else None
-    comparisons = await comp_queries.list_comparisons(
-        user_id=user_id,
-        context_id=ctx_uuid,
-        status=status,
-    )
-    return {"comparisons": comparisons}
-
-
-@router.get("/prompts/comparisons/{comparison_id}")
-async def get_comparison(
-    comparison_id: str,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Get a single comparison by ID."""
-    _get_user_id_from_header(authorization)
-    comp_uuid = _parse_uuid(comparison_id)
-    comparison = await comp_queries.get_comparison(comp_uuid)
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
-    return comparison
-
-
-@router.post("/prompts/comparisons/{comparison_id}/init-round")
-async def init_comparison_round(
-    comparison_id: str,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Initialize a blind A/B comparison round.
-
-    Randomizes version_a/version_b assignment to A/B labels,
-    stores mapping server-side, and returns version numbers for streaming.
-    """
-    _get_user_id_from_header(authorization)
-    comp_uuid = _parse_uuid(comparison_id)
-    comparison = await comp_queries.get_comparison(comp_uuid)
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
-    if comparison["status"] != "active":
-        raise HTTPException(status_code=400, detail="Comparison is already resolved")
-
-    round_id = str(uuid_module.uuid4())
-    version_a = comparison["version_a"]
-    version_b = comparison["version_b"]
-
-    # Randomize A/B assignment
-    if random.random() < 0.5:
-        mapped_a, mapped_b = version_a, version_b
-    else:
-        mapped_a, mapped_b = version_b, version_a
-
-    round_data = {
-        "round_id": round_id,
-        "mapping": {"A": mapped_a, "B": mapped_b},
-        "winner": None,
-    }
-    await comp_queries.append_round(comp_uuid, round_data)
 
     return {
-        "round_id": round_id,
-        "context_id": comparison["context_id"],
-        "version_a": mapped_a,
-        "version_b": mapped_b,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        **result,
     }
-
-
-@router.post("/prompts/comparisons/{comparison_id}/vote")
-async def vote_comparison_round(
-    comparison_id: str,
-    request: ComparisonVoteRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Vote on a comparison round result."""
-    _get_user_id_from_header(authorization)
-    comp_uuid = _parse_uuid(comparison_id)
-    comparison = await comp_queries.get_comparison(comp_uuid)
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
-    if comparison["status"] != "active":
-        raise HTTPException(status_code=400, detail="Comparison is already resolved")
-
-    success = await comp_queries.update_round_winner(comp_uuid, request.round_id, request.winner)
-    if not success:
-        raise HTTPException(status_code=404, detail="Round not found")
-
-    # Recalculate win_rate_b from updated rounds
-    updated = await comp_queries.get_comparison(comp_uuid)
-    rounds = updated["rounds"]
-    decided = [r for r in rounds if r.get("winner") and r["winner"] != "tie"]
-    version_b = updated["version_b"]
-    b_wins = sum(
-        1 for r in decided
-        if r.get("mapping", {}).get(r["winner"]) == version_b
-    )
-    win_rate_b = b_wins / len(decided) if decided else None
-
-    # Update win_rate_b in DB
-    if win_rate_b is not None:
-        async with get_connection() as conn:
-            await conn.execute(
-                "UPDATE prompt_comparisons SET win_rate_b = $2 WHERE id = $1",
-                comp_uuid,
-                win_rate_b,
-            )
-
-    return {
-        "round_id": request.round_id,
-        "winner": request.winner,
-        "total_rounds": len(rounds),
-        "decided_rounds": len(decided),
-        "win_rate_b": win_rate_b,
-    }
-
-
-@router.post("/prompts/comparisons/{comparison_id}/resolve")
-async def resolve_comparison(
-    comparison_id: str,
-    request: ComparisonResolveRequest,
-    authorization: str | None = Header(None),
-) -> dict:
-    """Resolve a comparison: adopt version A, adopt version B, or dismiss."""
-    _get_user_id_from_header(authorization)
-    comp_uuid = _parse_uuid(comparison_id)
-    comparison = await comp_queries.get_comparison(comp_uuid)
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
-    if comparison["status"] != "active":
-        raise HTTPException(status_code=400, detail="Comparison is already resolved")
-
-    ctx_uuid = UUID(comparison["context_id"])
-
-    if request.action == "adopt_a":
-        await ai_contexts_queries.rollback_to_version(ctx_uuid, comparison["version_a"])
-        await comp_queries.resolve_comparison(comp_uuid, "adopted_a", comparison.get("win_rate_b"))
-        return {"status": "adopted_a", "message": f"v{comparison['version_a']} を採用しました"}
-
-    elif request.action == "adopt_b":
-        await ai_contexts_queries.rollback_to_version(ctx_uuid, comparison["version_b"])
-        await comp_queries.resolve_comparison(comp_uuid, "adopted_b", comparison.get("win_rate_b"))
-        return {"status": "adopted_b", "message": f"v{comparison['version_b']} を採用しました"}
-
-    else:
-        await comp_queries.resolve_comparison(comp_uuid, "dismissed", comparison.get("win_rate_b"))
-        return {"status": "dismissed", "message": "比較を棄却しました"}
 
 
 @router.get("/prompts/{context_id}", response_model=AIContextResponse)
@@ -1186,6 +760,36 @@ async def rollback_prompt(
     return result
 
 
+@router.post("/prompts/{context_id}/versions/{version_number}/adopt")
+async def adopt_version(
+    context_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Adopt a candidate version as the active version."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    result = await ai_contexts_queries.adopt_version(ctx_uuid, version_number)
+    if not result:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return {"status": "adopted", "message": "改善版プロンプトが採用されました", "context": result}
+
+
+@router.post("/prompts/{context_id}/versions/{version_number}/reject")
+async def reject_version(
+    context_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Reject a candidate version."""
+    _get_user_id_from_header(authorization)
+    ctx_uuid = _parse_uuid(context_id)
+    result = await ai_contexts_queries.reject_version(ctx_uuid, version_number)
+    if not result:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return {"status": "rejected", "message": "改善版プロンプトは却下されました", "context": result}
+
+
 # =============================================================================
 # Admin (Internal, no JWT)
 # =============================================================================
@@ -1194,10 +798,7 @@ async def rollback_prompt(
 async def admin_reindex_pending(
     batch_size: int = Query(50, ge=1, le=500),
 ) -> dict:
-    """Reindex all notes with index_status='pending' across all users.
-
-    Internal endpoint for Dagster scheduled jobs. No JWT required.
-    """
+    """Reindex all notes with index_status='pending' across all users."""
     from kensan_ai.indexing.pipeline import reindex_pending_notes
 
     async with get_connection() as conn:
@@ -1225,10 +826,7 @@ async def admin_reindex_pending(
 
 @router.post("/admin/generate-weekly-reviews")
 async def admin_generate_weekly_reviews() -> dict:
-    """Generate weekly reviews for all active users.
-
-    Internal endpoint for Dagster scheduled jobs. No JWT required.
-    """
+    """Generate weekly reviews for all active users."""
     from kensan_ai.batch.weekly_review import generate_weekly_reviews
 
     return await generate_weekly_reviews()
@@ -1236,12 +834,7 @@ async def admin_generate_weekly_reviews() -> dict:
 
 @router.post("/admin/run-prompt-optimization")
 async def admin_run_prompt_optimization() -> dict:
-    """Run prompt optimization batch for all active contexts.
-
-    Evaluates conversation quality, generates improved prompts,
-    and creates experiments for user review.
-    Internal endpoint for Dagster scheduled jobs. No JWT required.
-    """
+    """Run prompt optimization batch for all active contexts."""
     from kensan_ai.batch.experiment_manager import run_prompt_optimization_batch
 
     return await run_prompt_optimization_batch()
@@ -1257,10 +850,7 @@ async def get_explorer_interactions(
     start_timestamp: str = Query(..., description="ISO8601 start time"),
     end_timestamp: str = Query(..., description="ISO8601 end time"),
 ) -> dict:
-    """Get AI interactions from Lakehouse Silver layer.
-
-    JWT-based user_id filtering ensures data isolation.
-    """
+    """Get AI interactions from Lakehouse Silver layer."""
     user_id = _get_user_id_from_header(authorization)
 
     try:
@@ -1277,24 +867,3 @@ async def get_explorer_interactions(
     )
 
     return {"interactions": interactions}
-
-
-async def _generate_llm_response(
-    settings: Any,
-    system_prompt: str,
-    user_message: str,
-) -> str:
-    """Generate a plain text LLM response (no tools) for challenge comparison."""
-    from kensan_ai.lib.ai_provider import LLMClient
-
-    try:
-        llm = LLMClient()
-        result = await llm.generate(
-            user_message,
-            max_tokens=2048,
-            system=system_prompt[:4000],
-        )
-        return result.strip()
-    except Exception as e:
-        logger.error("Challenge LLM response generation failed: %s", e)
-        return f"(応答生成エラー: {e})"

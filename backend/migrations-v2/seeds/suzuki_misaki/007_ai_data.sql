@@ -243,7 +243,7 @@ test(''ボタンクリックでカウントが増える'', () => {
 -- ==============================================================================
 -- AI Review Reports (4件)
 -- ==============================================================================
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 
 ('d1900101-0000-0000-0000-000000000000', 'd1111111-1111-1111-1111-111111111111',
  CURRENT_DATE - 49, CURRENT_DATE - 43,

@@ -1,26 +1,27 @@
 """Experiment manager for orchestrating prompt optimization batch.
 
 Evaluates all active default contexts, generates improved prompts for
-those needing improvement, and creates experiments for user review.
+those needing improvement, and creates candidate versions for user review.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+
+from kensan_ai.lib.timezone_utils import local_today
 from typing import Any
 
 from kensan_ai.batch.prompt_evaluator import PromptEvaluator
 from kensan_ai.batch.prompt_optimizer import PromptOptimizer
 from kensan_ai.db.connection import get_connection
-from kensan_ai.db.queries import prompt_experiments as exp_queries
 
 logger = logging.getLogger(__name__)
 
 
 def _last_week_range() -> tuple[date, date]:
     """Return (7 days ago, today) as the evaluation period."""
-    today = date.today()
+    today = local_today()
     period_start = today - timedelta(days=7)
     period_end = today
     return period_start, period_end
@@ -32,10 +33,10 @@ async def run_prompt_optimization_batch() -> dict[str, Any]:
     1. Get all active default contexts (excluding persona)
     2. Evaluate each context
     3. For contexts needing improvement, generate optimized prompt
-    4. Create experiments for user review
+    4. Create candidate versions for user review
 
     Returns:
-        {"contexts_evaluated": N, "experiments_created": N, "errors": [...]}
+        {"contexts_evaluated": N, "candidates_created": N, "errors": [...]}
     """
     period_start, period_end = _last_week_range()
     logger.info(
@@ -52,13 +53,13 @@ async def run_prompt_optimization_batch() -> dict[str, Any]:
 
     if not user_rows:
         logger.info("No users with per-user contexts found")
-        return {"contexts_evaluated": 0, "experiments_created": 0, "errors": []}
+        return {"contexts_evaluated": 0, "candidates_created": 0, "errors": []}
 
     evaluator = PromptEvaluator()
     optimizer = PromptOptimizer()
 
     contexts_evaluated = 0
-    experiments_created = 0
+    candidates_created = 0
     errors: list[str] = []
 
     for user_row in user_rows:
@@ -72,7 +73,7 @@ async def run_prompt_optimization_batch() -> dict[str, Any]:
                 optimizer=optimizer,
             )
             contexts_evaluated += stats["contexts_evaluated"]
-            experiments_created += stats["experiments_created"]
+            candidates_created += stats["candidates_created"]
             errors.extend(stats["errors"])
         except Exception:
             logger.exception("Error processing user %s", user_id)
@@ -83,7 +84,7 @@ async def run_prompt_optimization_batch() -> dict[str, Any]:
         "period_end": period_end.isoformat(),
         "users_processed": len(user_rows),
         "contexts_evaluated": contexts_evaluated,
-        "experiments_created": experiments_created,
+        "candidates_created": candidates_created,
         "errors": errors,
     }
     logger.info("Prompt optimization batch complete: %s", summary)
@@ -96,13 +97,14 @@ async def _process_user_contexts(
     period_end: date,
     evaluator: PromptEvaluator,
     optimizer: PromptOptimizer,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Process all active default contexts for a single user.
 
     Returns:
-        {"contexts_evaluated": N, "experiments_created": N, "errors": [...]}
+        {"contexts_evaluated": N, "candidates_created": N, "errors": [...]}
     """
-    result: dict[str, Any] = {"contexts_evaluated": 0, "experiments_created": 0, "errors": []}
+    result: dict[str, Any] = {"contexts_evaluated": 0, "candidates_created": 0, "errors": [], "optimized_context_ids": []}
 
     async with get_connection() as conn:
         contexts = await conn.fetch(
@@ -143,14 +145,15 @@ async def _process_user_contexts(
                 period_end=period_end,
                 persona_prompt=persona_prompt,
                 user_id=user_id,
+                force=force,
             )
             result["contexts_evaluated"] += 1
 
-            if eval_result["skipped_reason"]:
+            if not force and eval_result["skipped_reason"]:
                 logger.info("Skipped %s: %s", ctx_name, eval_result["skipped_reason"])
                 continue
 
-            if not eval_result["needs_improvement"]:
+            if not force and not eval_result["needs_improvement"]:
                 logger.info("No improvement needed for %s", ctx_name)
                 continue
 
@@ -166,29 +169,31 @@ async def _process_user_contexts(
                 result["errors"].append(f"{ctx_name}: optimization_failed")
                 continue
 
-            variant_id = await optimizer.create_variant_context(
-                source_context_id=ctx["id"],
+            # Build eval_summary from evaluation result
+            eval_summary = {
+                "interaction_count": eval_result["metrics"]["interaction_count"],
+                "avg_rating": eval_result["metrics"]["avg_rating"],
+                "strengths": eval_result["qualitative"]["strengths"],
+                "weaknesses": eval_result["qualitative"]["weaknesses"],
+            }
+
+            variant_version = await optimizer.create_candidate_version(
+                context_id=ctx["id"],
                 improved_prompt=optimization["improved_prompt"],
                 changelog=optimization["changelog"],
+                eval_summary=eval_summary,
             )
 
-            if variant_id is None:
-                logger.warning("Failed to create variant context for %s", ctx_name)
+            if variant_version is None:
+                logger.warning("Failed to create candidate version for %s", ctx_name)
                 result["errors"].append(f"{ctx_name}: variant_creation_failed")
                 continue
 
-            experiment_id = await exp_queries.create_experiment(
-                situation=ctx["situation"],
-                evaluation_id=eval_result["evaluation_id"],
-                control_context_id=ctx["id"],
-                variant_context_id=variant_id,
-                user_id=user_id,
-            )
-
-            result["experiments_created"] += 1
+            result["candidates_created"] += 1
+            result["optimized_context_ids"].append(str(ctx["id"]))
             logger.info(
-                "Created experiment %s for %s (eval_id=%s, user=%s)",
-                experiment_id,
+                "Created candidate version %d for %s (eval_id=%s, user=%s)",
+                variant_version,
                 ctx_name,
                 eval_result["evaluation_id"],
                 user_id,

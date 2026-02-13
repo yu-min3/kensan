@@ -7,7 +7,6 @@ from uuid import UUID
 
 from kensan_ai.context.detector import Situation
 from kensan_ai.context.variable_replacer import VariableReplacer
-from kensan_ai.context.ab_selector import ABSelector
 from kensan_ai.db.connection import get_connection
 from kensan_ai.db.queries.ai_contexts import ensure_user_contexts
 from kensan_ai.db.queries import ai_contexts as ai_contexts_queries
@@ -27,7 +26,6 @@ class AIContext:
     allowed_tools: list[str]
     max_turns: int
     temperature: float
-    experiment_id: UUID | None = None
     persona_context_id: UUID | None = None
     prompt_variables: list[str] = field(default_factory=list)
 
@@ -38,7 +36,6 @@ class ContextResolver:
     @staticmethod
     async def get_context(
         situation: Situation,
-        experiment_id: UUID | None = None,
         user_id: UUID | None = None,
     ) -> AIContext | None:
         """Get the appropriate context for a situation.
@@ -48,8 +45,7 @@ class ContextResolver:
 
         Args:
             situation: The detected or specified situation
-            experiment_id: Optional experiment ID for A/B testing
-            user_id: Optional user ID for variable replacement and A/B selection
+            user_id: Optional user ID for variable replacement
 
         Returns:
             AIContext if found, None otherwise
@@ -60,7 +56,7 @@ class ContextResolver:
 
         async with get_connection() as conn:
             context = await ContextResolver._resolve_context(
-                conn, situation, experiment_id, user_id
+                conn, situation, user_id
             )
             if not context:
                 return None
@@ -88,50 +84,15 @@ class ContextResolver:
     async def _resolve_context(
         conn: Any,
         situation: Situation,
-        experiment_id: UUID | None,
         user_id: UUID | None,
     ) -> AIContext | None:
-        """Resolve context from DB without variable replacement.
-
-        Handles A/B testing, experiment lookup, default, and fallback paths.
-        """
-        # If experiment specified and user_id provided, use A/B selector
-        if experiment_id and user_id:
-            selected = await ABSelector.select_context(user_id, experiment_id)
-            if selected:
-                return AIContext(
-                    id=selected.id,
-                    name=selected.name,
-                    situation=situation,
-                    version="experiment",
-                    system_prompt=selected.system_prompt,
-                    allowed_tools=selected.allowed_tools,
-                    max_turns=selected.max_turns,
-                    temperature=selected.temperature,
-                    experiment_id=experiment_id,
-                )
-
-        # If experiment specified without user_id, get first matching context
-        if experiment_id:
-            row = await conn.fetchrow(
-                """
-                SELECT id, name, situation, version, system_prompt,
-                       allowed_tools, max_turns, temperature, experiment_id
-                FROM ai_contexts
-                WHERE experiment_id = $1 AND is_active = true
-                LIMIT 1
-                """,
-                experiment_id,
-            )
-            if row:
-                return ContextResolver._row_to_context(row)
-
+        """Resolve context from DB without variable replacement."""
         # Get default context for situation (prefer user-specific, fallback to system)
         if user_id:
             row = await conn.fetchrow(
                 """
                 SELECT id, name, situation, version, system_prompt,
-                       allowed_tools, max_turns, temperature, experiment_id
+                       allowed_tools, max_turns, temperature
                 FROM ai_contexts
                 WHERE situation = $1 AND is_default = true AND is_active = true
                   AND user_id = $2
@@ -147,7 +108,7 @@ class ContextResolver:
         row = await conn.fetchrow(
             """
             SELECT id, name, situation, version, system_prompt,
-                   allowed_tools, max_turns, temperature, experiment_id
+                   allowed_tools, max_turns, temperature
             FROM ai_contexts
             WHERE situation = $1 AND is_default = true AND is_active = true
               AND user_id IS NULL
@@ -163,7 +124,7 @@ class ContextResolver:
         row = await conn.fetchrow(
             """
             SELECT id, name, situation, version, system_prompt,
-                   allowed_tools, max_turns, temperature, experiment_id
+                   allowed_tools, max_turns, temperature
             FROM ai_contexts
             WHERE situation = $1 AND is_active = true
             ORDER BY created_at DESC
@@ -187,7 +148,7 @@ class ContextResolver:
         if user_id:
             row = await conn.fetchrow(
                 """SELECT id, name, situation, version, system_prompt,
-                          allowed_tools, max_turns, temperature, experiment_id
+                          allowed_tools, max_turns, temperature
                    FROM ai_contexts
                    WHERE situation = 'persona' AND is_active = true AND user_id = $1
                    LIMIT 1""",
@@ -196,7 +157,7 @@ class ContextResolver:
         if not row:
             row = await conn.fetchrow(
                 """SELECT id, name, situation, version, system_prompt,
-                          allowed_tools, max_turns, temperature, experiment_id
+                          allowed_tools, max_turns, temperature
                    FROM ai_contexts
                    WHERE situation = 'persona' AND is_active = true AND user_id IS NULL
                    LIMIT 1""",
@@ -221,7 +182,6 @@ class ContextResolver:
             allowed_tools=list(row["allowed_tools"]) if row["allowed_tools"] else [],
             max_turns=row["max_turns"],
             temperature=row["temperature"],
-            experiment_id=row["experiment_id"],
         )
 
     @staticmethod
@@ -233,7 +193,7 @@ class ContextResolver:
         """Get a context directly by its ID.
 
         Loads context by ID, applies variable replacement and persona prepend.
-        Used by challenge A/B comparison to load specific contexts.
+        Used by A/B comparison to load specific contexts.
 
         Args:
             context_id: The context ID to load
@@ -244,12 +204,10 @@ class ContextResolver:
             AIContext if found, None otherwise
         """
         async with get_connection() as conn:
-            # No is_active filter: variant contexts are created with is_active=false
-            # but need to be loadable for challenge A/B comparison
             row = await conn.fetchrow(
                 """
                 SELECT id, name, situation, version, system_prompt,
-                       allowed_tools, max_turns, temperature, experiment_id
+                       allowed_tools, max_turns, temperature
                 FROM ai_contexts
                 WHERE id = $1
                 """,
@@ -260,11 +218,17 @@ class ContextResolver:
 
             context = ContextResolver._row_to_context(row)
 
-            # Override with specific version's prompt if requested
+            # Override with specific version's settings if requested
             if version_number is not None:
                 version = await ai_contexts_queries.get_version(context_id, version_number)
                 if version:
                     context.system_prompt = version["system_prompt"]
+                    if version.get("allowed_tools"):
+                        context.allowed_tools = version["allowed_tools"]
+                    if version.get("max_turns") is not None:
+                        context.max_turns = version["max_turns"]
+                    if version.get("temperature") is not None:
+                        context.temperature = version["temperature"]
 
             # Variable replacement on task-specific prompt
             if user_id:
@@ -290,15 +254,7 @@ class ContextResolver:
         situation: Situation | None = None,
         active_only: bool = True,
     ) -> list[AIContext]:
-        """List all contexts, optionally filtered by situation.
-
-        Args:
-            situation: Filter by situation
-            active_only: Only return active contexts
-
-        Returns:
-            List of AIContext objects
-        """
+        """List all contexts, optionally filtered by situation."""
         async with get_connection() as conn:
             conditions = []
             params: list[Any] = []
@@ -317,7 +273,7 @@ class ContextResolver:
             rows = await conn.fetch(
                 f"""
                 SELECT id, name, situation, version, system_prompt,
-                       allowed_tools, max_turns, temperature, experiment_id
+                       allowed_tools, max_turns, temperature
                 FROM ai_contexts
                 WHERE {where_clause}
                 ORDER BY situation, is_default DESC, created_at DESC

@@ -131,7 +131,7 @@ S3とRDSに集中しましょう。
 
 自分で「サボってた」と認識できるのは成長の証拠です。来月のSAA合格、十分狙えます。', 500, 350, 2000, CURRENT_DATE - 2);
 
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 ('d2900101-0000-0000-0000-000000000000', 'd2222222-2222-2222-2222-222222222222',
  CURRENT_DATE - 49, CURRENT_DATE - 43,
  'AWS学習を始めたがモチベーション維持に苦戦。Udemyは購入したが計画通りに進んでいない。Python入門書も読み始めた。',
