@@ -101,6 +101,23 @@ cd lakehouse
 sudo docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
 cd ..
 
+echo '=== Waiting for Polaris to be healthy ==='
+for i in {1..20}; do
+  if sudo docker exec kensan-polaris curl -sf http://localhost:8182/q/health > /dev/null 2>&1; then
+    echo 'Polaris is healthy.'
+    break
+  fi
+  echo \"Waiting for Polaris... (\$i/20)\"
+  sleep 3
+done
+
+echo '=== Bootstrapping & initializing Iceberg catalog ==='
+sudo docker exec kensan-dagster-user-code uv run python -m catalog.bootstrap_polaris
+sudo docker exec kensan-dagster-user-code uv run python -m catalog.init_catalog
+
+echo '=== Restarting ai-service to connect to Polaris ==='
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate ai-service
+
 echo '=== Running demo seed ==='
 sleep 5
 # Wait for user-service to be ready (direct container access, bypasses nginx HTTPS redirect)
