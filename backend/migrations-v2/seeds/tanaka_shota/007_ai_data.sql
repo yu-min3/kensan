@@ -731,7 +731,7 @@ SIerのDB設計経験 + モダンなPostgreSQL知識、テックリードとし�
 -- ==============================================================================
 -- AI Review Reports (4件 — 2週ごと)
 -- ==============================================================================
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 
 -- Week 2 review
 ('dd900101-0000-0000-0000-000000000000', 'dddddddd-dddd-dddd-dddd-dddddddddddd',

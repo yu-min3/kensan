@@ -218,12 +218,12 @@ e2e-headed:
 
 ## Apply demo seed data (Tanaka Shota persona)
 demo-seed:
-	@bash scripts/demo-seed/apply.sh
+	@bash backend/migrations-v2/apply.sh tanaka_shota
 
 ## Remove demo seed data only
 demo-clean:
 	@echo "Removing demo user data..."
-	@docker exec -i kensan-postgres psql -U kensan -d kensan < scripts/demo-seed/000_cleanup.sql
+	@docker exec -i kensan-postgres psql -U kensan -d kensan < backend/migrations-v2/seeds/tanaka_shota/000_cleanup.sql
 	@echo "Demo data removed."
 
 # =============================================================================

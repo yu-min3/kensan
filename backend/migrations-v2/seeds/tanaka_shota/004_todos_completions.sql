@@ -11,6 +11,7 @@ DECLARE
     dow INT;
     week_num INT;
     seq INT := 0;
+    uid UUID := 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
     -- Todo IDs
     todo_news UUID := 'dd0b0001-0000-0000-0000-000000000000';
@@ -29,8 +30,8 @@ BEGIN
         -- ============================================================
         IF day_offset % 11 <> 0 THEN  -- skip ~9%
             seq := seq + 1;
-            INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-            VALUES (uuid_generate_v4(), todo_news, d, d + TIME '03:30' + INTERVAL '9 hours');
+            INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+            VALUES (uuid_generate_v4(), uid, todo_news, d, d + TIME '03:30' + INTERVAL '9 hours');
         END IF;
 
         -- ============================================================
@@ -40,15 +41,15 @@ BEGIN
             -- Week 1-4: ~80% completion
             IF day_offset % 5 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_eng, d, d + TIME '03:45' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_eng, d, d + TIME '03:45' + INTERVAL '9 hours');
             END IF;
         ELSE
             -- Week 5-8: ~50% completion (busy with personal dev)
             IF day_offset % 2 = 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_eng, d, d + TIME '03:45' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_eng, d, d + TIME '03:45' + INTERVAL '9 hours');
             END IF;
         END IF;
 
@@ -59,22 +60,22 @@ BEGIN
             -- Week 1-4: ~85%
             IF day_offset % 7 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
             END IF;
         ELSIF week_num <= 6 THEN
             -- Week 5-6: ~30% (AWS後回し)
             IF day_offset % 3 = 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
             END IF;
         ELSE
             -- Week 7-8: ~70% (立て直し)
             IF day_offset % 3 <> 0 THEN
                 seq := seq + 1;
-                INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                VALUES (uuid_generate_v4(), todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
+                INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                VALUES (uuid_generate_v4(), uid, todo_aws, d, d + TIME '14:00' + INTERVAL '9 hours');
             END IF;
         END IF;
 
@@ -86,26 +87,26 @@ BEGIN
                 -- Week 1-4: ~70%
                 IF day_offset % 3 <> 0 THEN
                     seq := seq + 1;
-                    INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                    VALUES (uuid_generate_v4(), todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
+                    INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                    VALUES (uuid_generate_v4(), uid, todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
                 END IF;
             ELSIF week_num <= 6 THEN
                 -- Week 5-6: ~50%
                 IF day_offset % 2 = 0 THEN
                     seq := seq + 1;
-                    INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                    VALUES (uuid_generate_v4(), todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
+                    INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                    VALUES (uuid_generate_v4(), uid, todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
                 END IF;
             ELSE
                 -- Week 7-8: ~55%
                 IF day_offset % 4 <> 0 AND dow = 4 THEN
                     seq := seq + 1;
-                    INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                    VALUES (uuid_generate_v4(), todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
+                    INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                    VALUES (uuid_generate_v4(), uid, todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
                 ELSIF dow = 2 AND day_offset % 3 <> 0 THEN
                     seq := seq + 1;
-                    INSERT INTO todo_completions (id, todo_id, completed_date, completed_at)
-                    VALUES (uuid_generate_v4(), todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
+                    INSERT INTO todo_completions (id, user_id, todo_id, completed_date, completed_at)
+                    VALUES (uuid_generate_v4(), uid, todo_gym, d, d + TIME '10:00' + INTERVAL '9 hours');
                 END IF;
             END IF;
         END IF;

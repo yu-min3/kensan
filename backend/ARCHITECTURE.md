@@ -381,7 +381,7 @@ AIエージェントのシステムプロンプトを管理。`user_id = NULL` �
 
 | カラム | 説明 |
 |-------|------|
-| `situation` | 使用場面（`chat`, `persona`, `morning`, `weekly`, etc.） |
+| `situation` | 使用場面（`chat`, `persona`, `review`, `daily_advice`, `briefing`） |
 | `system_prompt` | システムプロンプト本文 |
 | `allowed_tools` | 使用可能なツール一覧 (`TEXT[]`) |
 | `user_id` | NULL=システムテンプレート、UUID=ユーザー固有 |
@@ -430,6 +430,21 @@ flowchart LR
 | 全文検索 | `to_tsvector('simple', title \|\| ' ' \|\| content)` | ノート検索 |
 | ベクトル | `embedding vector(1536)` | セマンティック検索 |
 | 外部キー | 各テーブル | `ON DELETE CASCADE` |
+
+### マイグレーション・初期データ
+
+スキーマは `backend/migrations-v2/` で管理。v1 (64個の増分マイグレーション) を2ファイルに統合。
+
+| ファイル | 内容 |
+|----------|------|
+| `001_init.sql` | 全テーブル・インデックス・トリガー・Extension |
+| `002_master.sql` | AIコンテキスト (システムプロンプト) + ノートタイプ等のマスターデータ |
+| `apply.sh` | スキーマ + ペルソナシード適用スクリプト |
+| `seeds/<persona>/0*.sql` | 4ペルソナ分のデモデータ (tanaka_shota, suzuki_misaki, yamada_takuya, takahashi_aya) |
+
+**Docker初期化**: `docker-compose.yml` で `001_init.sql` と `002_master.sql` を `/docker-entrypoint-initdb.d/` にマウント。
+
+**デモログイン**: `user-service` の `POST /api/v1/auth/demo-login` が `seeds/<persona>/` 配下の SQL を読み込み、UUID を動的に置換して毎回新規ユーザーを作成。
 
 ---
 

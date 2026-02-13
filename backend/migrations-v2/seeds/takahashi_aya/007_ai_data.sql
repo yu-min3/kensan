@@ -148,7 +148,7 @@ Go Tourを完走させて、来週から実際にAPIを書き始めましょう�
 「マネジメント：技術：読書 = 4:3:3」の配分は健全です。EMが技術を完全に手放す必要はありません。高橋さんのように意識的に技術学習の時間を確保するのは正しいアプローチです。',
  600, 400, 2300, CURRENT_DATE - 2);
 
-INSERT INTO ai_review_reports (id, user_id, week_start, week_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
+INSERT INTO ai_review_reports (id, user_id, period_start, period_end, summary, good_points, improvement_points, advice, tokens_input, tokens_output, created_at) VALUES
 ('d3900101-0000-0000-0000-000000000000', 'd3333333-3333-3333-3333-333333333333',
  CURRENT_DATE - 49, CURRENT_DATE - 43,
  '1on1テンプレートの確立とGROWモデルの学習に注力した2週間。朝活の習慣も安定。',
