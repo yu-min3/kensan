@@ -34,9 +34,9 @@ export function PromptSidebar({ contexts, selectedId, onSelect, unseenContextIds
             )}
           </div>
           <div className="ml-2 flex items-center gap-1.5">
-            {ctx.pending_experiment && (
+            {ctx.pending_candidate_count > 0 && (
               <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-700 text-[10px] px-1.5 py-0 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700">
-                改善案
+                候補 {ctx.pending_candidate_count}
               </Badge>
             )}
             {ctx.situation === 'persona' && (

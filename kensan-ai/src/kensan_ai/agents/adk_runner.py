@@ -205,9 +205,15 @@ class AdkAgentRunner:
         context_name: str | None = None,
         context_version: str | None = None,
         experiment_id: str | None = None,
+        deferred_tools: list[str] | None = None,
     ):
         self.system_prompt = system_prompt
-        self.allowed_tools = allowed_tools
+        # ADK manages its own loop internally, so mid-loop injection is not possible.
+        # Merge deferred_tools into allowed_tools upfront.
+        if deferred_tools and allowed_tools is not None:
+            self.allowed_tools = list(set(allowed_tools + deferred_tools))
+        else:
+            self.allowed_tools = allowed_tools
         self.max_turns = max_turns
         self.temperature = temperature
         self.model = model or get_settings().google_model

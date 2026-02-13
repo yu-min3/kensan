@@ -62,9 +62,9 @@ export function DemoTour() {
       useChatStore.getState().open()
     } else if (currentStep.action === 'close-chat') {
       useChatStore.getState().close()
-    } else if (currentStep.action === 'switch-challenge-tab') {
-      const trigger = document.querySelector('[data-guide="prompt-tab-challenge"]') as HTMLElement
-      trigger?.click()
+    } else if (currentStep.action === 'switch-optimize-tab') {
+      const tabTrigger = document.querySelector('[data-guide="prompt-tab-optimize"]') as HTMLElement | null
+      if (tabTrigger) tabTrigger.click()
     }
 
     // Navigate if needed

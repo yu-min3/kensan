@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   CalendarDays,
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { useChallengeStore } from '@/stores/useChallengeStore'
+import { usePromptStore } from '@/stores/usePromptStore'
 
 interface NavItem {
   to: string
@@ -84,23 +84,24 @@ function NavItemLink({ item }: { item: NavItem }) {
 
 export function Sidebar() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const { experiments, fetchExperiments } = useChallengeStore()
+  const { contexts, fetchContexts } = usePromptStore()
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchExperiments()
+      fetchContexts()
     }
-  }, [isAuthenticated, fetchExperiments])
+  }, [isAuthenticated, fetchContexts])
 
-  const pendingExperimentCount = experiments.filter(
-    (e) => e.status === 'pending_review' || e.status === 'in_challenge',
-  ).length
+  const pendingCandidateCount = useMemo(
+    () => contexts.reduce((sum, ctx) => sum + (ctx.pending_candidate_count ?? 0), 0),
+    [contexts],
+  )
 
   // Inject dynamic notification counts into static nav config
   const sections = navSections.map((section) => ({
     ...section,
     items: section.items.map((item) =>
-      item.to === '/prompts' ? { ...item, notifyCount: pendingExperimentCount } : item,
+      item.to === '/prompts' ? { ...item, notifyCount: pendingCandidateCount } : item,
     ),
   }))
 

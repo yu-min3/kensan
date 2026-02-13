@@ -15,7 +15,7 @@ from uuid import UUID
 
 from kensan_ai.config import get_settings
 from kensan_ai.db.connection import get_connection
-from kensan_ai.db.queries import prompt_experiments as exp_queries
+from kensan_ai.db.queries import prompt_evaluations as eval_queries
 from kensan_ai.lib.ai_provider import LLMClient
 from kensan_ai.lib.llm_utils import extract_json_from_response
 
@@ -125,7 +125,7 @@ class PromptEvaluator:
                 )
 
         # 5. Save evaluation
-        evaluation_id = await exp_queries.create_evaluation(
+        evaluation_id = await eval_queries.create_evaluation(
             context_id=context_id,
             period_start=period_start,
             period_end=period_end,

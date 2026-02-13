@@ -92,8 +92,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations-v2/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
-      - ./backend/migrations-v2/002_master.sql:/docker-entrypoint-initdb.d/002_master.sql:ro
+      - ./backend/migrations-v2:/migrations:ro
+      - ./backend/migrations-v2/docker-init.sh:/docker-entrypoint-initdb.d/00-apply-migrations.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kensan"]
       interval: 5s

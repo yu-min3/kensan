@@ -40,26 +40,56 @@ function formatDate(dateStr: string): string {
   }
 }
 
-/** Expand proposal dates to a full Mon-Sun week range covering all proposed dates. */
+/** Get the Mon-Sun week range that contains the given date. */
+function getWeekRange(date: Date): { start: Date; end: Date } {
+  const day = date.getDay()
+  const daysToMon = day === 0 ? 6 : day - 1
+  const start = new Date(date)
+  start.setDate(start.getDate() - daysToMon)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 6)
+  return { start, end }
+}
+
+/** Expand proposal dates to a full Mon-Sun week range, capped to current week if proposals are within it. */
 function expandToFullWeek(proposalDates: string[]): string[] {
   if (proposalDates.length === 0) return []
+
+  // Current week boundaries (Mon-Sun containing today)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const currentWeek = getWeekRange(today)
+
   const first = new Date(proposalDates[0] + 'T00:00:00')
   const last = new Date(proposalDates[proposalDates.length - 1] + 'T00:00:00')
-  // Snap start back to Monday (day 0=Sun→-6, 1=Mon→0, 2=Tue→-1, ...)
-  const firstDay = first.getDay()
-  const daysToMon = firstDay === 0 ? 6 : firstDay - 1
-  const start = new Date(first)
-  start.setDate(start.getDate() - daysToMon)
-  // Snap end forward to Sunday
-  const lastDay = last.getDay()
-  const daysToSun = lastDay === 0 ? 0 : 7 - lastDay
-  const end = new Date(last)
-  end.setDate(end.getDate() + daysToSun)
+
+  // If most proposals fall within the current week, clamp to current week
+  const inCurrentWeek = proposalDates.filter((d) => {
+    const dt = new Date(d + 'T00:00:00')
+    return dt >= currentWeek.start && dt <= currentWeek.end
+  }).length
+  const useCurrentWeek = inCurrentWeek >= proposalDates.length * 0.5
+
+  let start: Date
+  let end: Date
+  if (useCurrentWeek) {
+    start = currentWeek.start
+    end = currentWeek.end
+  } else {
+    // Fall back to covering all proposals
+    const firstWeek = getWeekRange(first)
+    const lastWeek = getWeekRange(last)
+    start = firstWeek.start
+    end = lastWeek.end
+  }
 
   const result: string[] = []
   const cursor = new Date(start)
   while (cursor <= end) {
-    result.push(cursor.toISOString().slice(0, 10))
+    const yyyy = cursor.getFullYear()
+    const mm = String(cursor.getMonth() + 1).padStart(2, '0')
+    const dd = String(cursor.getDate()).padStart(2, '0')
+    result.push(`${yyyy}-${mm}-${dd}`)
     cursor.setDate(cursor.getDate() + 1)
   }
   return result
@@ -164,16 +194,32 @@ export function ActionProposal({ actions, onApprove, onReject, disabled, readOnl
           </div>
 
           <Tabs value={activeDate} onValueChange={setActiveDate}>
-            <TabsList className="h-7 mb-2 overflow-x-auto">
+            <TabsList className="h-auto mb-2 overflow-x-auto gap-0.5 p-1">
               {sortedDates.map((date) => {
-                const hasProposals = dateGroups.has(date)
+                const proposalCount = dateGroups.get(date)?.length ?? 0
+                const hasProposals = proposalCount > 0
+                const today = getLocalDate(new Date().toISOString(), timezone)
+                const isToday = date === today
                 return (
                   <TabsTrigger
                     key={date}
                     value={date}
-                    className={cn('text-xs px-2 py-1 h-5', !hasProposals && 'opacity-50')}
+                    className={cn(
+                      'text-xs px-2 py-1 h-auto flex flex-col items-center gap-0.5 relative',
+                      !hasProposals && 'opacity-40',
+                      isToday && 'font-bold',
+                    )}
                   >
-                    {formatDate(date)}
+                    <span>{formatDate(date)}</span>
+                    {hasProposals && (
+                      <span className="flex items-center gap-0.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                        <span className="text-[9px] text-brand font-medium">{proposalCount}</span>
+                      </span>
+                    )}
+                    {isToday && !hasProposals && (
+                      <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+                    )}
                   </TabsTrigger>
                 )
               })}

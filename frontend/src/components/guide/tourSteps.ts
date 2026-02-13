@@ -109,8 +109,8 @@ export const tourDefinitions: TourDefinition[] = [
       },
       {
         target: 'prompt-tabs',
-        title: '比較・バージョン管理',
-        description: '変更履歴の確認、比較、ロールバックが可能。',
+        title: 'プロンプト編集 & 最適化',
+        description: '「プロンプト編集」タブで直接編集、「最適化」タブでAI提案のレビュー・A/Bテスト・バージョン管理が可能。',
         placement: 'bottom',
       },
     ],
@@ -152,7 +152,7 @@ export interface DemoTourStep {
   title: string
   description: string
   placement: 'top' | 'bottom' | 'left' | 'right' | 'center'
-  action?: 'open-chat' | 'close-chat' | 'switch-challenge-tab'
+  action?: 'open-chat' | 'close-chat' | 'switch-optimize-tab'
   customCard?: string     // special card renderer identifier
   sectionLabel?: string   // section badge (e.g. "AI") for visual continuity
 }
@@ -228,18 +228,18 @@ export const demoTourSteps: DemoTourStep[] = [
   },
   {
     page: '/prompts',
-    target: 'prompt-tab-challenge',
-    title: '比較して最適化',
-    description: '「比較」タブで新旧バージョンのプロンプトを実際に試して、応答品質を比較できます。',
+    target: 'prompt-tab-optimize',
+    title: 'AI最適化とA/Bテスト',
+    description: '「最適化」タブでAIが自動生成した改善候補をレビュー。採用・却下の判断や、A/Bテストで応答品質を比較できます。',
     placement: 'bottom',
-    action: 'switch-challenge-tab',
+    action: 'switch-optimize-tab',
     sectionLabel: 'AI',
   },
   {
     page: '/prompts',
-    target: 'challenge-detail',
-    title: '実験の流れ',
-    description: 'バージョン履歴から比較を作成 → ラウンドを開始して同じ質問を両バージョンに送信 → 応答を見比べて投票 → 結果をもとに最適なバージョンを採用できます。',
+    target: 'version-detail',
+    title: 'バージョン詳細とA/Bテスト',
+    description: 'バージョンを選択すると詳細を表示。AI候補は評価サマリー付きで採用/却下でき、A/Bテストで現行と候補の応答を並べて比較できます。',
     placement: 'left',
     sectionLabel: 'AI',
   },

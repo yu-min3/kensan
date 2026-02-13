@@ -65,7 +65,7 @@ src/
 │   ├── weekly/                   # ウィークリーページ（DnD対応）
 │   ├── interactions/             # AI Interaction Explorer
 │   ├── guide/                   # ページガイドシステム (PageGuide, SpotlightTour, SpotlightOverlay)
-│   └── prompt/                  # プロンプト管理 (PromptSidebar, PromptEditor, VersionHistory, VersionDiffDialog, ChallengeList, ChallengeDetail, ChallengeChatPanel, ChallengePromptDiff, ChallengeVoting, ToolSelector) — ChallengeList/Detail/Voting はバージョンベース比較UI
+│   └── prompt/                  # プロンプト管理 (PromptSidebar, PromptEditor, VersionHistory, VersionDetail, ABTestPanel, VersionDiffDialog, ChallengeChatPanel, ChallengePromptDiff, ToolSelector)
 ├── pages/                        # ページコンポーネント（10ファイル）
 ├── stores/                       # Zustandストア（18ストア）
 ├── hooks/                        # カスタムReactフック (usePanelResize, useChatStream, useVersionSeen)
@@ -264,7 +264,6 @@ flowchart TB
 | `useAnalyticsStore` | 分析データ | - | 週次/月次サマリー |
 | `useChatStore` | AIチャット | - | パネルUI状態（開閉、履歴、評価、プリフィル）。SSEストリーミングは`useChatStream`フックに移行 |
 | `usePromptStore` | プロンプト管理 | - | AIコンテキスト一覧・バージョン管理 |
-| `useChallengeStore` | バージョン比較（Comparison） | - | バージョンベースA/B比較・投票・採否判定。保存後バナーからの比較開始、バージョン履歴からの比較開始に対応 |
 | `useTaskManagerStore` | タスク管理統合 | - | Goal/Milestone/Tag/Taskストアの統合フック |
 
 ### カスタムフック
@@ -384,7 +383,6 @@ graph TB
 | `agent.ts` | kensan-ai | カスタム（SSE対応） |
 | `analytics.ts` | analytics-service | カスタム |
 | `prompts.ts` | kensan-ai | カスタム（AIコンテキスト・バージョン管理） |
-| `challenges.ts` | kensan-ai | カスタム（バージョンベース比較 Comparison API） |
 | `observability.ts` | kensan-ai | カスタム（AI Interaction Explorer用、Lakehouse Silver経由） |
 
 ### タイムゾーン変換（timeblocks.ts）
@@ -502,6 +500,56 @@ flowchart LR
 - **セマンティックカラー**: CSS変数ベース（`--background`, `--primary`, `--brand`）
 - **ダークモード**: `.dark` クラスでCSS変数を切替
 - **パスエイリアス**: `@/*` → `./src/*`
+
+### A03_PromptEditor (プロンプト最適化管理)
+
+AIコンテキストのプロンプトをバージョン中心で管理するページ。2タブ構成:
+
+- **プロンプト編集タブ**: コンテキスト一覧 + エディタ
+- **最適化タブ**: AI最適化 + バージョン履歴 + バージョン詳細/A/Bテスト
+
+```mermaid
+flowchart TB
+    subgraph "最適化タブ 左パネル"
+        Optimize["AI最適化ボタン"]
+        CtxSelect["コンテキスト選択"]
+        VH["VersionHistory<br/>source/candidateバッジ付き"]
+    end
+
+    subgraph "最適化タブ 右パネル"
+        VD["VersionDetail<br/>メタデータ + eval_summary + diff"]
+        AB["ABTestPanel<br/>エフェメラルA/Bテスト"]
+    end
+
+    VH -->|バージョン選択| VD
+    VH -->|A/Bテスト開始| AB
+    VD -->|採用/却下| Optimize
+```
+
+**バージョン中心モデル:**
+
+| 概念 | 説明 |
+|------|------|
+| `active_version` | ai_contextsの現在有効なバージョン番号 |
+| `candidate_status` | NULL(通常) / pending(AI候補) / adopted(採用) / rejected(却下) |
+| `source` | manual(手動) / ai(AI生成) / rollback(ロールバック) |
+| `eval_summary` | AI評価データ (interaction_count, avg_rating, strengths, weaknesses) |
+
+**コンポーネント構成:**
+
+| コンポーネント | 役割 |
+|--------------|------|
+| `A03_PromptEditor` (ページ) | タブ管理、状態統合、adopt/reject/rollback/A/Bテスト操作 |
+| `PromptSidebar` | コンテキスト一覧 + pending候補バッジ |
+| `VersionHistory` | バージョン一覧 (source/candidateバッジ、選択、A/Bテスト開始) |
+| `VersionDetail` | バージョン詳細表示 + eval_summary + diff + アクションボタン |
+| `ABTestPanel` | エフェメラルA/Bテスト (ChallengeChatPanel x2、投票、採用) |
+
+**ストア連携:**
+
+| ストア | 用途 |
+|--------|------|
+| `usePromptStore` | AIコンテキスト一覧・バージョン管理・ロールバック |
 
 ### AI Interaction Explorer
 

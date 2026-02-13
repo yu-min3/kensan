@@ -89,6 +89,48 @@ function DueTasksPanel({ date, tasks, getMilestoneById, getGoalById }: DueTasksP
   )
 }
 
+// 期限切れタスク表示パネル
+function OverdueTasksPanel({ date, tasks, getMilestoneById, getGoalById }: DueTasksPanelProps) {
+  const overdueTasks = tasks.filter((t) => t.dueDate && t.dueDate < date && !t.completed)
+  if (overdueTasks.length === 0) return null
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3">
+      <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
+        <AlertCircle className="h-4 w-4" />
+        <span className="text-sm font-medium">
+          期限切れ: {overdueTasks.length}件のタスク
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {overdueTasks.map((task) => {
+          const milestone = task.milestoneId
+            ? getMilestoneById(task.milestoneId)
+            : undefined
+          const goal = milestone ? getGoalById(milestone.goalId) : undefined
+          const daysOverdue = Math.floor(
+            (new Date(date).getTime() - new Date(task.dueDate!).getTime()) / (1000 * 60 * 60 * 24)
+          )
+          return (
+            <li key={task.id} className="flex items-center gap-2 text-sm">
+              {goal && (
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: goal.color }}
+                />
+              )}
+              <span className="truncate">{task.name}</span>
+              <span className="text-xs text-red-500 dark:text-red-400 flex-shrink-0">
+                {daysOverdue}日超過
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 // Y座標からタイムブロックの時間を計算するヘルパーをエクスポート
 export { calculateTimeFromY }
 
@@ -408,6 +450,14 @@ export function TimeBlockSection({
               compact
             />
           )}
+
+          {/* 期限切れタスク */}
+          <OverdueTasksPanel
+            date={selectedDateIso}
+            tasks={tasks}
+            getMilestoneById={getMilestoneById}
+            getGoalById={getGoalById}
+          />
 
           {/* 期限が選択日のタスク */}
           <DueTasksPanel

@@ -11,6 +11,10 @@ To update the prompt:
 2. Create a new migration to UPDATE the ai_contexts row
 """
 
+import re
+
+from kensan_ai.tools import is_readonly_tool
+
 SYSTEM_PROMPT = """## 現在の日時
 {current_datetime}
 
@@ -51,7 +55,7 @@ SYSTEM_PROMPT = """## 現在の日時
 - 「予定立てて」→ get_time_blocks + get_tasks で現状を把握 → 方針を2-3文で述べ → create_time_block をまとめて呼ぶ（タスク細分化が必要なら create_task も同時に呼ぶ）
 - 「スケジュール相談したい」→ get_time_blocks + get_tasks で現状を把握 → 方針を2-3文で述べ → create_time_block + 必要に応じて create_task をまとめて呼ぶ
 - 「スケジュールを組んで」「予定を立てて」→ **最終ゴールはタイムブロックの作成**。タスクの細分化が必要な場合でも、create_task と create_time_block を同じターンでまとめて提案する。タスク作成だけで終わらない
-- 「今週の予定を立てて」→ {weekly_summary}で今週の時間配分を把握済み。get_time_blocks + get_tasks で既存の予定と未消化タスクを取得 → 生産性ピーク時間帯({user_patterns})を活かして create_time_block をまとめて提案
+- 「今週の予定を立てて」→ {weekly_summary}で今週の時間配分を把握済み。get_time_blocks(start_date=今日, end_date=今週日曜) + get_tasks で既存の予定と未消化タスクを取得 → 生産性ピーク時間帯({user_patterns})を活かして、**今日から今週日曜日まで**の範囲で create_time_block をまとめて提案
 - 「学習記録を振り返って」→ {recent_learning_notes}に直近の学習データあり。目標({goal_progress})との関連性、学習の深さ、パターンを分析して洞察を伝える。ツール不要
 
 ## 回答の構成ルール
@@ -125,6 +129,7 @@ SYSTEM_PROMPT = """## 現在の日時
 - 書き込み操作はツール呼び出しで提案する。UIが承認フローを表示するので、テキストで「実行してよいですか？」と聞かない
 - 読み取り操作は即実行してよい
 - 日付は JST 基準。「今日」「明日」等は JST で解釈する
+- スケジュール提案の日付範囲: 「今週」→ 今日〜今週の日曜日（{current_datetime}の週）。「来週」→ 次の月曜〜日曜。時期指定なし→ 今日〜今週日曜。**ユーザーが指定した期間を超えて提案しない**（「今週」と言われたら来週の日付を含めない）
 - 曖昧な時間: 朝→08:00-09:00、昼→12:00-13:00、午後→14:00-15:00、夕方→17:00-18:00
 - 単純な操作は短く、分析や振り返りの依頼には深く答える
 - ユーザーにIDや技術的情報を聞かない。必要な情報はツールで取得する
@@ -285,16 +290,45 @@ INTENT_READ_PATTERNS: list[tuple[list[str], list[str]]] = [
     (["ウェブ", "Web", "web", "ググって", "最新", "ニュース", "公式", "URL", "サイト", "ページ"], ["web"]),
 ]
 
-# 変更系: 明示的な書き込み意図があるときだけ追加
-WRITE_KEYWORDS: list[str] = [
-    "作って", "追加して", "入れて", "入れといて", "登録して",
-    "変更して", "更新して", "修正して", "編集して",
-    "削除して", "消して", "取り消して",
-    "書いて", "メモして", "記録して",
-    "立てて",  # 予定を立てて
-    # 相談・提案系（分析→アクション提案のフローを期待）
-    "相談", "見直し", "見直した", "調整した", "調整して", "組みた", "組んで",
-    "整理した", "整理して", "計画", "提案して",
+# =========================================================================
+# 書き込み意図の判定（語幹ベース）
+# =========================================================================
+# 従来の完全一致キーワードでは活用形の取りこぼしが多い
+# （例: 「作って」は検出できても「作りたい」「作ろう」は検出できない）
+#
+# 動詞を語幹ベースでマッチさせることで、全活用形を網羅的にカバーする:
+# 1. サ変動詞 → 名詞部分でマッチ（作成 → 作成して/作成したい/作成しよう 全てOK）
+# 2. 一段動詞 → 語幹でマッチ（入れ → 入れて/入れたい/入れよう 全てOK）
+# 3. 五段動詞 → 語幹＋活用行の正規表現（作[らりるれろっ] → 作って/作りたい/作ろう 全てOK）
+# 4. その他 → 部分文字列マッチ
+
+# サ変動詞: 名詞部分でマッチ（「〜する」の全活用形をカバー）
+_SURU_VERB_STEMS: list[str] = [
+    "作成", "追加", "登録", "変更", "更新", "修正", "編集",
+    "削除", "取消", "取り消", "記録", "確保",
+    "調整", "整理", "提案", "計画",
+]
+
+# 一段動詞: 語幹（「る」を除いた部分）でマッチ
+_ICHIDAN_VERB_STEMS: list[str] = [
+    "入れ",  # 入れる
+    "決め",  # 決める
+    "埋め",  # 埋める
+    "立て",  # 立てる
+]
+
+# 五段動詞: 語幹＋活用行（子音行の全段をカバー）
+_GODAN_VERB_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"作[らりるれろっ]"),   # 作る
+    re.compile(r"つく[らりるれろっ]"),  # つくる
+    re.compile(r"書[かきくけこい]"),   # 書く
+    re.compile(r"消[さしすせそ]"),    # 消す
+    re.compile(r"組[まみむめもん]"),   # 組む
+]
+
+# 活用形に依存しないキーワード
+_OTHER_WRITE_KEYWORDS: list[str] = [
+    "相談", "見直", "メモし",
 ]
 
 # 書き込みキーワード × ドメインキーワード → writeグループ
@@ -305,10 +339,76 @@ INTENT_WRITE_PATTERNS: list[tuple[list[str], list[str]]] = [
     (["ノート", "メモ", "日記", "記録"], ["notes_write"]),
 ]
 
+# =========================================================================
+# Deferred Write Tool Injection
+# =========================================================================
+# read ツール呼び出し自体が write 意図のシグナルになる。
+# LLM が read ツールを呼んだ後、対応する write ツールを動的に追加する。
+
+READ_TOOL_TO_WRITE_GROUPS: dict[str, list[str]] = {
+    "get_tasks": ["task"],
+    "get_time_blocks": ["planning"],
+    "get_time_entries": ["planning"],
+    "get_goals_and_milestones": ["goals_write"],
+    "get_notes": ["notes_write"],
+    "get_memos": ["notes_write"],
+    "get_reviews": ["review"],
+    "get_review": ["review"],
+    "get_user_facts": ["memory"],
+    "get_user_memory": ["memory"],
+}
+
+
+def get_deferred_write_tools(
+    read_tools: list[str],
+    base_tools: list[str],
+) -> list[str]:
+    """read ツールリストから、deferred で追加すべき write ツールを返す。
+
+    read ツールが選択されていれば、対応する write グループの write ツールのみを返す。
+    base_tools（DB許可リスト）にないツールは除外される。
+
+    Args:
+        read_tools: select_tools() で選択された read ツールのリスト
+        base_tools: DBで許可されたツールの上限リスト
+
+    Returns:
+        deferred で追加する write ツール名のリスト
+    """
+    deferred_groups: set[str] = set()
+    for tool_name in read_tools:
+        groups = READ_TOOL_TO_WRITE_GROUPS.get(tool_name)
+        if groups:
+            deferred_groups.update(groups)
+
+    if not deferred_groups:
+        return []
+
+    # グループからツール名に展開し、write ツールのみフィルタ
+    deferred: set[str] = set()
+    for group in deferred_groups:
+        for tool_name in TOOL_GROUPS.get(group, []):
+            if not is_readonly_tool(tool_name):
+                deferred.add(tool_name)
+
+    # base_tools（許可リスト）とのANDで返す
+    base_set = set(base_tools)
+    return [t for t in deferred if t in base_set]
+
 
 def _has_write_intent(message: str) -> bool:
-    """メッセージに書き込み意図があるかを判定する。"""
-    return any(kw in message for kw in WRITE_KEYWORDS)
+    """メッセージに書き込み意図があるかを判定する。
+
+    動詞の語幹ベースでマッチするため、活用形のバリエーション
+    （〜して/〜したい/〜しよう/〜しろ 等）を網羅的にカバーする。
+    """
+    if any(stem in message for stem in _SURU_VERB_STEMS):
+        return True
+    if any(stem in message for stem in _ICHIDAN_VERB_STEMS):
+        return True
+    if any(p.search(message) for p in _GODAN_VERB_PATTERNS):
+        return True
+    return any(kw in message for kw in _OTHER_WRITE_KEYWORDS)
 
 
 def select_tools(
@@ -336,26 +436,13 @@ def select_tools(
         # 明示 situation → 静的グループ
         selected_groups.update(SITUATION_TOOL_GROUPS[situation])
     else:
-        # auto / chat → キーワードベース
+        # auto / chat → キーワードベースで read グループのみ選択
+        # write ツールは deferred injection で供給される（read ツール呼び出し後に動的追加）
         matched_read = False
         for keywords, groups in INTENT_READ_PATTERNS:
             if any(kw in message for kw in keywords):
                 selected_groups.update(groups)
                 matched_read = True
-
-        # 書き込み意図がある場合のみ write グループを追加
-        if _has_write_intent(message):
-            for keywords, groups in INTENT_WRITE_PATTERNS:
-                if any(kw in message for kw in keywords):
-                    selected_groups.update(groups)
-                    matched_read = True  # ドメインマッチあり
-
-            # 書き込み意図あるが特定ドメインにマッチしない → デフォルト write
-            if not any(
-                any(kw in message for kw in keywords)
-                for keywords, _ in INTENT_WRITE_PATTERNS
-            ):
-                selected_groups.update(["planning", "task"])
 
         # 読み書きどちらにもマッチなし → デフォルトセット（read only）
         if not matched_read and selected_groups == {"core"}:

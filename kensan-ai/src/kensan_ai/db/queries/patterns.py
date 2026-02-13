@@ -27,9 +27,9 @@ async def get_user_patterns(
     lookback_weeks = min(lookback_weeks, 12)
     tz_name = str(timezone)
 
-    today = date.today()
-    start_local = datetime(today.year, today.month, today.day, tzinfo=timezone) - timedelta(weeks=lookback_weeks)
-    end_local = datetime(today.year, today.month, today.day, tzinfo=timezone) + timedelta(days=1)
+    today = datetime.now(timezone)
+    start_local = today.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(weeks=lookback_weeks)
+    end_local = today.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     start_utc = start_local.astimezone(ZoneInfo("UTC"))
     end_utc = end_local.astimezone(ZoneInfo("UTC"))
 

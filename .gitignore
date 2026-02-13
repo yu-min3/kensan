@@ -73,5 +73,9 @@ kensan-ai/.ruff_cache/
 kensan-ai/.mypy_cache/
 kensan-ai/*.egg-info/
 
-# privatedocs
+# docs (必要なものだけ追跡)
 docs/*
+!docs/adr/
+!docs/design/
+!docs/spec/
+!docs/TECHNICAL_HIGHLIGHTS.md

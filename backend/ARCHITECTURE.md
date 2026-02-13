@@ -331,8 +331,6 @@ erDiagram
 
     ai_contexts ||--o{ ai_context_versions : "has versions"
     ai_contexts ||--o{ prompt_evaluations : "evaluated by"
-    ai_contexts ||--o{ prompt_experiments : "tested in"
-    ai_contexts ||--o{ prompt_comparisons : "compared in"
     note_types ||--o{ notes : "defines type"
     goals ||--o{ milestones : "contains"
     milestones ||--o{ tasks : "contains"
@@ -388,7 +386,7 @@ AIエージェントのシステムプロンプトを管理。`user_id = NULL` �
 | `source_template_id` | コピー元テンプレートへの参照 |
 | `is_default` / `is_active` | デフォルト・有効フラグ |
 
-関連テーブル: `ai_context_versions`（バージョン履歴）、`prompt_evaluations`（定期評価）、`prompt_experiments`（A/Bテスト実験、レガシー）、`prompt_comparisons`（バージョンベースA/B比較）。いずれも `user_id` カラムを持つ。
+関連テーブル: `ai_context_versions`（バージョン履歴、source/candidate_status/eval_summaryメタデータ付き）、`prompt_evaluations`（定期評価）。`active_version` カラムで現在有効なバージョン番号を追跡。
 
 ### 非正規化フィールド自動同期トリガー
 

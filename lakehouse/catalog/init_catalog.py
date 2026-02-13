@@ -550,7 +550,26 @@ def create_silver_explorer_tables(catalog):
 
 
 def _create_table(catalog, name, schema, partition_spec=None):
-    """テーブル作成（冪等）"""
+    """テーブル作成（冪等・stale metadata自動修復）
+
+    1. list_tables で存在確認
+    2. 存在すれば load_table でメタデータ検証
+    3. メタデータ破損なら drop → 再作成
+    """
+    ns, tbl = name.split(".")
+    try:
+        existing = {t[1] for t in catalog.list_tables(ns)}
+        if tbl in existing:
+            try:
+                catalog.load_table(name)
+                print(f"  Table already exists: {name}")
+                return
+            except Exception:
+                print(f"  Stale metadata detected, recreating: {name}")
+                catalog.drop_table(name)
+    except Exception:
+        pass
+
     try:
         if partition_spec:
             catalog.create_table(name, schema=schema, partition_spec=partition_spec)

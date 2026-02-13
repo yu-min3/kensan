@@ -1,6 +1,6 @@
 .PHONY: up down dremio-up dremio-down trino-up trino-down all-up all-down \
        openmetadata-up openmetadata-down \
-       init ingest transform aggregate pipeline query summary logs health install test \
+       bootstrap init ingest transform aggregate pipeline query summary logs health install test \
        dagster-logs dagster-dev clean
 
 COMMON       := -f docker-compose.common.yml
@@ -90,8 +90,11 @@ install:
 # Pipeline
 # =============================================================================
 
-init:
-	uv run python catalog/init_catalog.py
+bootstrap:
+	uv run python -m catalog.bootstrap_polaris
+
+init: bootstrap
+	uv run python -m catalog.init_catalog
 
 ingest:
 	uv run python pipelines/bronze/ingest_postgres.py

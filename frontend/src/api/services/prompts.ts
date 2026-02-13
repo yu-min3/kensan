@@ -2,11 +2,11 @@
 import { API_CONFIG } from '../config'
 import { httpClient } from '../client'
 
-export interface PendingExperiment {
-  id: string
-  status: 'pending_review' | 'in_challenge'
-  win_rate: number | null
-  created_at: string
+export interface EvalSummary {
+  interaction_count?: number
+  avg_rating?: number
+  strengths?: string[]
+  weaknesses?: string[]
 }
 
 export interface AIContext {
@@ -24,7 +24,8 @@ export interface AIContext {
   created_at: string
   updated_at: string
   current_version_number: number | null
-  pending_experiment?: PendingExperiment | null
+  active_version: number | null
+  pending_candidate_count: number
 }
 
 export interface AIContextUpdateInput {
@@ -45,6 +46,9 @@ export interface AIContextVersion {
   temperature: number
   changelog: string | null
   created_at: string
+  source: 'manual' | 'ai' | 'rollback'
+  eval_summary: EvalSummary | null
+  candidate_status: 'pending' | 'adopted' | 'rejected' | null
 }
 
 export interface VariableMetadata {
@@ -98,4 +102,24 @@ export async function fetchVersion(contextId: string, versionNumber: number): Pr
 
 export async function rollbackToVersion(contextId: string, versionNumber: number): Promise<AIContext> {
   return httpClient.post<AIContext>(BASE, `/prompts/${contextId}/rollback/${versionNumber}`)
+}
+
+export async function adoptVersion(contextId: string, versionNumber: number): Promise<{ status: string; message: string; context: AIContext }> {
+  return httpClient.post(BASE, `/prompts/${contextId}/versions/${versionNumber}/adopt`)
+}
+
+export async function rejectVersion(contextId: string, versionNumber: number): Promise<{ status: string; message: string; context: AIContext }> {
+  return httpClient.post(BASE, `/prompts/${contextId}/versions/${versionNumber}/reject`)
+}
+
+export async function runOptimization(force?: boolean): Promise<{
+  period_start: string
+  period_end: string
+  contexts_evaluated: number
+  candidates_created: number
+  optimized_context_ids: string[]
+  errors: string[]
+}> {
+  const query = force ? '?force=true' : ''
+  return httpClient.post(BASE, `/prompts/run-optimization${query}`)
 }

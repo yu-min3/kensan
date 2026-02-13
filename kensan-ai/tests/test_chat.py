@@ -1,7 +1,12 @@
 """Tests for chat.py select_tools function."""
 
 import pytest
-from kensan_ai.agents.chat import select_tools, ALLOWED_TOOLS
+from kensan_ai.agents.chat import (
+    select_tools,
+    get_deferred_write_tools,
+    ALLOWED_TOOLS,
+    _has_write_intent,
+)
 
 
 # Use ALLOWED_TOOLS as base_tools for all tests (simulates DB config)
@@ -60,70 +65,86 @@ class TestSelectToolsReadIntent:
 
 
 class TestSelectToolsWriteIntent:
-    """書き込み意図があるときはwriteツールが含まれることを確認。"""
+    """select_tools はもう write ツールを直接返さない（deferred 経由で供給）。
+    write キーワードがあっても read ツールのみが返ることを確認。"""
 
-    def test_create_task(self):
-        """「タスク作って」→ task write グループ含む"""
+    def test_create_task_returns_read_only(self):
+        """「タスク作って」→ select_tools は read のみ、write は deferred で供給"""
         result = select_tools("新しいタスク作って", BASE)
-        assert "create_task" in result
+        assert "get_tasks" in result  # core read
+        assert "create_task" not in result  # write は deferred
 
-    def test_create_schedule(self):
-        """「予定入れて」→ planning write グループ含む"""
+    def test_create_schedule_returns_read_only(self):
+        """「予定入れて」→ select_tools は read のみ"""
         result = select_tools("明日の午前に予定入れて", BASE)
-        assert "create_time_block" in result
+        assert "get_time_blocks" in result
+        assert "create_time_block" not in result
 
-    def test_create_goal(self):
-        """「目標追加して」→ goals_write グループ含む"""
+    def test_create_goal_returns_read_only(self):
+        """「目標追加して」→ select_tools は read のみ"""
         result = select_tools("新しい目標追加して", BASE)
-        assert "create_goal" in result
+        assert "get_goals_and_milestones" in result
+        assert "create_goal" not in result
 
-    def test_update_task(self):
-        """「タスク更新して」→ task write"""
+    def test_update_task_returns_read_only(self):
+        """「タスク更新して」→ read のみ"""
         result = select_tools("このタスク更新して", BASE)
-        assert "update_task" in result
+        assert "get_tasks" in result
+        assert "update_task" not in result
 
-    def test_delete_task(self):
-        """「タスク削除して」→ task write"""
+    def test_delete_task_returns_read_only(self):
+        """「タスク削除して」→ read のみ"""
         result = select_tools("このタスク削除して", BASE)
-        assert "delete_task" in result
+        assert "get_tasks" in result
+        assert "delete_task" not in result
 
-    def test_write_note(self):
-        """「メモ書いて」→ notes_write 含む"""
+    def test_write_note_returns_read_only(self):
+        """「メモ書いて」→ read のみ"""
         result = select_tools("今日のメモ書いて", BASE)
-        assert "create_memo" in result or "create_note" in result
+        assert "create_memo" not in result
+        assert "create_note" not in result
 
-    def test_generic_write_defaults(self):
-        """「作って」だけ（ドメインなし）→ デフォルト planning + task"""
+    def test_generic_write_returns_read_only(self):
+        """「作って」だけ（ドメインなし）→ write なし（core + goals_read のみ）"""
         result = select_tools("これ作って", BASE)
-        assert "create_time_block" in result or "create_task" in result
+        assert "create_time_block" not in result
+        assert "create_task" not in result
 
-    def test_schedule_plan(self):
-        """「予定立てて」→ planning write"""
+    def test_schedule_plan_returns_read_only(self):
+        """「予定立てて」→ read のみ"""
         result = select_tools("明日の予定立てて", BASE)
-        assert "create_time_block" in result
+        assert "create_time_block" not in result
 
 
 class TestSelectToolsSituation:
     """situation指定時のテスト。"""
 
     def test_weekly_situation(self):
-        """weekly → review, search, read系のみ"""
+        """weekly → review, search, read系のみ (SITUATION_TOOL_GROUPS で静的定義)"""
         result = select_tools("振り返りをお願い", BASE, situation="weekly")
         assert "get_reviews" in result
         assert "create_task" not in result
 
-    def test_briefing_situation(self):
-        """briefing → planning + task + goals_read + analytics"""
-        result = select_tools("今日の計画", BASE, situation="briefing")
+    def test_review_situation(self):
+        """review → SITUATION_TOOL_GROUPS で静的定義"""
+        result = select_tools("振り返りをお願い", BASE, situation="review")
+        assert "get_reviews" in result
+        assert "semantic_search" in result
+        assert "create_task" not in result
+
+    def test_daily_advice_situation(self):
+        """daily_advice → SITUATION_TOOL_GROUPS で静的定義（planning + task を含む）"""
+        result = select_tools("今日の計画", BASE, situation="daily_advice")
         assert "create_time_block" in result
         assert "create_task" in result
         assert "get_analytics_summary" in result
 
-    def test_evening_situation(self):
-        """evening → analytics + notes + memory"""
-        result = select_tools("今日の振り返り", BASE, situation="evening")
-        assert "get_analytics_summary" in result
-        assert "create_note" in result
+    def test_unknown_situation_falls_through(self):
+        """未知の situation はキーワードベースのauto選択（read only）"""
+        result = select_tools("今日の計画", BASE, situation="briefing")
+        # "計画" は _SURU_VERB_STEMS にあるが select_tools は write を返さない
+        assert "create_time_block" not in result
+        assert "create_task" not in result
 
 
 class TestSelectToolsContextExclusion:
@@ -191,14 +212,21 @@ class TestSelectToolsPromptVariableExclusion:
         # core tools minus excluded ones
         assert "get_time_blocks" in result  # still available for schedule queries
 
-    def test_write_tools_not_excluded_by_variables(self):
-        """変数注入はread系ツールのみ除外、write系は影響しない"""
+    def test_write_tools_available_via_deferred(self):
+        """変数注入でread除外されても、deferred経由でwrite取得可能"""
         result = select_tools(
             "タスク作って", BASE,
             prompt_variables=["pending_tasks"],
         )
-        assert "get_tasks" not in result  # read excluded
-        assert "create_task" in result     # write still available
+        assert "get_tasks" not in result  # read excluded by variable
+
+        # select_tools doesn't return write tools directly anymore
+        assert "create_task" not in result
+
+        # But deferred write tools are computed from the selected read tools
+        deferred = get_deferred_write_tools(result, BASE)
+        # get_time_blocks is in core (always selected), so planning write is deferred
+        assert "create_time_block" in deferred or "create_task" in deferred
 
 
 class TestToolCount:
@@ -219,9 +247,15 @@ class TestToolCount:
         assert len(result) <= 5, f"Too many tools with variables: {len(result)} tools: {result}"
 
     def test_write_query_tool_count(self):
-        """書き込み系でも合理的な範囲"""
+        """書き込みキーワードがあっても select_tools は read のみ返す"""
         result = select_tools("タスク作って", BASE)
-        assert len(result) <= 10, f"Too many tools: {len(result)} tools: {result}"
+        assert len(result) <= 8, f"Too many tools: {len(result)} tools: {result}"
+        # write tools are not included
+        assert all(
+            t not in result
+            for t in ["create_task", "update_task", "delete_task",
+                       "create_time_block", "create_goal"]
+        )
 
     def test_no_match_tool_count(self):
         """マッチなしでもツールは最小限"""
@@ -259,6 +293,156 @@ class TestSelectToolsSearch:
         """「調べて」→ search グループ含む"""
         result = select_tools("サービスメッシュについて調べて", BASE)
         assert "semantic_search" in result
+
+
+class TestGetDeferredWriteTools:
+    """get_deferred_write_tools のテスト: read → write マッピングの検証。"""
+
+    def test_task_read_unlocks_task_write(self):
+        """get_tasks が選択されていれば task write が deferred で返る"""
+        read_tools = ["get_tasks", "get_time_blocks"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "create_task" in deferred
+        assert "update_task" in deferred
+        assert "delete_task" in deferred
+
+    def test_time_blocks_read_unlocks_planning_write(self):
+        """get_time_blocks → planning write"""
+        read_tools = ["get_time_blocks"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "create_time_block" in deferred
+        assert "update_time_block" in deferred
+        assert "delete_time_block" in deferred
+
+    def test_goals_read_unlocks_goals_write(self):
+        """get_goals_and_milestones → goals_write"""
+        read_tools = ["get_goals_and_milestones"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "create_goal" in deferred
+        assert "update_goal" in deferred
+
+    def test_notes_read_unlocks_notes_write(self):
+        """get_notes → notes_write"""
+        read_tools = ["get_notes"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "create_note" in deferred
+        assert "update_note" in deferred
+
+    def test_memos_read_unlocks_notes_write(self):
+        """get_memos → notes_write"""
+        read_tools = ["get_memos"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "create_memo" in deferred
+
+    def test_reviews_read_unlocks_review_write(self):
+        """get_reviews → review (generate_review)"""
+        read_tools = ["get_reviews"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "generate_review" in deferred
+
+    def test_memory_read_unlocks_memory_write(self):
+        """get_user_facts → memory (add_user_fact)"""
+        read_tools = ["get_user_facts"]
+        deferred = get_deferred_write_tools(read_tools, BASE)
+        assert "add_user_fact" in deferred
+
+    def test_no_read_tools_returns_empty(self):
+        """read ツールなし → 空"""
+        deferred = get_deferred_write_tools([], BASE)
+        assert deferred == []
+
+    def test_unrelated_read_tools_returns_empty(self):
+        """マッピングにない read ツール → 空"""
+        deferred = get_deferred_write_tools(["get_analytics_summary"], BASE)
+        assert deferred == []
+
+    def test_respects_base_tools(self):
+        """base_tools にないツールは deferred に含まれない"""
+        limited_base = ["get_tasks", "create_task"]  # update/delete は不許可
+        deferred = get_deferred_write_tools(["get_tasks"], limited_base)
+        assert "create_task" in deferred
+        assert "update_task" not in deferred
+        assert "delete_task" not in deferred
+
+    def test_only_write_tools_returned(self):
+        """deferred にはwrite ツールのみ（read ツールは含まない）"""
+        # review グループには get_reviews, get_review, generate_review がある
+        # generate_review のみ write
+        deferred = get_deferred_write_tools(["get_reviews"], BASE)
+        assert "get_reviews" not in deferred
+        assert "get_review" not in deferred
+
+    def test_end_to_end_schedule_flow(self):
+        """「予定よろしく」のE2Eフロー: select_tools → get_deferred_write_tools"""
+        # select_tools で read ツールを取得
+        selected = select_tools("予定よろしく", BASE)
+        assert "get_time_blocks" in selected
+        assert "create_time_block" not in selected
+
+        # deferred で write ツールを取得
+        deferred = get_deferred_write_tools(selected, BASE)
+        assert "create_time_block" in deferred
+        assert "update_time_block" in deferred
+
+    def test_end_to_end_greeting_flow(self):
+        """「こんにちは」のE2Eフロー: deferred も最小限"""
+        selected = select_tools("こんにちは", BASE)
+        deferred = get_deferred_write_tools(selected, BASE)
+        # core (get_tasks, get_time_blocks, etc.) + goals_read → 対応する write
+        assert "create_task" in deferred
+        assert "create_time_block" in deferred
+
+
+class TestWriteIntentStemMatching:
+    """語幹ベースの書き込み意図判定テスト。活用形のバリエーションをカバーできることを確認。
+    _has_write_intent はユーティリティとして残されており、直接テスト可能。"""
+
+    # サ変動詞: 名詞部分で全活用形にマッチ
+    @pytest.mark.parametrize("msg", [
+        "予定を作成して",     # て形
+        "予定を作成したい",    # たい形
+        "予定を作成しよう",    # 意志形
+        "予定を作成する",     # 辞書形
+        "予定を作成した",     # た形
+    ])
+    def test_suru_verb_conjugations(self, msg):
+        """サ変動詞「作成する」の各活用形でwrite intent検出"""
+        assert _has_write_intent(msg) is True
+
+    # 五段動詞: 語幹＋活用行で全活用形にマッチ
+    @pytest.mark.parametrize("msg", [
+        "タスク作って",     # て形
+        "タスク作りたい",    # たい形
+        "タスク作ろう",     # 意志形
+        "タスク作る",      # 辞書形
+        "タスク作れる",     # 可能形
+        "タスク作った",     # た形（促音便）
+    ])
+    def test_godan_verb_conjugations(self, msg):
+        """五段動詞「作る」の各活用形でwrite intent検出"""
+        assert _has_write_intent(msg) is True
+
+    # 一段動詞: 語幹で全活用形にマッチ
+    @pytest.mark.parametrize("msg", [
+        "予定に入れて",     # て形
+        "予定に入れたい",    # たい形
+        "予定に入れよう",    # 意志形
+        "予定に入れる",     # 辞書形
+    ])
+    def test_ichidan_verb_conjugations(self, msg):
+        """一段動詞「入れる」の各活用形でwrite intent検出"""
+        assert _has_write_intent(msg) is True
+
+    # 参照系はマッチしないことを確認
+    @pytest.mark.parametrize("msg", [
+        "今日の予定は？",
+        "タスクの状況は？",
+        "こんにちは",
+        "目標の進捗を教えて",
+    ])
+    def test_read_intent_not_matched(self, msg):
+        """参照系メッセージではwrite intentが検出されない"""
+        assert _has_write_intent(msg) is False
 
 
 class TestSelectToolsNoFiles:

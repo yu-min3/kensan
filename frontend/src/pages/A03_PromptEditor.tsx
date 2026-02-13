@@ -3,21 +3,23 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, FileCode2, GitCompare, ArrowRight, Wand2 } from 'lucide-react'
+import { Loader2, FileCode2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { usePromptStore } from '@/stores/usePromptStore'
-import { useChallengeStore } from '@/stores/useChallengeStore'
-import { useVersionSeen } from '@/hooks/useVersionSeen'
 import { PromptSidebar } from '@/components/prompt/PromptSidebar'
 import { PromptEditor } from '@/components/prompt/PromptEditor'
 import { VersionHistory } from '@/components/prompt/VersionHistory'
-import { VersionDiffDialog } from '@/components/prompt/VersionDiffDialog'
-import { ChallengeList } from '@/components/prompt/ChallengeList'
-import { ChallengeDetail } from '@/components/prompt/ChallengeDetail'
-import { ExperimentDetail } from '@/components/prompt/ExperimentDetail'
+import { VersionDetail } from '@/components/prompt/VersionDetail'
+import { ABTestPanel } from '@/components/prompt/ABTestPanel'
 import { PageGuide } from '@/components/guide/PageGuide'
-import type { AIContextVersion, AIContextUpdateInput } from '@/api/services/prompts'
+import {
+  adoptVersion,
+  rejectVersion,
+  runOptimization,
+  type AIContextVersion,
+  type AIContextUpdateInput,
+} from '@/api/services/prompts'
 
 export function A03PromptEditor() {
   const {
@@ -30,28 +32,11 @@ export function A03PromptEditor() {
     rollback,
   } = usePromptStore()
 
-  const {
-    comparisons,
-    experiments,
-    selectedComparison,
-    selectedExperiment,
-    isLoading: comparisonLoading,
-    isOptimizing,
-    fetchComparisons,
-    fetchExperiments,
-    selectComparison,
-    selectExperiment,
-    createAndSelect,
-    runOptimization,
-  } = useChallengeStore()
-
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [diffOpen, setDiffOpen] = useState(false)
-  const [diffOld, setDiffOld] = useState<AIContextVersion | null>(null)
-  const [diffNew, setDiffNew] = useState<AIContextVersion | null>(null)
   const [activeTab, setActiveTab] = useState('editor')
-  const [savedBanner, setSavedBanner] = useState<{ contextId: string; oldVersion: number; newVersion: number } | null>(null)
-  const [compareSubTab, setCompareSubTab] = useState<'versions' | 'comparisons'>('versions')
+  const [selectedVersion, setSelectedVersion] = useState<AIContextVersion | null>(null)
+  const [abTestMode, setAbTestMode] = useState<{ versionA: number; versionB: number } | null>(null)
+  const [isOptimizing, setIsOptimizing] = useState(false)
   const [optimizeElapsed, setOptimizeElapsed] = useState(0)
   const optimizeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -71,8 +56,6 @@ export function A03PromptEditor() {
     }
   }, [isOptimizing])
 
-  const { getLastSeen, markSeen, markUnseen, hasUnseen, initializeIfNeeded } = useVersionSeen()
-
   useEffect(() => {
     fetchContexts()
   }, [fetchContexts])
@@ -84,13 +67,6 @@ export function A03PromptEditor() {
     }
   }, [contexts, selectedId])
 
-  // Initialize version seen tracking when contexts load
-  useEffect(() => {
-    if (contexts.length > 0) {
-      initializeIfNeeded(contexts)
-    }
-  }, [contexts, initializeIfNeeded])
-
   // Fetch versions when selection changes
   useEffect(() => {
     if (selectedId) {
@@ -98,69 +74,102 @@ export function A03PromptEditor() {
     }
   }, [selectedId, fetchVersions])
 
-  // Fetch comparisons + experiments when switching to challenge tab
+  // Fetch versions when switching to optimize tab
   useEffect(() => {
-    if (activeTab === 'challenge') {
-      fetchComparisons()
-      fetchExperiments()
-      if (selectedId) {
-        fetchVersions(selectedId)
-      }
+    if (activeTab === 'optimize' && selectedId) {
+      fetchVersions(selectedId)
     }
-  }, [activeTab, fetchComparisons, fetchExperiments, selectedId, fetchVersions])
+  }, [activeTab, selectedId, fetchVersions])
 
   const selectedContext = contexts.find((c) => c.id === selectedId)
   const selectedVersions = selectedId ? (versions[selectedId] ?? []) : []
 
-  // Mark versions as seen when viewing the versions sub-tab
-  useEffect(() => {
-    if (activeTab === 'challenge' && compareSubTab === 'versions' && selectedContext?.current_version_number != null && selectedId) {
-      markSeen(selectedId, selectedContext.current_version_number)
-    }
-  }, [activeTab, compareSubTab, selectedId, selectedContext?.current_version_number, markSeen])
-
-  const unseenContextIds = useMemo(
-    () => new Set(contexts.filter((ctx) => hasUnseen(ctx.id, ctx.current_version_number)).map((ctx) => ctx.id)),
-    [contexts, hasUnseen],
+  const pendingCandidateCount = useMemo(
+    () => contexts.reduce((sum, ctx) => sum + (ctx.pending_candidate_count ?? 0), 0),
+    [contexts],
   )
+
+  // Get the active version's prompt for diff display
+  const activeVersionPrompt = useMemo(() => {
+    if (!selectedContext?.active_version) return null
+    const v = selectedVersions.find((v) => v.version_number === selectedContext.active_version)
+    return v?.system_prompt ?? null
+  }, [selectedContext?.active_version, selectedVersions])
 
   const handleSave = async (data: AIContextUpdateInput) => {
     if (!selectedId) return
-    const oldVersionNumber = selectedContext?.current_version_number ?? 0
     await updateContext(selectedId, data)
     await fetchVersions(selectedId)
-    // Show compare banner
-    const newVersionNumber = oldVersionNumber + 1
-    setSavedBanner({ contextId: selectedId, oldVersion: oldVersionNumber, newVersion: newVersionNumber })
-    // Mark as seen since the user just created this version
-    markSeen(selectedId, newVersionNumber)
   }
-
-  const handleCompareFromBanner = useCallback(async () => {
-    if (!savedBanner) return
-    await createAndSelect(savedBanner.contextId, savedBanner.oldVersion, savedBanner.newVersion)
-    setSavedBanner(null)
-    setActiveTab('challenge')
-  }, [savedBanner, createAndSelect])
-
-  const handleCompareVersions = useCallback(async (contextId: string, versionA: number, versionB: number) => {
-    await createAndSelect(contextId, versionA, versionB)
-    setActiveTab('challenge')
-  }, [createAndSelect])
 
   const handleRollback = async (versionNumber: number) => {
     if (!selectedId) return
     await rollback(selectedId, versionNumber)
+    setSelectedVersion(null)
   }
 
-  const handleShowDiff = (v1: AIContextVersion, v2: AIContextVersion) => {
-    setDiffOld(v1)
-    setDiffNew(v2)
-    setDiffOpen(true)
-  }
+  const handleAdopt = useCallback(async (versionNumber: number) => {
+    if (!selectedId) return
+    await adoptVersion(selectedId, versionNumber)
+    await fetchContexts()
+    await fetchVersions(selectedId)
+    setSelectedVersion(null)
+    toast.success(`v${versionNumber} を採用しました`)
+  }, [selectedId, fetchContexts, fetchVersions])
 
-  const activeCount = comparisons.filter((c) => c.status === 'active').length
-  const pendingExperimentCount = experiments.filter((e) => e.status === 'pending_review' || e.status === 'in_challenge').length
+  const handleReject = useCallback(async (versionNumber: number) => {
+    if (!selectedId) return
+    await rejectVersion(selectedId, versionNumber)
+    await fetchContexts()
+    await fetchVersions(selectedId)
+    setSelectedVersion(null)
+    toast.success(`v${versionNumber} を却下しました`)
+  }, [selectedId, fetchContexts, fetchVersions])
+
+  const handleRunOptimization = useCallback(async () => {
+    setIsOptimizing(true)
+    try {
+      const result = await runOptimization(true)
+      if (result.candidates_created > 0) {
+        toast.success(`${result.candidates_created}件の最適化提案を生成しました`)
+        await fetchContexts()
+        if (selectedId) await fetchVersions(selectedId)
+      } else {
+        toast.info('改善が必要なコンテキストはありませんでした')
+      }
+    } catch {
+      toast.error('最適化の実行に失敗しました')
+    } finally {
+      setIsOptimizing(false)
+    }
+  }, [fetchContexts, fetchVersions, selectedId])
+
+  const handleStartABTest = useCallback((versionNumber: number) => {
+    if (!selectedContext?.active_version) return
+    setAbTestMode({ versionA: selectedContext.active_version, versionB: versionNumber })
+    setSelectedVersion(null)
+  }, [selectedContext?.active_version])
+
+  const handleABAdoptVersion = useCallback(async (versionNumber: number) => {
+    if (!selectedId) return
+    // If it's the active version, nothing to do
+    if (versionNumber === selectedContext?.active_version) {
+      toast.info('現在のバージョンがそのまま維持されます')
+      setAbTestMode(null)
+      return
+    }
+    // Check if the version is a pending candidate
+    const version = selectedVersions.find((v) => v.version_number === versionNumber)
+    if (version?.candidate_status === 'pending') {
+      await adoptVersion(selectedId, versionNumber)
+    } else {
+      await rollback(selectedId, versionNumber)
+    }
+    await fetchContexts()
+    await fetchVersions(selectedId)
+    setAbTestMode(null)
+    toast.success(`v${versionNumber} を採用しました`)
+  }, [selectedId, selectedContext?.active_version, selectedVersions, fetchContexts, fetchVersions, rollback])
 
   if (isLoading && contexts.length === 0) {
     return (
@@ -192,11 +201,11 @@ export function A03PromptEditor() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList data-guide="prompt-tabs">
           <TabsTrigger value="editor">プロンプト編集</TabsTrigger>
-          <TabsTrigger value="challenge" className="gap-1.5" data-guide="prompt-tab-challenge">
-            比較
-            {(activeCount + pendingExperimentCount > 0 || unseenContextIds.size > 0) && (
+          <TabsTrigger value="optimize" className="gap-1.5" data-guide="prompt-tab-optimize">
+            最適化
+            {pendingCandidateCount > 0 && (
               <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[10px]">
-                {activeCount + pendingExperimentCount + unseenContextIds.size}
+                {pendingCandidateCount}
               </Badge>
             )}
           </TabsTrigger>
@@ -212,57 +221,22 @@ export function A03PromptEditor() {
                   contexts={contexts}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
-                  unseenContextIds={unseenContextIds}
                 />
               </CardContent>
             </Card>
 
-            {/* Right: Editor + Version History */}
+            {/* Right: Editor */}
             <div className="space-y-4 lg:col-span-2">
               {selectedContext ? (
-                <>
-                  {/* Save → Compare banner */}
-                  {savedBanner && savedBanner.contextId === selectedId && (
-                    <div className="flex items-center justify-between rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 dark:border-blue-700 dark:bg-blue-950/50">
-                      <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-300">
-                        <GitCompare className="h-4 w-4 shrink-0" />
-                        <span>
-                          v{savedBanner.oldVersion} → v{savedBanner.newVersion} を保存しました。比較しますか？
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => setSavedBanner(null)}
-                        >
-                          閉じる
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="gap-1 text-blue-700 hover:text-blue-900 hover:bg-blue-100 dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
-                          onClick={handleCompareFromBanner}
-                        >
-                          比較する
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  <Card data-guide="prompt-editor">
-                    <CardContent className="p-5">
-                      <PromptEditor
-                        context={selectedContext}
-                        isLoading={isLoading}
-                        onSave={handleSave}
-                      />
-                    </CardContent>
-                  </Card>
-
-                </>
+                <Card data-guide="prompt-editor">
+                  <CardContent className="p-5">
+                    <PromptEditor
+                      context={selectedContext}
+                      isLoading={isLoading}
+                      onSave={handleSave}
+                    />
+                  </CardContent>
+                </Card>
               ) : (
                 <Card>
                   <CardContent className="flex items-center justify-center py-20">
@@ -276,183 +250,119 @@ export function A03PromptEditor() {
           </div>
         </TabsContent>
 
-        {/* Challenge Tab */}
-        <TabsContent value="challenge">
+        {/* Optimization Tab */}
+        <TabsContent value="optimize">
           <div className="grid gap-4 lg:grid-cols-3">
-            {/* Left: Internal tabs (Versions / Comparisons) */}
+            {/* Left: Optimize button + version history */}
             <Card className="lg:col-span-1">
-              <CardContent className="p-3">
-                <Tabs value={compareSubTab} onValueChange={(v) => setCompareSubTab(v as 'versions' | 'comparisons')}>
-                  <TabsList className="w-full">
-                    <TabsTrigger value="versions" className="flex-1 gap-1">
-                      バージョン
-                      {unseenContextIds.size > 0 && (
-                        <span className="h-2 w-2 rounded-full bg-blue-500" />
-                      )}
-                    </TabsTrigger>
-                    <TabsTrigger value="comparisons" className="flex-1 gap-1">
-                      比較一覧
-                      {(activeCount + pendingExperimentCount) > 0 && (
-                        <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[9px]">
-                          {activeCount + pendingExperimentCount}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="versions" className="mt-3">
-                    <div>
-                      <Select value={selectedId ?? ''} onValueChange={setSelectedId}>
-                        <SelectTrigger className="mb-3 h-8 text-xs">
-                          <span className="truncate">
-                            {selectedContext
-                              ? `${selectedContext.name}${selectedContext.current_version_number ? ` v${selectedContext.current_version_number}` : ''}`
-                              : 'コンテキストを選択'}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {contexts.map((ctx) => (
-                            <SelectItem key={ctx.id} value={ctx.id} className="text-xs">
-                              {ctx.name}{ctx.current_version_number ? ` v${ctx.current_version_number}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedContext ? (
-                        <VersionHistory
-                          versions={selectedVersions}
-                          currentVersionNumber={selectedContext.current_version_number}
-                          isLoading={isLoading}
-                          onRollback={handleRollback}
-                          onShowDiff={handleShowDiff}
-                          lastSeenVersion={getLastSeen(selectedContext.id)}
-                          onCompare={selectedId ? (versionNumber) => {
-                            const currentVN = selectedContext.current_version_number
-                            if (currentVN != null) {
-                              handleCompareVersions(selectedId, versionNumber, currentVN)
-                            }
-                          } : undefined}
-                        />
-                      ) : (
-                        <p className="py-8 text-center text-sm text-muted-foreground">
-                          コンテキストを選択してください
-                        </p>
-                      )}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="comparisons" className="mt-3">
-                    <div className="mb-3 space-y-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-1.5"
-                        disabled={isOptimizing}
-                        onClick={async () => {
-                          const result = await runOptimization(true)
-                          if (result) {
-                            if (result.experiments_created > 0) {
-                              for (const ctxId of result.optimized_context_ids) {
-                                markUnseen(ctxId)
-                              }
-                              toast.success(`${result.experiments_created}件のチャレンジを生成しました`)
-                            } else {
-                              toast.info('改善が必要なコンテキストはありませんでした')
-                            }
-                          }
-                        }}
-                      >
-                        {isOptimizing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-3.5 w-3.5" />
-                        )}
-                        {isOptimizing
-                          ? `実行中... (${optimizeElapsed}秒)`
-                          : 'AI最適化を実行'}
-                      </Button>
-                      <p className="text-center text-[10px] text-muted-foreground">
-                        {isOptimizing
-                          ? 'コンテキストの評価・改善プロンプト生成中です'
-                          : 'コンテキスト数に応じて1〜2分程度かかります'}
-                      </p>
-                    </div>
-                    {/* Experiment list (AI optimization) */}
-                    {experiments.length > 0 && (
-                      <div className="mb-3 space-y-1">
-                        <h3 className="px-3 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          AI最適化
-                        </h3>
-                        {experiments.map((exp) => {
-                          const isSelected = selectedExperiment?.id === exp.id
-                          const statusLabel = exp.status === 'pending_review' ? 'レビュー待ち'
-                            : exp.status === 'in_challenge' ? '評価中'
-                            : exp.status === 'promoted' ? '採用済み' : '却下'
-                          const statusClass = exp.status === 'pending_review'
-                            ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30'
-                            : exp.status === 'in_challenge'
-                            ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30'
-                            : exp.status === 'promoted'
-                            ? 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30'
-                            : 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30'
-                          return (
-                            <button
-                              key={exp.id}
-                              onClick={() => selectExperiment(exp.id)}
-                              className={`flex w-full flex-col gap-1.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                                isSelected
-                                  ? 'bg-brand/15 text-brand font-medium'
-                                  : 'text-foreground hover:bg-muted'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Wand2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                <span className="truncate font-medium">{exp.control_name}</span>
-                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 ${statusClass}`}>
-                                  {statusLabel}
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {exp.situation} — {new Date(exp.created_at).toLocaleDateString('ja-JP')}
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {/* Comparison list (version A/B) */}
-                    {comparisonLoading && comparisons.length === 0 ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
+              <CardContent className="p-3 space-y-3">
+                {/* AI Optimize trigger */}
+                <div className="space-y-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-1.5"
+                    disabled={isOptimizing}
+                    onClick={handleRunOptimization}
+                  >
+                    {isOptimizing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <ChallengeList
-                        challenges={comparisons}
-                        selectedId={selectedComparison?.id ?? null}
-                        onSelect={selectComparison}
-                      />
+                      <Wand2 className="h-3.5 w-3.5" />
                     )}
-                  </TabsContent>
-                </Tabs>
+                    {isOptimizing
+                      ? `実行中... (${optimizeElapsed}秒)`
+                      : 'AI最適化を実行'}
+                  </Button>
+                  <p className="text-center text-[10px] text-muted-foreground">
+                    {isOptimizing
+                      ? 'コンテキストの評価・改善プロンプト生成中です'
+                      : 'コンテキスト数に応じて1〜2分程度かかります'}
+                  </p>
+                </div>
+
+                {/* Context selector + version history */}
+                <div className="border-t pt-3">
+                  <Select value={selectedId ?? ''} onValueChange={(v) => { setSelectedId(v); setSelectedVersion(null); setAbTestMode(null) }}>
+                    <SelectTrigger className="mb-2 h-8 text-xs">
+                      <span className="truncate">
+                        {selectedContext
+                          ? `${selectedContext.name}${selectedContext.active_version ? ` v${selectedContext.active_version}` : ''}`
+                          : 'コンテキストを選択'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contexts.map((ctx) => (
+                        <SelectItem key={ctx.id} value={ctx.id} className="text-xs">
+                          <span className="flex items-center gap-1.5">
+                            {ctx.name}{ctx.active_version ? ` v${ctx.active_version}` : ''}
+                            {ctx.pending_candidate_count > 0 && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30">
+                                {ctx.pending_candidate_count}
+                              </Badge>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedContext ? (
+                    <VersionHistory
+                      versions={selectedVersions}
+                      activeVersion={selectedContext.active_version}
+                      isLoading={isLoading}
+                      onSelectVersion={setSelectedVersion}
+                      onRollback={handleRollback}
+                      onStartABTest={handleStartABTest}
+                      selectedVersionNumber={selectedVersion?.version_number ?? null}
+                    />
+                  ) : (
+                    <p className="py-4 text-center text-xs text-muted-foreground">
+                      コンテキストを選択してください
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
             {/* Right: Detail panel */}
-            <div className="lg:col-span-2" data-guide="challenge-detail">
-              {selectedExperiment ? <ExperimentDetail /> : <ChallengeDetail />}
+            <div className="lg:col-span-2" data-guide="version-detail">
+              {abTestMode && selectedId ? (
+                <ABTestPanel
+                  contextId={selectedId}
+                  versionA={abTestMode.versionA}
+                  versionB={abTestMode.versionB}
+                  onClose={() => setAbTestMode(null)}
+                  onAdoptVersion={handleABAdoptVersion}
+                />
+              ) : selectedVersion ? (
+                <Card>
+                  <CardContent className="p-5">
+                    <VersionDetail
+                      version={selectedVersion}
+                      activeVersion={selectedContext?.active_version ?? null}
+                      activePrompt={activeVersionPrompt}
+                      onAdopt={handleAdopt}
+                      onReject={handleReject}
+                      onRollback={handleRollback}
+                      onStartABTest={handleStartABTest}
+                    />
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center gap-2 py-20 text-center">
+                    <Wand2 className="h-8 w-8 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      バージョンを選択するか、AI最適化を実行してください
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </TabsContent>
       </Tabs>
-
-      {/* Diff Dialog */}
-      <VersionDiffDialog
-        open={diffOpen}
-        onOpenChange={setDiffOpen}
-        oldVersion={diffOld}
-        newVersion={diffNew}
-      />
     </div>
   )
 }

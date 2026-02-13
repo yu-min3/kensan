@@ -144,9 +144,29 @@ deploy:
 # Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
 # =============================================================================
 
-## Start lakehouse base (Nessie + Dagster)
+## Start lakehouse (Polaris + Dagster), init catalog, restart ai-service
 lakehouse:
 	$(MAKE) -C lakehouse up
+	@echo ""
+	@echo "Waiting for Polaris to be healthy..."
+	@for i in $$(seq 1 20); do \
+		curl -sf http://localhost:8182/q/health > /dev/null 2>&1 && break; \
+		sleep 3; \
+	done
+	@curl -sf http://localhost:8182/q/health > /dev/null 2>&1 || { echo "ERROR: Polaris did not become healthy within 60s"; exit 1; }
+	@echo "Polaris is healthy."
+	@echo ""
+	@echo "Initializing Iceberg catalog..."
+	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
+	@echo ""
+	@echo "Restarting ai-service to connect to Polaris..."
+	@docker compose up -d --force-recreate ai-service
+	@echo ""
+	@echo "Lakehouse is ready!"
+	@echo "  Polaris API:      http://localhost:8181"
+	@echo "  Dagster UI:       http://localhost:3070"
+	@echo ""
+	@echo "AI Explorer data will appear after Dagster pipelines run."
 
 ## Start lakehouse + Dremio
 lakehouse-dremio:
@@ -330,7 +350,7 @@ help:
 	@echo "  storage-restore        Restore MinIO buckets from backup"
 	@echo ""
 	@echo "Lakehouse:"
-	@echo "  lakehouse         Base stack (Nessie + Dagster)"
+	@echo "  lakehouse         Polaris + Dagster + catalog init + ai-service restart"
 	@echo "  lakehouse-dremio  Base + Dremio"
 	@echo "  lakehouse-trino   Base + Trino + Superset"
 	@echo "  lakehouse-all     Base + all query engines"

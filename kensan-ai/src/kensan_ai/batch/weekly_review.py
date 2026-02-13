@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+
+from kensan_ai.lib.timezone_utils import local_today
 from uuid import UUID
 
 from kensan_ai.agents import create_agent_runner
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def _last_week_range() -> tuple[date, date]:
     """Return (monday, sunday) of the previous week."""
-    today = date.today()
+    today = local_today()
     # Monday of this week
     monday_this_week = today - timedelta(days=today.weekday())
     # Last week
