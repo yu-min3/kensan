@@ -112,8 +112,13 @@ for i in {1..20}; do
 done
 
 echo '=== Bootstrapping & initializing Iceberg catalog ==='
-sudo docker exec kensan-dagster-user-code uv run python -m catalog.bootstrap_polaris
-sudo docker exec kensan-dagster-user-code uv run python -m catalog.init_catalog
+sudo docker exec -e POLARIS_MANAGEMENT_URL=http://kensan-polaris:8181/api/management/v1 \
+  -e POLARIS_CATALOG_URL=http://kensan-polaris:8181/api/catalog/v1 \
+  -e S3_ENDPOINT=http://kensan-minio:9000 \
+  kensan-dagster-user-code uv run python -m catalog.bootstrap_polaris
+sudo docker exec -e POLARIS_URI=http://kensan-polaris:8181/api/catalog \
+  -e S3_ENDPOINT=http://kensan-minio:9000 \
+  kensan-dagster-user-code uv run python -m catalog.init_catalog
 
 echo '=== Restarting ai-service to connect to Polaris ==='
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate ai-service
