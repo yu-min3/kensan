@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, Star } from 'lucide-react'
 
 type Mode = 'login' | 'register'
 
@@ -15,6 +15,7 @@ interface PersonaInfo {
   role: string
   description: string
   color: string
+  recommended?: boolean
 }
 
 const PERSONAS: PersonaInfo[] = [
@@ -22,8 +23,9 @@ const PERSONAS: PersonaInfo[] = [
     id: 'tanaka',
     name: '田中翔太',
     role: 'バックエンドエンジニア',
-    description: '30歳・Go+GCP 5年目。AIが学習パターンを完全把握',
+    description: '30歳・Go+Google Cloud 5年目。AIが学習パターンをある程度把握',
     color: 'bg-blue-500',
+    recommended: true,
   },
   {
     id: 'misaki',
@@ -36,7 +38,7 @@ const PERSONAS: PersonaInfo[] = [
     id: 'takuya',
     name: '山田拓也',
     role: 'SIer ジュニア',
-    description: '23歳・2年目、基本情報技術者を目指す',
+    description: '23歳・2年目、応用情報技術者を目指す',
     color: 'bg-green-500',
   },
   {
@@ -114,8 +116,14 @@ export function LoginPage() {
                     key={persona.id}
                     onClick={() => handleDemoLogin(persona.id)}
                     disabled={isDisabled}
-                    className="flex items-start gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-accent/50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`relative flex items-start gap-3 p-3 rounded-lg border transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${persona.recommended ? 'border-primary/50 bg-primary/5 hover:bg-primary/10 ring-1 ring-primary/20' : 'border-border hover:border-primary/50 hover:bg-accent/50'}`}
                   >
+                    {persona.recommended && (
+                      <span className="absolute -top-2.5 right-2 flex items-center gap-0.5 rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                        おすすめ
+                      </span>
+                    )}
                     <div className={`${persona.color} w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 mt-0.5`}>
                       {isThisLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

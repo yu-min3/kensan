@@ -108,3 +108,62 @@ export async function resolveComparison(
     { action },
   )
 }
+
+// =============================================================================
+// Experiments (AI-generated optimization challenges)
+// =============================================================================
+
+export interface Experiment {
+  id: string
+  situation: string
+  evaluation_id: string
+  control_context_id: string
+  variant_context_id: string
+  status: 'pending_review' | 'in_challenge' | 'promoted' | 'rejected'
+  challenge_results: Array<{ round_id: string; mapping: Record<string, string>; winner: string | null }>
+  win_rate: number | null
+  resolved_at: string | null
+  created_at: string
+  control_name: string
+  control_prompt: string
+  variant_name: string
+  variant_prompt: string
+  eval_avg_rating: number | null
+  eval_interaction_count: number
+  eval_weaknesses: string[]
+  eval_strengths: string[]
+}
+
+export async function fetchExperiments(): Promise<Experiment[]> {
+  const res = await httpClient.get<{ challenges: Experiment[] }>(BASE, '/prompts/challenges')
+  return res.challenges
+}
+
+export async function fetchExperiment(id: string): Promise<Experiment> {
+  return httpClient.get<Experiment>(BASE, `/prompts/challenges/${id}`)
+}
+
+export async function resolveExperiment(
+  id: string,
+  action: 'promote' | 'reject',
+): Promise<ResolveResult> {
+  return httpClient.post<ResolveResult>(BASE, `/prompts/challenges/${id}/resolve`, { action })
+}
+
+// =============================================================================
+// Optimization trigger
+// =============================================================================
+
+export interface OptimizationResult {
+  period_start: string
+  period_end: string
+  contexts_evaluated: number
+  experiments_created: number
+  errors: string[]
+  optimized_context_ids: string[]
+}
+
+export async function runOptimization(force = false): Promise<OptimizationResult> {
+  const params = force ? '?force=true' : ''
+  return httpClient.post<OptimizationResult>(BASE, `/prompts/run-optimization${params}`, {})
+}

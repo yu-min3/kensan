@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, FileCode2, GitCompare, ArrowRight } from 'lucide-react'
+import { Loader2, FileCode2, GitCompare, ArrowRight, Wand2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { usePromptStore } from '@/stores/usePromptStore'
 import { useChallengeStore } from '@/stores/useChallengeStore'
@@ -14,6 +15,7 @@ import { VersionHistory } from '@/components/prompt/VersionHistory'
 import { VersionDiffDialog } from '@/components/prompt/VersionDiffDialog'
 import { ChallengeList } from '@/components/prompt/ChallengeList'
 import { ChallengeDetail } from '@/components/prompt/ChallengeDetail'
+import { ExperimentDetail } from '@/components/prompt/ExperimentDetail'
 import { PageGuide } from '@/components/guide/PageGuide'
 import type { AIContextVersion, AIContextUpdateInput } from '@/api/services/prompts'
 
@@ -30,11 +32,17 @@ export function A03PromptEditor() {
 
   const {
     comparisons,
+    experiments,
     selectedComparison,
+    selectedExperiment,
     isLoading: comparisonLoading,
+    isOptimizing,
     fetchComparisons,
+    fetchExperiments,
     selectComparison,
+    selectExperiment,
     createAndSelect,
+    runOptimization,
   } = useChallengeStore()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -44,8 +52,26 @@ export function A03PromptEditor() {
   const [activeTab, setActiveTab] = useState('editor')
   const [savedBanner, setSavedBanner] = useState<{ contextId: string; oldVersion: number; newVersion: number } | null>(null)
   const [compareSubTab, setCompareSubTab] = useState<'versions' | 'comparisons'>('versions')
+  const [optimizeElapsed, setOptimizeElapsed] = useState(0)
+  const optimizeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { getLastSeen, markSeen, hasUnseen, initializeIfNeeded } = useVersionSeen()
+  // Elapsed timer for optimization
+  useEffect(() => {
+    if (isOptimizing) {
+      setOptimizeElapsed(0)
+      optimizeTimerRef.current = setInterval(() => setOptimizeElapsed((s) => s + 1), 1000)
+    } else {
+      if (optimizeTimerRef.current) {
+        clearInterval(optimizeTimerRef.current)
+        optimizeTimerRef.current = null
+      }
+    }
+    return () => {
+      if (optimizeTimerRef.current) clearInterval(optimizeTimerRef.current)
+    }
+  }, [isOptimizing])
+
+  const { getLastSeen, markSeen, markUnseen, hasUnseen, initializeIfNeeded } = useVersionSeen()
 
   useEffect(() => {
     fetchContexts()
@@ -72,15 +98,16 @@ export function A03PromptEditor() {
     }
   }, [selectedId, fetchVersions])
 
-  // Fetch comparisons when switching to challenge tab
+  // Fetch comparisons + experiments when switching to challenge tab
   useEffect(() => {
     if (activeTab === 'challenge') {
       fetchComparisons()
+      fetchExperiments()
       if (selectedId) {
         fetchVersions(selectedId)
       }
     }
-  }, [activeTab, fetchComparisons, selectedId, fetchVersions])
+  }, [activeTab, fetchComparisons, fetchExperiments, selectedId, fetchVersions])
 
   const selectedContext = contexts.find((c) => c.id === selectedId)
   const selectedVersions = selectedId ? (versions[selectedId] ?? []) : []
@@ -133,6 +160,7 @@ export function A03PromptEditor() {
   }
 
   const activeCount = comparisons.filter((c) => c.status === 'active').length
+  const pendingExperimentCount = experiments.filter((e) => e.status === 'pending_review' || e.status === 'in_challenge').length
 
   if (isLoading && contexts.length === 0) {
     return (
@@ -166,9 +194,9 @@ export function A03PromptEditor() {
           <TabsTrigger value="editor">プロンプト編集</TabsTrigger>
           <TabsTrigger value="challenge" className="gap-1.5" data-guide="prompt-tab-challenge">
             比較
-            {(activeCount > 0 || unseenContextIds.size > 0) && (
+            {(activeCount + pendingExperimentCount > 0 || unseenContextIds.size > 0) && (
               <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[10px]">
-                {activeCount + unseenContextIds.size}
+                {activeCount + pendingExperimentCount + unseenContextIds.size}
               </Badge>
             )}
           </TabsTrigger>
@@ -264,9 +292,9 @@ export function A03PromptEditor() {
                     </TabsTrigger>
                     <TabsTrigger value="comparisons" className="flex-1 gap-1">
                       比較一覧
-                      {activeCount > 0 && (
+                      {(activeCount + pendingExperimentCount) > 0 && (
                         <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[9px]">
-                          {activeCount}
+                          {activeCount + pendingExperimentCount}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -314,6 +342,86 @@ export function A03PromptEditor() {
                   </TabsContent>
 
                   <TabsContent value="comparisons" className="mt-3">
+                    <div className="mb-3 space-y-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-1.5"
+                        disabled={isOptimizing}
+                        onClick={async () => {
+                          const result = await runOptimization(true)
+                          if (result) {
+                            if (result.experiments_created > 0) {
+                              for (const ctxId of result.optimized_context_ids) {
+                                markUnseen(ctxId)
+                              }
+                              toast.success(`${result.experiments_created}件のチャレンジを生成しました`)
+                            } else {
+                              toast.info('改善が必要なコンテキストはありませんでした')
+                            }
+                          }
+                        }}
+                      >
+                        {isOptimizing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        {isOptimizing
+                          ? `実行中... (${optimizeElapsed}秒)`
+                          : 'AI最適化を実行'}
+                      </Button>
+                      <p className="text-center text-[10px] text-muted-foreground">
+                        {isOptimizing
+                          ? 'コンテキストの評価・改善プロンプト生成中です'
+                          : 'コンテキスト数に応じて1〜2分程度かかります'}
+                      </p>
+                    </div>
+                    {/* Experiment list (AI optimization) */}
+                    {experiments.length > 0 && (
+                      <div className="mb-3 space-y-1">
+                        <h3 className="px-3 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          AI最適化
+                        </h3>
+                        {experiments.map((exp) => {
+                          const isSelected = selectedExperiment?.id === exp.id
+                          const statusLabel = exp.status === 'pending_review' ? 'レビュー待ち'
+                            : exp.status === 'in_challenge' ? '評価中'
+                            : exp.status === 'promoted' ? '採用済み' : '却下'
+                          const statusClass = exp.status === 'pending_review'
+                            ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30'
+                            : exp.status === 'in_challenge'
+                            ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                            : exp.status === 'promoted'
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30'
+                            : 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30'
+                          return (
+                            <button
+                              key={exp.id}
+                              onClick={() => selectExperiment(exp.id)}
+                              className={`flex w-full flex-col gap-1.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                                isSelected
+                                  ? 'bg-brand/15 text-brand font-medium'
+                                  : 'text-foreground hover:bg-muted'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Wand2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                <span className="truncate font-medium">{exp.control_name}</span>
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 ${statusClass}`}>
+                                  {statusLabel}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {exp.situation} — {new Date(exp.created_at).toLocaleDateString('ja-JP')}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Comparison list (version A/B) */}
                     {comparisonLoading && comparisons.length === 0 ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -330,9 +438,9 @@ export function A03PromptEditor() {
               </CardContent>
             </Card>
 
-            {/* Right: Comparison detail */}
+            {/* Right: Detail panel */}
             <div className="lg:col-span-2" data-guide="challenge-detail">
-              <ChallengeDetail />
+              {selectedExperiment ? <ExperimentDetail /> : <ChallengeDetail />}
             </div>
           </div>
         </TabsContent>

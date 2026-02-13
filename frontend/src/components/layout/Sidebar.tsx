@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   CalendarDays,
@@ -9,6 +10,8 @@ import {
   FileCode2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useChallengeStore } from '@/stores/useChallengeStore'
 
 interface NavItem {
   to: string
@@ -16,6 +19,7 @@ interface NavItem {
   label: string
   badge?: string
   guideId?: string
+  notifyCount?: number
 }
 
 interface NavSection {
@@ -69,15 +73,41 @@ function NavItemLink({ item }: { item: NavItem }) {
           {item.badge}
         </span>
       )}
+      {item.notifyCount != null && item.notifyCount > 0 && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-medium text-white">
+          {item.notifyCount}
+        </span>
+      )}
     </NavLink>
   )
 }
 
 export function Sidebar() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const { experiments, fetchExperiments } = useChallengeStore()
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchExperiments()
+    }
+  }, [isAuthenticated, fetchExperiments])
+
+  const pendingExperimentCount = experiments.filter(
+    (e) => e.status === 'pending_review' || e.status === 'in_challenge',
+  ).length
+
+  // Inject dynamic notification counts into static nav config
+  const sections = navSections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.to === '/prompts' ? { ...item, notifyCount: pendingExperimentCount } : item,
+    ),
+  }))
+
   return (
     <aside className="w-60 border-r bg-muted/40 h-full">
       <nav role="navigation" aria-label="Main navigation" className="flex flex-col gap-4 p-4">
-        {navSections.map((section, i) => (
+        {sections.map((section, i) => (
           <div key={i} className="flex flex-col gap-1">
             {section.label && (
               <span className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">

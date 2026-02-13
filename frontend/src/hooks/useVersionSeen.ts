@@ -59,6 +59,13 @@ export function useVersionSeen() {
     [seenMap],
   )
 
+  const markUnseen = useCallback((contextId: string) => {
+    const current = getSeenMap()
+    if (contextId in current && current[contextId] > 0) {
+      setSeenMap({ ...current, [contextId]: current[contextId] - 1 })
+    }
+  }, [])
+
   const initializeIfNeeded = useCallback(
     (contexts: { id: string; current_version_number: number | null }[]) => {
       const current = getSeenMap()
@@ -76,5 +83,5 @@ export function useVersionSeen() {
     [],
   )
 
-  return { getLastSeen, markSeen, hasUnseen, initializeIfNeeded }
+  return { getLastSeen, markSeen, markUnseen, hasUnseen, initializeIfNeeded }
 }

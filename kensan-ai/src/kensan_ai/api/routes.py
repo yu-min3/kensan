@@ -673,6 +673,43 @@ async def get_prompt_metadata(
 # NOTE: Challenge routes MUST be defined before /prompts/{context_id}
 # to avoid FastAPI matching "challenges" as a context_id parameter.
 
+
+@router.post("/prompts/run-optimization")
+async def run_optimization_for_user(
+    authorization: str | None = Header(None),
+    force: bool = Query(False),
+) -> dict:
+    """Run prompt optimization for the current user.
+
+    Evaluates conversation quality, generates improved prompts,
+    and creates experiments. JWT-authenticated (per-user).
+    """
+    from kensan_ai.batch.experiment_manager import _process_user_contexts, _last_week_range
+    from kensan_ai.batch.prompt_evaluator import PromptEvaluator
+    from kensan_ai.batch.prompt_optimizer import PromptOptimizer
+
+    user_id = _get_user_id_from_header(authorization)
+    period_start, period_end = _last_week_range()
+
+    evaluator = PromptEvaluator()
+    optimizer = PromptOptimizer()
+
+    result = await _process_user_contexts(
+        user_id=user_id,
+        period_start=period_start,
+        period_end=period_end,
+        evaluator=evaluator,
+        optimizer=optimizer,
+        force=force,
+    )
+
+    return {
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        **result,
+    }
+
+
 @router.get("/prompts/challenges")
 async def list_challenges(
     authorization: str | None = Header(None),

@@ -73,6 +73,7 @@ class PromptEvaluator:
         period_end: date,
         persona_prompt: str | None = None,
         user_id: UUID | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """Evaluate an AI context for a given period.
 
@@ -88,8 +89,8 @@ class PromptEvaluator:
         # 1. Gather quantitative metrics
         metrics = await self._gather_metrics(context_id, period_start, period_end)
 
-        # Skip if too few interactions
-        if metrics["interaction_count"] < 5:
+        # Skip if too few interactions (unless forced)
+        if not force and metrics["interaction_count"] < 5:
             logger.info(
                 "Skipping evaluation for %s: only %d interactions",
                 context_name,
@@ -112,7 +113,18 @@ class PromptEvaluator:
             eval_prompt = persona_prompt + "\n\n" + system_prompt
         qualitative = await self._analyze_quality(eval_prompt, metrics, samples)
 
-        # 4. Save evaluation
+        # 4. Delete existing evaluation if force mode (avoids unique constraint conflict)
+        if force:
+            async with get_connection() as conn:
+                await conn.execute(
+                    "DELETE FROM prompt_evaluations "
+                    "WHERE context_id = $1 AND period_start = $2 AND user_id = $3",
+                    context_id,
+                    period_start,
+                    user_id,
+                )
+
+        # 5. Save evaluation
         evaluation_id = await exp_queries.create_evaluation(
             context_id=context_id,
             period_start=period_start,

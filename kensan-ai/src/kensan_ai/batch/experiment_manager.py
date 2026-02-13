@@ -96,13 +96,14 @@ async def _process_user_contexts(
     period_end: date,
     evaluator: PromptEvaluator,
     optimizer: PromptOptimizer,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Process all active default contexts for a single user.
 
     Returns:
         {"contexts_evaluated": N, "experiments_created": N, "errors": [...]}
     """
-    result: dict[str, Any] = {"contexts_evaluated": 0, "experiments_created": 0, "errors": []}
+    result: dict[str, Any] = {"contexts_evaluated": 0, "experiments_created": 0, "errors": [], "optimized_context_ids": []}
 
     async with get_connection() as conn:
         contexts = await conn.fetch(
@@ -143,14 +144,15 @@ async def _process_user_contexts(
                 period_end=period_end,
                 persona_prompt=persona_prompt,
                 user_id=user_id,
+                force=force,
             )
             result["contexts_evaluated"] += 1
 
-            if eval_result["skipped_reason"]:
+            if not force and eval_result["skipped_reason"]:
                 logger.info("Skipped %s: %s", ctx_name, eval_result["skipped_reason"])
                 continue
 
-            if not eval_result["needs_improvement"]:
+            if not force and not eval_result["needs_improvement"]:
                 logger.info("No improvement needed for %s", ctx_name)
                 continue
 
@@ -186,6 +188,7 @@ async def _process_user_contexts(
             )
 
             result["experiments_created"] += 1
+            result["optimized_context_ids"].append(str(ctx["id"]))
             logger.info(
                 "Created experiment %s for %s (eval_id=%s, user=%s)",
                 experiment_id,

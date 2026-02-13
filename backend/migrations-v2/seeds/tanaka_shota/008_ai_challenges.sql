@@ -3,6 +3,7 @@
 -- ============================================================================
 -- per-user ai_contexts, ai_context_versions (v1 + v2 for chat),
 -- ai_interactions rating/context_id updates, prompt_comparisons
+-- Persona: 30歳バックエンドエンジニア, Go + Google Cloud, 夜型, ブログ・LT・SaaS
 
 -- ==============================================================================
 -- Section A: Per-user ai_contexts (copy all system templates)
@@ -157,81 +158,81 @@ FROM ai_contexts WHERE id = 'ddc00004-0000-0000-0000-000000000000'::uuid;
 
 -- chat interactions → chat context
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800001-0000-0000-0000-000000000000'::uuid;  -- DB設計レビュー（高評価）
+WHERE id = 'dd800001-0000-0000-0000-000000000000'::uuid;  -- SaaS DB設計レビュー（高評価）
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800003-0000-0000-0000-000000000000'::uuid;  -- context.Context解説
+WHERE id = 'dd800003-0000-0000-0000-000000000000'::uuid;  -- Cloud Runデプロイ
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 3
-WHERE id = 'dd800005-0000-0000-0000-000000000000'::uuid;  -- AWS勉強できてない
+WHERE id = 'dd800005-0000-0000-0000-000000000000'::uuid;  -- Google Cloud勉強できてない
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800006-0000-0000-0000-000000000000'::uuid;  -- AWS模擬試験60%
+WHERE id = 'dd800006-0000-0000-0000-000000000000'::uuid;  -- ACE模擬試験65%
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800008-0000-0000-0000-000000000000'::uuid;  -- goroutineリーク発見
+WHERE id = 'dd800008-0000-0000-0000-000000000000'::uuid;  -- Go Conference CFP提出
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800009-0000-0000-0000-000000000000'::uuid;  -- useEffect無限ループ
+WHERE id = 'dd800009-0000-0000-0000-000000000000'::uuid;  -- ブログ公開できない（完璧主義）
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800011-0000-0000-0000-000000000000'::uuid;  -- エラーハンドリング標準化
+WHERE id = 'dd800011-0000-0000-0000-000000000000'::uuid;  -- 12日連続学習
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 3
-WHERE id = 'dd800012-0000-0000-0000-000000000000'::uuid;  -- Zustand
+WHERE id = 'dd800012-0000-0000-0000-000000000000'::uuid;  -- Firestore設計パターン
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800014-0000-0000-0000-000000000000'::uuid;  -- AWS模擬試験72%
+WHERE id = 'dd800014-0000-0000-0000-000000000000'::uuid;  -- ブログ1本公開！
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800016-0000-0000-0000-000000000000'::uuid;  -- chi router
+WHERE id = 'dd800016-0000-0000-0000-000000000000'::uuid;  -- Cloud Run vs App Engine
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800017-0000-0000-0000-000000000000'::uuid;  -- Zenn記事構成
+WHERE id = 'dd800017-0000-0000-0000-000000000000'::uuid;  -- LTスライド構成
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800020-0000-0000-0000-000000000000'::uuid;  -- 家族時間
+WHERE id = 'dd800020-0000-0000-0000-000000000000'::uuid;  -- 木曜MTGが辛い
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800021-0000-0000-0000-000000000000'::uuid;  -- PostgreSQLインデックス
+WHERE id = 'dd800021-0000-0000-0000-000000000000'::uuid;  -- GoのHTTPミドルウェア
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 3
-WHERE id = 'dd800023-0000-0000-0000-000000000000'::uuid;  -- Tailwind CSS
+WHERE id = 'dd800023-0000-0000-0000-000000000000'::uuid;  -- Next.js App Router
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800025-0000-0000-0000-000000000000'::uuid;  -- MVP完成間近
+WHERE id = 'dd800025-0000-0000-0000-000000000000'::uuid;  -- SaaS MVP残りタスク
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800026-0000-0000-0000-000000000000'::uuid;  -- 受験日仮予約
+WHERE id = 'dd800026-0000-0000-0000-000000000000'::uuid;  -- ACE最終対策
 
 UPDATE ai_interactions SET context_id = 'ddc00001-0000-0000-0000-000000000000'::uuid, rating = 5
 WHERE id = 'dd800028-0000-0000-0000-000000000000'::uuid;  -- 来月の目標設定
 
--- morning interactions → daily_advice context (morning は inactive なので daily_advice を使用)
+-- morning interactions → daily_advice context
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800002-0000-0000-0000-000000000000'::uuid;  -- 朝の計画確認
+WHERE id = 'dd800002-0000-0000-0000-000000000000'::uuid;  -- 今週の計画確認
 
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800007-0000-0000-0000-000000000000'::uuid;  -- 朝活3週間達成
+WHERE id = 'dd800007-0000-0000-0000-000000000000'::uuid;  -- 夜型学習3週間達成
 
-UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 3
-WHERE id = 'dd800018-0000-0000-0000-000000000000'::uuid;  -- 寝落ち朝5時起き
+UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 5
+WHERE id = 'dd800018-0000-0000-0000-000000000000'::uuid;  -- ACE模擬試験78%
 
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800024-0000-0000-0000-000000000000'::uuid;  -- AWS学習計画
+WHERE id = 'dd800024-0000-0000-0000-000000000000'::uuid;  -- ACE受験日仮予約
 
 -- evening interactions → daily_advice context
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 5
-WHERE id = 'dd800004-0000-0000-0000-000000000000'::uuid;  -- 子ども体調不良
+WHERE id = 'dd800004-0000-0000-0000-000000000000'::uuid;  -- ACE問題集進捗
 
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800010-0000-0000-0000-000000000000'::uuid;  -- バランス崩れ
+WHERE id = 'dd800010-0000-0000-0000-000000000000'::uuid;  -- Next.js苦戦
 
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 5
 WHERE id = 'dd800015-0000-0000-0000-000000000000'::uuid;  -- 8週間振り返り
 
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 4
-WHERE id = 'dd800022-0000-0000-0000-000000000000'::uuid;  -- CI/CD改善成功
+WHERE id = 'dd800022-0000-0000-0000-000000000000'::uuid;  -- CFP通過！
 
 -- briefing interactions → daily_advice context
 UPDATE ai_interactions SET context_id = 'ddc00003-0000-0000-0000-000000000000'::uuid, rating = 4
@@ -262,4 +263,132 @@ INSERT INTO prompt_comparisons (
     0.67,
     'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid,
     NOW() - INTERVAL '2 days'
+);
+
+-- ==============================================================================
+-- Section E: Prompt Experiments (3 pending_review for sidebar badge on login)
+-- ==============================================================================
+
+-- E-1: Variant ai_contexts (AI-optimized prompt proposals)
+
+-- chat variant
+INSERT INTO ai_contexts (
+    id, name, situation, version, is_active, is_default,
+    system_prompt, allowed_tools, max_turns, temperature,
+    description, user_id
+)
+SELECT
+    'ddc40001-0000-0000-0000-000000000000'::uuid,
+    'improved-chat (AI最適化案)', situation, version, false, false,
+    system_prompt || E'\n\n## AI最適化ガイドライン\n- ユーザーの感情に寄り添った応答を心がける\n- 具体的なアクションプランを提示する\n- 過去の成功体験を参照して動機づけを行う',
+    allowed_tools, max_turns, temperature,
+    description,
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+FROM ai_contexts WHERE id = 'ddc00001-0000-0000-0000-000000000000'::uuid;
+
+-- review variant
+INSERT INTO ai_contexts (
+    id, name, situation, version, is_active, is_default,
+    system_prompt, allowed_tools, max_turns, temperature,
+    description, user_id
+)
+SELECT
+    'ddc40002-0000-0000-0000-000000000000'::uuid,
+    'improved-weekly (AI最適化案)', situation, version, false, false,
+    system_prompt || E'\n\n## AI最適化ガイドライン\n- 週次レビューでは具体的な数値目標を提示する\n- 前週との比較で進捗を可視化する\n- 達成できなかった項目には代替案を提案する',
+    allowed_tools, max_turns, temperature,
+    description,
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+FROM ai_contexts WHERE id = 'ddc00002-0000-0000-0000-000000000000'::uuid;
+
+-- daily_advice variant
+INSERT INTO ai_contexts (
+    id, name, situation, version, is_active, is_default,
+    system_prompt, allowed_tools, max_turns, temperature,
+    description, user_id
+)
+SELECT
+    'ddc40003-0000-0000-0000-000000000000'::uuid,
+    'planning-agent (AI最適化案)', situation, version, false, false,
+    system_prompt || E'\n\n## AI最適化ガイドライン\n- 朝のアドバイスは3つ以内に絞る\n- 前日の振り返りを踏まえた提案をする\n- 体調やモチベーションに配慮したスケジュール提案',
+    allowed_tools, max_turns, temperature,
+    description,
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+FROM ai_contexts WHERE id = 'ddc00003-0000-0000-0000-000000000000'::uuid;
+
+-- E-2: Prompt evaluations (one per context)
+
+INSERT INTO prompt_evaluations (
+    id, context_id, period_start, period_end,
+    interaction_count, avg_rating, rated_count,
+    strengths, weaknesses, improvement_suggestions,
+    user_id
+) VALUES
+(
+    'ddc50001-0000-0000-0000-000000000000'::uuid,
+    'ddc00001-0000-0000-0000-000000000000'::uuid,
+    CURRENT_DATE - 7, CURRENT_DATE,
+    17, 4.1, 17,
+    ARRAY['技術的な質問への回答精度が高い', 'コード例を活用した説明が分かりやすい'],
+    ARRAY['感情面へのフォローが不足', '長文回答になりがち'],
+    ARRAY['ユーザーの感情に寄り添う応答の追加', '回答の簡潔化'],
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+),
+(
+    'ddc50002-0000-0000-0000-000000000000'::uuid,
+    'ddc00002-0000-0000-0000-000000000000'::uuid,
+    CURRENT_DATE - 7, CURRENT_DATE,
+    12, 3.8, 10,
+    ARRAY['週次の振り返り構成が体系的', 'データに基づいた分析が正確'],
+    ARRAY['改善提案が抽象的になりがち', '数値目標の提示が少ない'],
+    ARRAY['具体的な数値目標の提示', '前週比較の自動化'],
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+),
+(
+    'ddc50003-0000-0000-0000-000000000000'::uuid,
+    'ddc00003-0000-0000-0000-000000000000'::uuid,
+    CURRENT_DATE - 7, CURRENT_DATE,
+    22, 4.3, 20,
+    ARRAY['スケジュール提案の精度が高い', 'ユーザーの習慣パターンを反映'],
+    ARRAY['提案数が多すぎることがある', '体調面への配慮が不足'],
+    ARRAY['提案を3つ以内に絞る', '体調・モチベーション考慮の追加'],
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid
+);
+
+-- E-3: Prompt experiments (pending_review → sidebar badge)
+
+INSERT INTO prompt_experiments (
+    id, situation, evaluation_id,
+    control_context_id, variant_context_id,
+    status, user_id, created_at
+) VALUES
+(
+    'ddc60001-0000-0000-0000-000000000000'::uuid,
+    'chat',
+    'ddc50001-0000-0000-0000-000000000000'::uuid,
+    'ddc00001-0000-0000-0000-000000000000'::uuid,
+    'ddc40001-0000-0000-0000-000000000000'::uuid,
+    'pending_review',
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid,
+    NOW() - INTERVAL '1 day'
+),
+(
+    'ddc60002-0000-0000-0000-000000000000'::uuid,
+    'review',
+    'ddc50002-0000-0000-0000-000000000000'::uuid,
+    'ddc00002-0000-0000-0000-000000000000'::uuid,
+    'ddc40002-0000-0000-0000-000000000000'::uuid,
+    'pending_review',
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid,
+    NOW() - INTERVAL '1 day'
+),
+(
+    'ddc60003-0000-0000-0000-000000000000'::uuid,
+    'daily_advice',
+    'ddc50003-0000-0000-0000-000000000000'::uuid,
+    'ddc00003-0000-0000-0000-000000000000'::uuid,
+    'ddc40003-0000-0000-0000-000000000000'::uuid,
+    'pending_review',
+    'dddddddd-dddd-dddd-dddd-dddddddddddd'::uuid,
+    NOW() - INTERVAL '1 day'
 );

@@ -221,12 +221,12 @@ BEGIN
             IF dow = 3 AND week_num >= 5 THEN
                 seq := seq + 1;
                 INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                    task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                    task_name, goal_id, goal_name, goal_color, tag_ids)
                 VALUES (
                     uuid_generate_v4(), uid,
                     d + TIME '10:00', d + TIME '10:30',
                     'ランニング', NULL, NULL, NULL,
-                    NULL, true
+                    NULL
                 );
             END IF;
 
@@ -281,12 +281,12 @@ BEGIN
                     -- Running on Saturday
                     seq := seq + 1;
                     INSERT INTO time_blocks (id, user_id, start_datetime, end_datetime,
-                        task_name, goal_id, goal_name, goal_color, tag_ids, is_routine)
+                        task_name, goal_id, goal_name, goal_color, tag_ids)
                     VALUES (
                         uuid_generate_v4(), uid,
                         d + TIME '08:00', d + TIME '08:30',
                         'ランニング', NULL, NULL, NULL,
-                        NULL, true
+                        NULL
                     );
                 END IF;
 
