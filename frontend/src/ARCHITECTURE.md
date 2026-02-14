@@ -255,7 +255,7 @@ flowchart TB
 | `useMilestoneStore` | マイルストーン | - | createCrudStoreファクトリ |
 | `useTagStore` | タスクタグ | - | createCrudStoreファクトリ |
 | `useNoteTagStore` | ノートタグ | - | noteTagsApi (list/create)。タスクタグと完全分離 |
-| `useTaskOnlyStore` | タスク | - | 独自実装（toggle, reorder, bulk操作） |
+| `useTaskStore` | タスク | - | 独自実装（toggle, reorder, bulk操作） |
 | `useTimeBlockStore` | 予定・実績 | - | タイムゾーン対応フェッチ |
 | `useTimerStore` | タイマー | - | start/stop/fetch |
 | `useNoteTypeStore` | ノートタイプ設定 | - | APIから取得、isLoadedでキャッシュ |
@@ -416,10 +416,14 @@ sequenceDiagram
 graph TB
     subgraph "公開ルート"
         Login["/login → LoginPage"]
-        Settings["/settings → S01_Settings"]
+    end
+
+    subgraph "保護ルート (RequireAuth、Layout なし)"
+        SettingsInitial["/settings/initial → S01_Settings<br/>(初期設定)"]
     end
 
     subgraph "保護ルート (RequireAuth + RequireConfigured + Layout)"
+        SettingsRoute["/settings → S01_Settings"]
         Daily["/ → DailyPage<br/>(?date=YYYY-MM-DD)"]
         Weekly["/weekly → W01_WeeklyPlanning"]
         TasksRoute["/tasks → T01_TaskManagement"]

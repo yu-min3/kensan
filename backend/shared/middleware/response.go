@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	sharedErrors "github.com/kensan/backend/shared/errors"
 )
 
 // Response is the standard API response format
@@ -130,6 +132,17 @@ func RequireURLParam(w http.ResponseWriter, r *http.Request, paramName string) (
 		return "", false
 	}
 	return value, true
+}
+
+// HandleDBSchemaError checks if err is a database schema error and sends the appropriate response.
+// Returns true if handled (caller should return), false if not a schema error.
+func HandleDBSchemaError(w http.ResponseWriter, r *http.Request, err error) bool {
+	if sharedErrors.IsDatabaseSchema(err) {
+		slog.ErrorContext(r.Context(), "Database schema error", "error", err, "request_id", GetRequestID(r.Context()))
+		Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		return true
+	}
+	return false
 }
 
 // ErrorMapping defines how a service error should be mapped to an HTTP response.

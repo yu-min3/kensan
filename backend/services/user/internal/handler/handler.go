@@ -75,10 +75,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 // GET /users/me
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	profile, err := h.service.GetProfile(r.Context(), userID)
 	if err != nil {
@@ -93,10 +89,6 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 // PUT /users/me
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	var req user.UpdateProfileRequest
 	if !middleware.DecodeJSONBody(w, r, &req) {
@@ -116,10 +108,6 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 // GET /users/me/settings
 func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	settings, err := h.service.GetSettings(r.Context(), userID)
 	if err != nil {
@@ -134,10 +122,6 @@ func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 // PUT /users/me/settings
 func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	var req user.UpdateSettingsRequest
 	if !middleware.DecodeJSONBody(w, r, &req) {
@@ -157,10 +141,6 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 // POST /users/me/ai-consent
 func (h *Handler) GiveAIConsent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	var req user.AIConsentRequest
 	if !middleware.DecodeJSONBody(w, r, &req) {

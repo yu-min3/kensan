@@ -52,10 +52,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 // GET /notes
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	// Parse query parameters for filtering
 	filter := &note.NoteFilter{}
@@ -114,10 +110,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // GET /notes/{noteId}
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	noteID, ok := middleware.RequireURLParam(w, r, "noteId")
 	if !ok {
@@ -137,10 +129,6 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 // POST /notes
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	var input note.CreateNoteInput
 	if !middleware.DecodeJSONBody(w, r, &input) {
@@ -160,10 +148,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // PUT /notes/{noteId}
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	noteID, ok := middleware.RequireURLParam(w, r, "noteId")
 	if !ok {
@@ -188,10 +172,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 // DELETE /notes/{noteId}
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	noteID, ok := middleware.RequireURLParam(w, r, "noteId")
 	if !ok {
@@ -210,10 +190,6 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 // POST /notes/{noteId}/archive
 func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	noteID, ok := middleware.RequireURLParam(w, r, "noteId")
 	if !ok {
@@ -240,10 +216,6 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 // GET /notes/search
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
 
 	query := r.URL.Query().Get("q")
 
@@ -339,11 +311,6 @@ func (h *Handler) ListNoteTypes(w http.ResponseWriter, r *http.Request) {
 // GET /notes/{noteId}/contents
 func (h *Handler) ListContents(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 
 	contents, err := h.service.ListContents(r.Context(), userID, noteID)
@@ -359,11 +326,6 @@ func (h *Handler) ListContents(w http.ResponseWriter, r *http.Request) {
 // GET /notes/{noteId}/contents/{contentId}
 func (h *Handler) GetContent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 	contentID := chi.URLParam(r, "contentId")
 
@@ -380,11 +342,6 @@ func (h *Handler) GetContent(w http.ResponseWriter, r *http.Request) {
 // POST /notes/{noteId}/contents
 func (h *Handler) CreateContent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 
 	var input note.CreateNoteContentInput
@@ -405,11 +362,6 @@ func (h *Handler) CreateContent(w http.ResponseWriter, r *http.Request) {
 // PUT /notes/{noteId}/contents/{contentId}
 func (h *Handler) UpdateContent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 	contentID := chi.URLParam(r, "contentId")
 
@@ -431,11 +383,6 @@ func (h *Handler) UpdateContent(w http.ResponseWriter, r *http.Request) {
 // DELETE /notes/{noteId}/contents/{contentId}
 func (h *Handler) DeleteContent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 	contentID := chi.URLParam(r, "contentId")
 
@@ -451,11 +398,6 @@ func (h *Handler) DeleteContent(w http.ResponseWriter, r *http.Request) {
 // PATCH /notes/{noteId}/contents/reorder
 func (h *Handler) ReorderContents(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 
 	var input struct {
@@ -479,11 +421,6 @@ func (h *Handler) ReorderContents(w http.ResponseWriter, r *http.Request) {
 // POST /notes/{noteId}/contents/upload-url
 func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 
 	var input note.UploadURLRequest
@@ -518,11 +455,6 @@ func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 // GET /notes/{noteId}/contents/{contentId}/download-url
 func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		middleware.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
-		return
-	}
-
 	noteID := chi.URLParam(r, "noteId")
 	contentID := chi.URLParam(r, "contentId")
 

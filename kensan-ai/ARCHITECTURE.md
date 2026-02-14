@@ -27,7 +27,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 - **エージェントベース** アーキテクチャ（LLMのDirect Tools / Function Calling使用）
 - **コンテキスト認識** AI（状況別プロンプト選択 + バージョン管理）
 - **メモリシステム**（ファクト自動抽出 + プロフィール要約）
-- **AIプロバイダ**: Google Gemini API によるチャット・レビュー・埋め込み
+- **AIプロバイダ**: Anthropic Claude / Google Gemini（`AI_PROVIDER` 環境変数で切替: `anthropic`, `google`, `google-adk`）
 
 ### 技術スタック
 
@@ -35,7 +35,7 @@ KensanアプリケーションのためのDirect Toolsを使用したPython AI�
 |--------------|------|
 | フレームワーク | FastAPI (非同期) |
 | ランタイム | Python 3.12+ |
-| AIモデル | Gemini (Google GenAI SDK) |
+| AIモデル | Claude (Anthropic SDK) / Gemini (Google GenAI SDK)、AI_PROVIDERで切替 |
 | 埋め込み | Gemini gemini-embedding-001 (1536次元) |
 | データベース | PostgreSQL 16 + pgvector (asyncpg) |
 | ストレージ | MinIO (S3互換、読み取り専用) |
