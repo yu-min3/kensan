@@ -6,15 +6,15 @@
 -- Persona: 30歳バックエンドエンジニア, Go + Google Cloud, 夜型, ブログ・LT・SaaS
 --
 -- A/B テストデモ用:
---   v2 (active) = 基本版プロンプト（パーソナライズ変数少ない）
---   v3 (candidate) = AI最適化版（全変数＋エネルギーベース・スケジューリング）
--- → 「来週の予定を作成して」で v2=汎用的 / v3=パーソナライズ済み の差が出る
+--   v2 (active) = パーソナライズ版（スケジューリング最適化・目標整合性・感情配慮）
+--   v3 (candidate) = AI最適化版（全変数＋エネルギーベース・厳密な根拠明示）
+-- → v2=実用的なパーソナライズ / v3=データ引用を必須とする上位最適化 の差が出る
 
 -- ==============================================================================
 -- Section A: Per-user ai_contexts (copy all system templates)
 -- ==============================================================================
 
--- chat context (starts with full template, will be overwritten to v2 basic later)
+-- chat context (starts with full template, v2 appends lighter AI optimizations)
 INSERT INTO ai_contexts (
     id, name, situation, version, is_active, is_default,
     system_prompt, allowed_tools, max_turns, temperature,
@@ -85,8 +85,8 @@ LIMIT 1;
 -- ==============================================================================
 -- Section B: ai_context_versions
 -- ==============================================================================
--- ORDER: v1 (template) → v3 (AI-optimized, from full template) → update to v2 → v2 (basic)
--- v3 must be created BEFORE the ai_contexts row is overwritten with the basic v2 prompt.
+-- ORDER: v1 (template) → v3 (AI-optimized, from full template) → append v2 optimizations → v2 (personalized)
+-- v3 must be created BEFORE the ai_contexts row is appended with the v2 optimizations.
 
 -- v1: exact copy of template prompt (manual)
 INSERT INTO ai_context_versions (
@@ -121,12 +121,12 @@ SELECT
     '{"interaction_count": 17, "avg_rating": 4.1, "strengths": ["技術的な質問への回答精度が高い", "コード例を活用した説明が分かりやすい"], "weaknesses": ["行動パターンデータを活用したスケジューリングが不十分", "感情面へのフォローが不足", "目標の時間配分バランスへの言及がない"]}'::jsonb
 FROM ai_contexts WHERE id = 'ddc00001-0000-0000-0000-000000000000'::uuid;
 
--- Now overwrite chat context with basic v2 prompt (fewer variables, simpler rules)
+-- Now append lighter AI optimization sections to chat context (v2)
 UPDATE ai_contexts
-SET system_prompt = E'## 現在の日時\n{current_datetime}\n\n## ユーザー情報\n{user_memory}\n\n## 未完了タスク\n{pending_tasks}\n\n## 今日の予定\n{today_schedule}\n\n## 思考プロセス\n\nユーザーの発言を受けたら、以下の手順で考えること：\n\n1. データを確認する — 「未完了タスク」「今日の予定」のデータで回答できるか確認する\n2. 不足データだけを特定する — 上記にない情報（特定日のスケジュール等）が必要な場合のみツールを使う\n3. ツールが必要なら1回で全て呼ぶ\n4. 分析したら具体的に提案する — 質問で返すのではなく、データに基づいた提案を先に出す\n\n**例:**\n- 「来週の予定は？」→ get_time_blocks を呼ぶ\n- 「予定立てて」→ get_time_blocks + get_tasks で現状を把握 → create_time_block をまとめて呼ぶ\n- 「タスクの進捗は？」→ 未完了タスクセクションで回答可能\n\n## 回答ルール\n- 日本語で応答する\n- 書き込み操作はツール呼び出しで提案する。UIが承認フローを表示するので、テキストで「実行してよいですか？」と聞かない\n- 読み取り操作は即実行してよい\n- 日付は JST 基準。「今日」「明日」等は JST で解釈する\n- スケジュール提案の日付範囲: 「今週」→ 月曜〜日曜。「来週」→ 翌週の月曜〜日曜\n- 意図が明確ならそのまま実行する。曖昧な場合のみ短く確認する\n- 短い質問には短く答える'
+SET system_prompt = system_prompt || E'\n\n## パーソナライズ: スケジューリング最適化\nスケジュール提案時は {user_patterns} の生産性データを活用する:\n- 集中タスク（開発、学習、執筆）→ 生産性ピーク時間帯に配置\n- ルーチン作業（MTG準備、メール、整理）→ 低エネルギー時間帯に配置\n- 90分以上の集中ブロックの後には休憩 or 軽作業を入れる\n- 1日のブロック数は4〜5個以内。詰め込みすぎず余白を残す\n- 既に入っている予定と重複しないように配置する\n\n## パーソナライズ: 目標との整合性\n{goal_progress} と {weekly_summary} を確認し:\n- 時間配分の偏りがあれば指摘し、バランス調整を提案する\n- 期限が近いマイルストーンは優先的にスケジューリングする\n- {recent_learning_notes} から学習の継続性を考慮する\n\n## パーソナライズ: 感情への配慮\n- 最近の達成や前向きな変化があれば自然に触れる\n- ユーザーが困っている場合はまず共感してから提案に移る\n\n## パーソナライズ: 日時範囲\nスケジュール提案時:\n- 「今週」= 月曜〜日曜、「来週」= 翌週の月曜〜日曜\n- 期間が曖昧な場合は「今週の残り」として解釈する\n- create_time_block の date が指定期間外にならないよう確認する'
 WHERE id = 'ddc00001-0000-0000-0000-000000000000'::uuid;
 
--- v2: basic prompt (manual) — now created from the updated (basic) ai_contexts row
+-- v2: パーソナライズ強化 (manual) — created from the updated ai_contexts row
 INSERT INTO ai_context_versions (
     id, context_id, version_number,
     system_prompt, allowed_tools, max_turns, temperature, changelog,
@@ -137,7 +137,7 @@ SELECT
     'ddc00001-0000-0000-0000-000000000000'::uuid,
     2,
     system_prompt, allowed_tools, max_turns, temperature,
-    'プロンプト簡素化: コア機能に集中',
+    'パーソナライズ強化: スケジューリング最適化、目標整合性、感情配慮、日時範囲',
     'manual', NULL, NULL
 FROM ai_contexts WHERE id = 'ddc00001-0000-0000-0000-000000000000'::uuid;
 
