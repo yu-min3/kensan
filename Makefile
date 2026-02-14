@@ -9,7 +9,7 @@
 # Full Stack Commands
 # =============================================================================
 
-## Start all services (frontend + backend + database + storage)
+## Start all services (frontend + backend + database + storage + lakehouse)
 up:
 	docker compose up -d --remove-orphans
 	@echo ""
@@ -28,6 +28,11 @@ up:
 	@echo "Database:  postgres://kensan:kensan@localhost:5432/kensan"
 	@echo "Storage:   http://localhost:9000 (MinIO API)"
 	@echo "           http://localhost:9001 (MinIO Console - kensan/kensan123)"
+	@echo ""
+	@echo "Lakehouse:"
+	@echo "  - Polaris API:       http://localhost:8181"
+	@echo "  - Polaris Health:    http://localhost:8182/q/health"
+	@echo "  - Dagster UI:        http://localhost:3070"
 	@echo ""
 	@echo "Use 'make logs' to view logs"
 	@echo "Use 'make down' to stop all services"
@@ -132,9 +137,9 @@ prod-down:
 prod-logs:
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
 
-## Start production lakehouse (ports hidden)
+## Initialize lakehouse catalog (production)
 prod-lakehouse:
-	$(MAKE) -C lakehouse prod-up
+	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
 
 ## Deploy to GCE (requires JWT_SECRET and GOOGLE_API_KEY)
 deploy:
@@ -144,10 +149,8 @@ deploy:
 # Lakehouse (delegates to lakehouse/Makefile, requires app stack running)
 # =============================================================================
 
-## Start lakehouse (Polaris + Dagster), init catalog, restart ai-service
+## Initialize Iceberg catalog (services started by 'make up')
 lakehouse:
-	$(MAKE) -C lakehouse up
-	@echo ""
 	@echo "Waiting for Polaris to be healthy..."
 	@for i in $$(seq 1 20); do \
 		curl -sf http://localhost:8182/q/health > /dev/null 2>&1 && break; \
@@ -159,10 +162,7 @@ lakehouse:
 	@echo "Initializing Iceberg catalog..."
 	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
 	@echo ""
-	@echo "Restarting ai-service to connect to Polaris..."
-	@docker compose up -d --force-recreate ai-service
-	@echo ""
-	@echo "Lakehouse is ready!"
+	@echo "Lakehouse catalog initialized!"
 	@echo "  Polaris API:      http://localhost:8181"
 	@echo "  Dagster UI:       http://localhost:3070"
 	@echo ""
@@ -180,9 +180,10 @@ lakehouse-trino:
 lakehouse-all:
 	$(MAKE) -C lakehouse all-up
 
-## Stop all lakehouse services
+## Stop all lakehouse services (included in 'make down')
 lakehouse-down:
-	$(MAKE) -C lakehouse all-down
+	@echo "Lakehouse services are managed by root docker-compose.yml."
+	@echo "Use 'make down' to stop all services."
 
 ## Start OpenMetadata
 openmetadata:
@@ -207,6 +208,10 @@ health:
 	@curl -s http://localhost:8089/health 2>/dev/null | jq . || echo "ai-service: DOWN"
 	@curl -s http://localhost:8090/health 2>/dev/null | jq . || echo "memo-service: DOWN"
 	@curl -s http://localhost:8091/health 2>/dev/null | jq . || echo "note-service: DOWN"
+	@echo ""
+	@echo "Lakehouse:"
+	@curl -sf http://localhost:8182/q/health > /dev/null 2>&1 && echo "  polaris: UP" || echo "  polaris: DOWN"
+	@curl -sf http://localhost:3070 > /dev/null 2>&1 && echo "  dagster-webserver: UP" || echo "  dagster-webserver: DOWN"
 
 # =============================================================================
 # Help
@@ -313,7 +318,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Full Stack:"
-	@echo "  up        Start all services (frontend + backend + db + storage)"
+	@echo "  up        Start all services (frontend + backend + db + storage + lakehouse)"
 	@echo "  down      Stop all services"
 	@echo "  build     Build all Docker images"
 	@echo "  rebuild   Rebuild and start all services"
@@ -350,11 +355,10 @@ help:
 	@echo "  storage-restore        Restore MinIO buckets from backup"
 	@echo ""
 	@echo "Lakehouse:"
-	@echo "  lakehouse         Polaris + Dagster + catalog init + ai-service restart"
-	@echo "  lakehouse-dremio  Base + Dremio"
-	@echo "  lakehouse-trino   Base + Trino + Superset"
-	@echo "  lakehouse-all     Base + all query engines"
-	@echo "  lakehouse-down    Stop all lakehouse services"
+	@echo "  lakehouse         Initialize Iceberg catalog (services started by 'make up')"
+	@echo "  lakehouse-dremio  Dremio query engine"
+	@echo "  lakehouse-trino   Trino + Superset query engine"
+	@echo "  lakehouse-all     All query engines"
 	@echo "  openmetadata      OpenMetadata + Airflow"
 	@echo "  openmetadata-down Stop OpenMetadata"
 	@echo ""

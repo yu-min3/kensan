@@ -13,15 +13,14 @@ OPENMETADATA := -f docker-compose.openmetadata.yml
 # Lakehouse Stack (requires: make up in root for MinIO)
 # =============================================================================
 
-## Base: Polaris + Dagster
+## Base services are now in root docker-compose.yml
 up:
-	docker compose $(COMMON) up -d
-	@echo ""
-	@echo "Polaris API:      http://localhost:8181"
-	@echo "Dagster UI:       http://localhost:3070"
+	@echo "Polaris + Dagster are now managed by root docker-compose.yml."
+	@echo "Use 'make up' in project root to start all services."
 
 down:
-	docker compose $(COMMON) down
+	@echo "Polaris + Dagster are now managed by root docker-compose.yml."
+	@echo "Use 'make down' in project root to stop all services."
 
 ## Pattern A: Base + Dremio
 dremio-up:
@@ -130,7 +129,7 @@ test:
 # =============================================================================
 
 dagster-logs:
-	docker compose $(COMMON) logs -f dagster-webserver dagster-daemon dagster-user-code
+	docker logs -f kensan-dagster-webserver kensan-dagster-daemon kensan-dagster-user-code
 
 dagster-dev:
 	uv run dagster dev -p 3070 -m dagster_project
@@ -140,15 +139,15 @@ dagster-dev:
 # =============================================================================
 
 logs:
-	docker compose $(ALL) logs -f
+	docker logs -f kensan-polaris kensan-dagster-webserver kensan-dagster-daemon kensan-dagster-user-code
 
 # =============================================================================
 # Clean
 # =============================================================================
 
 clean:
-	docker compose $(ALL) down -v 2>/dev/null || true
-	@echo "Lakehouse volumes removed."
+	@echo "Lakehouse volumes are managed by root docker-compose.yml."
+	@echo "Use 'make clean' in project root to remove all volumes."
 
 # =============================================================================
 # Help
@@ -157,20 +156,19 @@ clean:
 help:
 	@echo "Lakehouse - Development Commands"
 	@echo ""
-	@echo "Prerequisites: Run 'make up' in project root first (MinIO must be running)"
+	@echo "Core services (Polaris + Dagster) are managed by root docker-compose.yml."
+	@echo "Use 'make up' / 'make down' in project root to start/stop them."
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Stack Patterns:"
-	@echo "  up           Base stack (Polaris + Dagster)"
-	@echo "  dremio-up    Base + Dremio"
-	@echo "  trino-up     Base + Trino + Superset"
-	@echo "  all-up       Base + Dremio + Trino + Superset"
+	@echo "Query Engines (overlay):"
+	@echo "  dremio-up    Dremio"
+	@echo "  trino-up     Trino + Superset"
+	@echo "  all-up       Dremio + Trino + Superset"
 	@echo ""
-	@echo "  down         Stop base stack"
-	@echo "  dremio-down  Stop base + Dremio"
-	@echo "  trino-down   Stop base + Trino + Superset"
-	@echo "  all-down     Stop all lakehouse services"
+	@echo "  dremio-down  Stop Dremio"
+	@echo "  trino-down   Stop Trino + Superset"
+	@echo "  all-down     Stop all query engines"
 	@echo ""
 	@echo "  openmetadata-up    OpenMetadata + Airflow"
 	@echo "  openmetadata-down  Stop OpenMetadata"
@@ -188,9 +186,8 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health       Check MinIO and Polaris health"
-	@echo "  logs         View all lakehouse logs"
+	@echo "  logs         View lakehouse logs"
 	@echo "  dagster-logs View Dagster logs"
 	@echo "  dagster-dev  Run Dagster dev server locally"
 	@echo "  install      Install Python dependencies"
 	@echo "  test         Run tests"
-	@echo "  clean        Remove all lakehouse volumes"

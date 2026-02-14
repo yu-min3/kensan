@@ -101,11 +101,8 @@ done
 echo '=== Reloading nginx (refresh upstream DNS) ==='
 sudo docker exec kensan-nginx nginx -s reload
 
-echo '=== Starting lakehouse ==='
+echo '=== Copying .env to lakehouse (for Dagster env_file) ==='
 cp .env lakehouse/.env
-cd lakehouse
-sudo docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
-cd ..
 
 echo '=== Waiting for Polaris to be healthy ==='
 for i in {1..20}; do
@@ -125,9 +122,6 @@ sudo docker exec -e POLARIS_MANAGEMENT_URL=http://kensan-polaris:8181/api/manage
 sudo docker exec -e POLARIS_URI=http://kensan-polaris:8181/api/catalog \
   -e S3_ENDPOINT=http://kensan-minio:9000 \
   kensan-dagster-user-code uv run python -m catalog.init_catalog
-
-echo '=== Restarting ai-service to connect to Polaris ==='
-sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate ai-service
 
 echo '=== Demo seed is applied on first demo-login (no manual trigger needed) ==='
 

@@ -304,6 +304,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      polaris:
+        condition: service_healthy
     networks:
       - kensan-network
     healthcheck:
@@ -312,6 +314,111 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # =============================================================================
+  # Lakehouse (Polaris + Dagster)
+  # =============================================================================
+  polaris:
+    image: apache/polaris:latest
+    container_name: kensan-polaris
+    ports:
+      - "8181:8181"
+      - "8182:8182"
+    environment:
+      POLARIS_BOOTSTRAP_CREDENTIALS: "POLARIS,root,s3cr3t"
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: kensan
+      AWS_SECRET_ACCESS_KEY: kensan-minio
+    volumes:
+      - ./lakehouse/polaris-config/application.properties:/deployments/config/application.properties:ro
+      - ./lakehouse/polaris-config/aws-config:/root/.aws/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8182/q/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+    networks:
+      - kensan-network
+
+  dagster-postgres:
+    image: postgres:16-alpine
+    container_name: kensan-dagster-postgres
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    volumes:
+      - dagster_pg_data:/var/lib/postgresql/data
+      - ./lakehouse/init-polaris-db.sql:/docker-entrypoint-initdb.d/02-polaris.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - kensan-network
+
+  dagster-user-code:
+    build:
+      context: ./lakehouse
+      dockerfile: Dockerfile.dagster
+    container_name: kensan-dagster-user-code
+    env_file:
+      - ./lakehouse/.env
+    environment:
+      DAGSTER_HOME: /app
+      DAGSTER_PG_URL: postgresql://dagster:dagster@dagster-postgres:5432/dagster
+      DAGSTER_CURRENT_IMAGE: kensan-dagster-user-code
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+    networks:
+      - kensan-network
+
+  dagster-webserver:
+    build:
+      context: ./lakehouse
+      dockerfile: Dockerfile.dagster
+    container_name: kensan-dagster-webserver
+    entrypoint: ["uv", "run", "dagster-webserver", "-h", "0.0.0.0", "-p", "3070", "-w", "workspace.yaml"]
+    env_file:
+      - ./lakehouse/.env
+    environment:
+      DAGSTER_HOME: /app
+      DAGSTER_PG_URL: postgresql://dagster:dagster@dagster-postgres:5432/dagster
+    ports:
+      - "3070:3070"
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      dagster-user-code:
+        condition: service_started
+    networks:
+      - kensan-network
+
+  dagster-daemon:
+    build:
+      context: ./lakehouse
+      dockerfile: Dockerfile.dagster
+    container_name: kensan-dagster-daemon
+    entrypoint: ["uv", "run", "dagster-daemon", "run"]
+    env_file:
+      - ./lakehouse/.env
+    environment:
+      DAGSTER_HOME: /app
+      DAGSTER_PG_URL: postgresql://dagster:dagster@dagster-postgres:5432/dagster
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      dagster-user-code:
+        condition: service_started
+    networks:
+      - kensan-network
 
   memo-service:
     build:
@@ -376,6 +483,7 @@ networks:
 volumes:
   postgres_data:
   minio_data:
+  dagster_pg_data:
   tempo_data:
   loki_data:
   prometheus_data:
