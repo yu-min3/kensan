@@ -4,6 +4,16 @@ set -euo pipefail
 # =============================================================================
 # Kensan GCE Deploy Script
 # Deploys to existing GCE instance via SSH
+#
+# Required env vars:
+#   JWT_SECRET     - JWT signing secret for auth services
+#   GOOGLE_API_KEY - Google AI API key for ai-service (Gemini)
+#
+# Optional env vars:
+#   GOOGLE_MODEL   - AI model name (default: gemini-2.0-flash)
+#
+# Usage:
+#   JWT_SECRET=xxx GOOGLE_API_KEY=xxx make deploy
 # =============================================================================
 
 INSTANCE_NAME="kensan-app"

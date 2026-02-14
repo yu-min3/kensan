@@ -141,7 +141,13 @@ prod-logs:
 prod-lakehouse:
 	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://kensan-minio:9000 $(MAKE) -C lakehouse init
 
-## Deploy to GCE (requires JWT_SECRET and GOOGLE_API_KEY)
+## Deploy to GCE
+## Required env vars:
+##   JWT_SECRET     - JWT signing secret for auth services
+##   GOOGLE_API_KEY - Google AI API key for ai-service (Gemini)
+## Optional env vars:
+##   GOOGLE_MODEL   - AI model name (default: gemini-2.0-flash)
+## Example: JWT_SECRET=xxx GOOGLE_API_KEY=xxx make deploy
 deploy:
 	@bash scripts/gce-deploy.sh
 
@@ -367,7 +373,7 @@ help:
 	@echo "  prod-down      Stop production stack"
 	@echo "  prod-logs      View production logs"
 	@echo "  prod-lakehouse Start lakehouse (prod, ports hidden)"
-	@echo "  deploy         Deploy to GCE via SSH"
+	@echo "  deploy         Deploy to GCE via SSH (requires JWT_SECRET, GOOGLE_API_KEY)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  health    Check health of all services"
