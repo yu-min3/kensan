@@ -139,7 +139,7 @@ prod-logs:
 
 ## Initialize lakehouse catalog (production)
 prod-lakehouse:
-	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
+	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://kensan-minio:9000 $(MAKE) -C lakehouse init
 
 ## Deploy to GCE (requires JWT_SECRET and GOOGLE_API_KEY)
 deploy:
@@ -160,7 +160,7 @@ lakehouse:
 	@echo "Polaris is healthy."
 	@echo ""
 	@echo "Initializing Iceberg catalog..."
-	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://localhost:9000 $(MAKE) -C lakehouse init
+	POLARIS_URI=http://localhost:8181/api/catalog S3_ENDPOINT=http://kensan-minio:9000 $(MAKE) -C lakehouse init
 	@echo ""
 	@echo "Lakehouse catalog initialized!"
 	@echo "  Polaris API:      http://localhost:8181"
