@@ -96,6 +96,15 @@ GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
 GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.0-flash}
 ENVEOF
 
+echo '=== Creating lakehouse/.env (Docker-internal hostnames) ==='
+cp .env lakehouse/.env
+cat >> lakehouse/.env << ENVEOF
+POLARIS_URI=http://kensan-polaris:8181/api/catalog
+S3_ENDPOINT=http://kensan-minio:9000
+LOKI_URL=http://kensan-loki:3100
+KENSAN_AI_URL=http://kensan-ai-service:8089
+ENVEOF
+
 echo '=== Starting main application ==='
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
@@ -110,9 +119,6 @@ done
 
 echo '=== Reloading nginx (refresh upstream DNS) ==='
 sudo docker exec kensan-nginx nginx -s reload
-
-echo '=== Copying .env to lakehouse (for Dagster env_file) ==='
-cp .env lakehouse/.env
 
 echo '=== Waiting for Polaris to be healthy ==='
 for i in {1..20}; do
