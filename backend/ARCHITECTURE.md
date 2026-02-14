@@ -431,12 +431,16 @@ flowchart LR
 
 ### マイグレーション・初期データ
 
-スキーマは `backend/migrations-v2/` で管理。v1 (64個の増分マイグレーション) を2ファイルに統合。
+スキーマは `backend/migrations-v2/` で管理。v1 (64個の増分マイグレーション) をベース2ファイルに統合し、以降は増分マイグレーションで追加。
 
 | ファイル | 内容 |
 |----------|------|
 | `001_init.sql` | 全テーブル・インデックス・トリガー・Extension |
 | `002_master.sql` | AIコンテキスト (システムプロンプト) + ノートタイプ等のマスターデータ |
+| `003_experiment_version_model.sql` | AI実験・バージョンモデル |
+| `004_fix_chat_schedule_date_range.sql` | チャットスケジュール日付範囲修正 |
+| `005_version_centric.sql` | バージョン中心モデルへの強化 |
+| `006_add_mindmap_content_type.sql` | マインドマップコンテンツタイプ追加 |
 | `apply.sh` | スキーマ + ペルソナシード適用スクリプト |
 | `seeds/<persona>/0*.sql` | 4ペルソナ分のデモデータ (tanaka_shota, suzuki_misaki, yamada_takuya, takahashi_aya) |
 

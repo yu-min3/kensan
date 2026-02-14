@@ -26,11 +26,6 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-// wrapDBError wraps a database error with context message and detects schema errors
-func wrapDBError(msg string, err error) error {
-	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
-}
-
 // List returns memos for a user with optional filters
 func (r *PostgresRepository) List(ctx context.Context, userID string, filter memo.MemoFilter) ([]memo.Memo, error) {
 	w := sqlbuilder.NewWhereBuilder(userID)
@@ -63,7 +58,7 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter mem
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query memos", err)
+		return nil, sharedErrors.WrapDBError("failed to query memos", err)
 	}
 	defer rows.Close()
 
@@ -79,13 +74,13 @@ func (r *PostgresRepository) List(ctx context.Context, userID string, filter mem
 			&m.UpdatedAt,
 		)
 		if err != nil {
-			return nil, wrapDBError("failed to scan memo", err)
+			return nil, sharedErrors.WrapDBError("failed to scan memo", err)
 		}
 		memos = append(memos, m)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, wrapDBError("error iterating memos", err)
+		return nil, sharedErrors.WrapDBError("error iterating memos", err)
 	}
 
 	return memos, nil
@@ -112,7 +107,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, userID, memoID string)
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, wrapDBError("failed to get memo", err)
+		return nil, sharedErrors.WrapDBError("failed to get memo", err)
 	}
 
 	return &m, nil
@@ -139,7 +134,7 @@ func (r *PostgresRepository) Create(ctx context.Context, userID string, input me
 		&m.UpdatedAt,
 	)
 	if err != nil {
-		return nil, wrapDBError("failed to create memo", err)
+		return nil, sharedErrors.WrapDBError("failed to create memo", err)
 	}
 
 	return &m, nil
@@ -179,7 +174,7 @@ func (r *PostgresRepository) Update(ctx context.Context, userID, memoID string, 
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, wrapDBError("failed to update memo", err)
+		return nil, sharedErrors.WrapDBError("failed to update memo", err)
 	}
 
 	return &m, nil
@@ -190,7 +185,7 @@ func (r *PostgresRepository) Delete(ctx context.Context, userID, memoID string) 
 	query := `DELETE FROM memos WHERE id = $1 AND user_id = $2`
 	result, err := r.pool.Exec(ctx, query, memoID, userID)
 	if err != nil {
-		return wrapDBError("failed to delete memo", err)
+		return sharedErrors.WrapDBError("failed to delete memo", err)
 	}
 
 	if result.RowsAffected() == 0 {

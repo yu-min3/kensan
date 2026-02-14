@@ -92,6 +92,12 @@ sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --bui
 echo '=== Waiting for services to be healthy ==='
 sleep 10
 
+echo '=== Applying database migrations ==='
+for f in backend/migrations-v2/[0-9]*.sql; do
+  echo \"  Applying: \$(basename \$f)\"
+  sudo docker exec -i kensan-postgres psql -U kensan -d kensan < \"\$f\" 2>&1 || true
+done
+
 echo '=== Reloading nginx (refresh upstream DNS) ==='
 sudo docker exec kensan-nginx nginx -s reload
 
@@ -112,25 +118,18 @@ for i in {1..20}; do
 done
 
 echo '=== Bootstrapping & initializing Iceberg catalog ==='
-sudo docker exec kensan-dagster-user-code uv run python -m catalog.bootstrap_polaris
-sudo docker exec kensan-dagster-user-code uv run python -m catalog.init_catalog
+sudo docker exec -e POLARIS_MANAGEMENT_URL=http://kensan-polaris:8181/api/management/v1 \
+  -e POLARIS_CATALOG_URL=http://kensan-polaris:8181/api/catalog/v1 \
+  -e S3_ENDPOINT=http://kensan-minio:9000 \
+  kensan-dagster-user-code uv run python -m catalog.bootstrap_polaris
+sudo docker exec -e POLARIS_URI=http://kensan-polaris:8181/api/catalog \
+  -e S3_ENDPOINT=http://kensan-minio:9000 \
+  kensan-dagster-user-code uv run python -m catalog.init_catalog
 
 echo '=== Restarting ai-service to connect to Polaris ==='
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate ai-service
 
-echo '=== Running demo seed ==='
-sleep 5
-# Wait for user-service to be ready (direct container access, bypasses nginx HTTPS redirect)
-for i in {1..30}; do
-  if sudo docker exec kensan-user-service wget -qO- http://localhost:8081/health > /dev/null 2>&1; then
-    break
-  fi
-  echo \"Waiting for user-service... (\$i/30)\"
-  sleep 2
-done
-
-# Trigger demo seed (direct container access)
-sudo docker exec kensan-user-service wget -qO- --post-data='' http://localhost:8081/api/v1/demo/seed || echo 'Demo seed skipped (may already exist)'
+echo '=== Demo seed is applied on first demo-login (no manual trigger needed) ==='
 
 echo ''
 echo '=== Deployment complete ==='

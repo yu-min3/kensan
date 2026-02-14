@@ -209,3 +209,9 @@ func WrapDatabaseError(err error) error {
 func IsDatabaseSchema(err error) bool {
 	return errors.Is(err, ErrDatabaseSchema)
 }
+
+// WrapDBError wraps a database error with a context message and detects schema errors.
+// Use this in repositories to add context to database errors.
+func WrapDBError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, WrapDatabaseError(err))
+}

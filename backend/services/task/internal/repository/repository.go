@@ -34,11 +34,6 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-// wrapDBError wraps a database error with context message and detects schema errors
-func wrapDBError(msg string, err error) error {
-	return fmt.Errorf("%s: %w", msg, sharedErrors.WrapDatabaseError(err))
-}
-
 // ========== Task Operations ==========
 
 // ListTasks returns all tasks for a user with optional filters
@@ -65,7 +60,7 @@ func (r *PostgresRepository) ListTasks(ctx context.Context, userID string, filte
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query tasks", err)
+		return nil, sharedErrors.WrapDBError("failed to query tasks", err)
 	}
 	defer rows.Close()
 
@@ -290,7 +285,7 @@ func (r *PostgresRepository) GetChildTasks(ctx context.Context, userID, parentTa
 
 	rows, err := r.pool.Query(ctx, query, userID, parentTaskID)
 	if err != nil {
-		return nil, wrapDBError("failed to query child tasks", err)
+		return nil, sharedErrors.WrapDBError("failed to query child tasks", err)
 	}
 	defer rows.Close()
 
@@ -418,7 +413,7 @@ func (r *PostgresRepository) ReorderTasks(ctx context.Context, userID string, ta
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, wrapDBError("failed to query reordered tasks", err)
+		return nil, sharedErrors.WrapDBError("failed to query reordered tasks", err)
 	}
 	defer rows.Close()
 
@@ -537,7 +532,7 @@ func (r *PostgresRepository) ListGoals(ctx context.Context, userID string, filte
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query goals", err)
+		return nil, sharedErrors.WrapDBError("failed to query goals", err)
 	}
 	defer rows.Close()
 
@@ -711,7 +706,7 @@ func (r *PostgresRepository) ReorderGoals(ctx context.Context, userID string, go
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, wrapDBError("failed to query reordered goals", err)
+		return nil, sharedErrors.WrapDBError("failed to query reordered goals", err)
 	}
 	defer rows.Close()
 
@@ -751,7 +746,7 @@ func (r *PostgresRepository) ListMilestones(ctx context.Context, userID string, 
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query milestones", err)
+		return nil, sharedErrors.WrapDBError("failed to query milestones", err)
 	}
 	defer rows.Close()
 
@@ -885,7 +880,7 @@ func (r *PostgresRepository) ListTags(ctx context.Context, userID string) ([]tas
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, wrapDBError("failed to query tags", err)
+		return nil, sharedErrors.WrapDBError("failed to query tags", err)
 	}
 	defer rows.Close()
 
@@ -915,7 +910,7 @@ func (r *PostgresRepository) ListNoteTags(ctx context.Context, userID string) ([
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, wrapDBError("failed to query note tags", err)
+		return nil, sharedErrors.WrapDBError("failed to query note tags", err)
 	}
 	defer rows.Close()
 
@@ -1081,7 +1076,7 @@ func (r *PostgresRepository) GetTaskTags(ctx context.Context, taskID string) ([]
 
 	rows, err := r.pool.Query(ctx, query, taskID)
 	if err != nil {
-		return nil, wrapDBError("failed to query task tags", err)
+		return nil, sharedErrors.WrapDBError("failed to query task tags", err)
 	}
 	defer rows.Close()
 
@@ -1141,7 +1136,7 @@ func (r *PostgresRepository) ListEntityMemos(ctx context.Context, userID string,
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query entity memos", err)
+		return nil, sharedErrors.WrapDBError("failed to query entity memos", err)
 	}
 	defer rows.Close()
 
@@ -1280,7 +1275,7 @@ func (r *PostgresRepository) ListTodos(ctx context.Context, userID string, filte
 
 	rows, err := r.pool.Query(ctx, query, w.Args()...)
 	if err != nil {
-		return nil, wrapDBError("failed to query todos", err)
+		return nil, sharedErrors.WrapDBError("failed to query todos", err)
 	}
 	defer rows.Close()
 
@@ -1346,7 +1341,7 @@ func (r *PostgresRepository) ListTodosWithStatus(ctx context.Context, userID str
 
 	rows, err := r.pool.Query(ctx, query, userID, date)
 	if err != nil {
-		return nil, wrapDBError("failed to query todos with status", err)
+		return nil, sharedErrors.WrapDBError("failed to query todos with status", err)
 	}
 	defer rows.Close()
 

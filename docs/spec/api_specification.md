@@ -124,8 +124,9 @@ Content-Type: application/json
 
 | HTTP | コード | 説明 |
 |------|--------|------|
-| 400 | `VALIDATION_ERROR` | バリデーションエラー |
-| 400 | `INVALID_REQUEST` | リクエスト形式エラー |
+| 400 | `VALIDATION_ERROR` | フィールド単位のバリデーションエラー（details 配列あり） |
+| 400 | `INVALID_INPUT` | 入力値が不正（汎用） |
+| 400 | `INVALID_REQUEST` | リクエスト形式エラー（必須URLパラメータ欠落等） |
 | 401 | `UNAUTHORIZED` | 認証エラー |
 | 403 | `FORBIDDEN` | 権限エラー |
 | 404 | `NOT_FOUND` | リソース未発見 |

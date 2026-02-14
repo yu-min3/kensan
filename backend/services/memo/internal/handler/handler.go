@@ -2,25 +2,24 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	memo "github.com/kensan/backend/services/memo/internal"
 	"github.com/kensan/backend/services/memo/internal/service"
-	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
-	"log/slog"
 )
 
 // Handler handles HTTP requests for memos
 type Handler struct {
-	service *service.Service
+	service service.MemoService
 }
 
 // NewHandler creates a new memo handler
-func NewHandler(service *service.Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(svc service.MemoService) *Handler {
+	return &Handler{service: svc}
 }
 
 // RegisterRoutes registers the memo routes.
@@ -65,10 +64,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	memos, err := h.service.List(r.Context(), userID, filter)
 	if err != nil {
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to list memos", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -90,10 +86,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to get memo", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -127,10 +120,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_INPUT", "Invalid input")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to create memo", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -157,10 +147,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to update memo", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -182,10 +169,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to archive memo", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -207,10 +191,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusNotFound, "MEMO_NOT_FOUND", "Memo not found")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in memo-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to delete memo", "error", err, "request_id", middleware.GetRequestID(r.Context()))

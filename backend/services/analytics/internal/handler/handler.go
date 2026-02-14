@@ -2,25 +2,24 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/analytics/internal"
 	"github.com/kensan/backend/services/analytics/internal/service"
-	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
-	"log/slog"
 )
 
 // Handler handles HTTP requests for analytics
 type Handler struct {
-	service *service.Service
+	service service.AnalyticsService
 }
 
 // NewHandler creates a new analytics handler
-func NewHandler(service *service.Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(svc service.AnalyticsService) *Handler {
+	return &Handler{service: svc}
 }
 
 // RegisterRoutes registers the analytics routes
@@ -54,10 +53,7 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE_RANGE", "Invalid date format. Use YYYY-MM-DD")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to get summary", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -83,10 +79,7 @@ func (h *Handler) GetWeeklySummary(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_WEEK_START", "Invalid week_start format. Use YYYY-MM-DD")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "Failed to get weekly summary", "error", err, "request_id", middleware.GetRequestID(r.Context()))
@@ -135,10 +128,7 @@ func (h *Handler) GetMonthlySummary(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_YEAR", "Invalid year value")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get monthly summary")
@@ -176,10 +166,7 @@ func (h *Handler) GetTrends(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_COUNT", "Count must be a positive integer")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get trends")
@@ -215,10 +202,7 @@ func (h *Handler) GetDailyStudyHours(w http.ResponseWriter, r *http.Request) {
 			middleware.Error(w, r, http.StatusBadRequest, "INVALID_DATE_RANGE", "Invalid date format. Use YYYY-MM-DD")
 			return
 		}
-		// Database schema errors
-		if sharedErrors.IsDatabaseSchema(err) {
-			slog.ErrorContext(r.Context(), "Database schema error in analytics-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-			middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+		if middleware.HandleDBSchemaError(w, r, err) {
 			return
 		}
 		middleware.Error(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get daily study hours")

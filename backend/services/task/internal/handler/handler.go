@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kensan/backend/services/task/internal"
 	"github.com/kensan/backend/services/task/internal/service"
-	sharedErrors "github.com/kensan/backend/shared/errors"
 	"github.com/kensan/backend/shared/middleware"
 	"log/slog"
 )
@@ -85,10 +84,7 @@ func (h *Handler) handleServiceError(w http.ResponseWriter, r *http.Request, err
 		return true
 	}
 
-	// Database schema errors
-	if sharedErrors.IsDatabaseSchema(err) {
-		slog.ErrorContext(r.Context(), "Database schema error in task-service", "error", err, "request_id", middleware.GetRequestID(r.Context()))
-		middleware.Error(w, r, http.StatusInternalServerError, "DB_SCHEMA_ERROR", err.Error())
+	if middleware.HandleDBSchemaError(w, r, err) {
 		return true
 	}
 

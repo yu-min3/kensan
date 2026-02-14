@@ -51,6 +51,30 @@ interface NoteActions {
 
 export type NoteStore = NoteState & NoteActions
 
+/** Convert a full Note to a NoteListItem (without content). */
+function toNoteListItem(note: Note): NoteListItem {
+  return {
+    id: note.id,
+    userId: note.userId,
+    type: note.type,
+    title: note.title,
+    format: note.format,
+    date: note.date,
+    taskId: note.taskId,
+    milestoneId: note.milestoneId,
+    milestoneName: note.milestoneName,
+    goalId: note.goalId,
+    goalName: note.goalName,
+    goalColor: note.goalColor,
+    tagIds: note.tagIds,
+    relatedTimeEntryIds: note.relatedTimeEntryIds,
+    fileUrl: note.fileUrl,
+    archived: note.archived,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+  }
+}
+
 export const useNoteStore = create<NoteStore>()((set, get) => ({
   // Initial state
   items: [],
@@ -103,29 +127,8 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   createNote: async (data: CreateNoteInput) => {
     try {
       const newNote = await notesApi.create(data)
-      // Add to items list (as NoteListItem)
-      const listItem: NoteListItem = {
-        id: newNote.id,
-        userId: newNote.userId,
-        type: newNote.type,
-        title: newNote.title,
-        format: newNote.format,
-        date: newNote.date,
-        taskId: newNote.taskId,
-        milestoneId: newNote.milestoneId,
-        milestoneName: newNote.milestoneName,
-        goalId: newNote.goalId,
-        goalName: newNote.goalName,
-        goalColor: newNote.goalColor,
-        tagIds: newNote.tagIds,
-        relatedTimeEntryIds: newNote.relatedTimeEntryIds,
-        fileUrl: newNote.fileUrl,
-        archived: newNote.archived,
-        createdAt: newNote.createdAt,
-        updatedAt: newNote.updatedAt,
-      }
       set((state) => ({
-        items: [listItem, ...state.items],
+        items: [toNoteListItem(newNote), ...state.items],
         noteCache: new Map(state.noteCache).set(newNote.id, newNote),
       }))
       return newNote
@@ -138,28 +141,8 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   updateNote: async (id: string, data: UpdateNoteInput) => {
     try {
       const updatedNote = await notesApi.update(id, data)
-      const listItem: NoteListItem = {
-        id: updatedNote.id,
-        userId: updatedNote.userId,
-        type: updatedNote.type,
-        title: updatedNote.title,
-        format: updatedNote.format,
-        date: updatedNote.date,
-        taskId: updatedNote.taskId,
-        milestoneId: updatedNote.milestoneId,
-        milestoneName: updatedNote.milestoneName,
-        goalId: updatedNote.goalId,
-        goalName: updatedNote.goalName,
-        goalColor: updatedNote.goalColor,
-        tagIds: updatedNote.tagIds,
-        relatedTimeEntryIds: updatedNote.relatedTimeEntryIds,
-        fileUrl: updatedNote.fileUrl,
-        archived: updatedNote.archived,
-        createdAt: updatedNote.createdAt,
-        updatedAt: updatedNote.updatedAt,
-      }
       set((state) => ({
-        items: state.items.map((item) => (item.id === id ? listItem : item)),
+        items: state.items.map((item) => (item.id === id ? toNoteListItem(updatedNote) : item)),
         noteCache: new Map(state.noteCache).set(id, updatedNote),
       }))
       return updatedNote
@@ -189,28 +172,8 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   archiveNote: async (id: string, archived: boolean) => {
     try {
       const updatedNote = await notesApi.archive(id, archived)
-      const listItem: NoteListItem = {
-        id: updatedNote.id,
-        userId: updatedNote.userId,
-        type: updatedNote.type,
-        title: updatedNote.title,
-        format: updatedNote.format,
-        date: updatedNote.date,
-        taskId: updatedNote.taskId,
-        milestoneId: updatedNote.milestoneId,
-        milestoneName: updatedNote.milestoneName,
-        goalId: updatedNote.goalId,
-        goalName: updatedNote.goalName,
-        goalColor: updatedNote.goalColor,
-        tagIds: updatedNote.tagIds,
-        relatedTimeEntryIds: updatedNote.relatedTimeEntryIds,
-        fileUrl: updatedNote.fileUrl,
-        archived: updatedNote.archived,
-        createdAt: updatedNote.createdAt,
-        updatedAt: updatedNote.updatedAt,
-      }
       set((state) => ({
-        items: state.items.map((item) => (item.id === id ? listItem : item)),
+        items: state.items.map((item) => (item.id === id ? toNoteListItem(updatedNote) : item)),
         noteCache: new Map(state.noteCache).set(id, updatedNote),
       }))
       return updatedNote
