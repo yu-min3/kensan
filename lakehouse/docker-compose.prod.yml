@@ -1,9 +1,0 @@
-# Lakehouse production overlay
-# Usage: cd lakehouse && docker compose -f docker-compose.common.yml -f docker-compose.prod.yml up -d --build
-
-services:
-  polaris:
-    ports: !reset []
-
-  dagster-webserver:
-    ports: !reset []
